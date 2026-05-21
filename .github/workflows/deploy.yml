@@ -131,6 +131,19 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      # Pre-ensure target directory ownership before copying files
+      - name: Fix remote directory permissions
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host:        ${{ secrets.LIGHTSAIL_HOST || '13.228.172.43' }}
+          username:    ubuntu
+          key:         ${{ secrets.LIGHTSAIL_SSH_KEY }}
+          port:        22
+          script: |
+            if [ -d /home/ubuntu/unggul-axiom-hub ]; then
+              sudo chown -R ubuntu:ubuntu /home/ubuntu/unggul-axiom-hub
+            fi
+
       # Sync docker-compose.prod.yml and migrations/schemas via SCP
       - name: Copy config files via SCP
         uses: appleboy/scp-action@v0.1.7
