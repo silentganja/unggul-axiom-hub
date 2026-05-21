@@ -141,6 +141,7 @@ jobs:
           port:        22
           source:      "docker-compose.prod.yml,infra/postgres/init.sql"
           target:      "/home/ubuntu/unggul-axiom-hub"
+          overwrite:   true
 
       # Connect to host VPS over SSH to run deployment commands
       - name: Execute deployment commands via SSH
