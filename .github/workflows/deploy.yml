@@ -190,7 +190,11 @@ jobs:
             docker compose -f docker-compose.prod.yml pull
 
             # Recreate containers safely with zero-downtime hot swap
-            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+            if ! docker compose -f docker-compose.prod.yml up -d --remove-orphans; then
+              echo "❌ Deployment failed! Printing logs..."
+              docker compose -f docker-compose.prod.yml logs
+              exit 1
+            fi
 
             # Prune old images to save Lightsail disk space
             docker image prune -af --filter "until=24h"

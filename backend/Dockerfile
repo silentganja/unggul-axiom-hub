@@ -43,7 +43,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=builder /app/target/release/server ./server
 
 # Non-root user for security
-RUN useradd -r -s /bin/false axiom
+RUN useradd -r -s /bin/false axiom && chown -R axiom:axiom /app
 USER axiom
 
 EXPOSE 8080
