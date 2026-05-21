@@ -1,8 +1,8 @@
 "use client";
 
 import { useFileStore } from "@/store/useFileStore";
-import { Trash2, Download, FolderInput, X, ShieldAlert } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Trash2, Download, FolderInput, X } from "lucide-react";
+
 
 export default function FloatingActionBar() {
   const selectedIds = useFileStore((state) => state.selectedIds);

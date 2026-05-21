@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useId, startTransition } from "react";
-import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Shield,
@@ -17,7 +16,6 @@ import {
   Settings,
   Lock,
   Menu,
-  X,
   LayoutDashboard,
   Terminal,
   FileCheck

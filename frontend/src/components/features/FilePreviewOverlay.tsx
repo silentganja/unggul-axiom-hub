@@ -12,13 +12,11 @@ import {
   Hash,
   FolderOpen,
   Info,
-  Maximize2,
-  Minimize2,
   ZoomIn,
   ZoomOut,
   RotateCw
 } from "lucide-react";
-import { useFileStore, FileNode } from "@/store/useFileStore";
+import { useFileStore } from "@/store/useFileStore";
 import { cn } from "@/lib/utils";
 
 export default function FilePreviewOverlay() {

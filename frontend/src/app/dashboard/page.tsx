@@ -10,23 +10,16 @@ import {
   Download,
   Share2,
   Star,
-  Plus,
   FolderPlus,
   Check,
   Search,
   Upload,
   Eye,
   Edit2,
-  Menu,
   ArrowLeft,
   Shield,
   Lock,
-  Activity,
-  TrendingUp,
-  CheckCircle,
-  XCircle,
-  Clock,
-  ArrowRight
+  CheckCircle
 } from "lucide-react";
 import { useFileStore, FileNode } from "@/store/useFileStore";
 import { useOperationsStore } from "@/store/useOperationsStore";
@@ -49,11 +42,9 @@ export default function FileExplorerPage() {
   const searchQuery = useFileStore((state) => state.searchQuery);
   const setSearchQuery = useFileStore((state) => state.setSearchQuery);
   const activeView = useFileStore((state) => state.activeView);
-  const setActiveView = useFileStore((state) => state.setActiveView);
 
   const toggleSelection = useFileStore((state) => state.toggleSelection);
   const selectAll = useFileStore((state) => state.selectAll);
-  const clearSelection = useFileStore((state) => state.clearSelection);
   const deleteFile = useFileStore((state) => state.deleteFile);
   const deleteSelected = useFileStore((state) => state.deleteSelected);
   const createFolder = useFileStore((state) => state.createFolder);

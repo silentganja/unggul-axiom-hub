@@ -2,22 +2,16 @@
 
 import { useState } from "react";
 import {
-  Activity,
-  TrendingUp,
   CheckCircle,
-  XCircle,
-  Clock,
   ArrowRight,
   Lock,
   Shield,
   User,
   FileText,
-  File,
-  Sparkles,
-  ChevronRight
+  File
 } from "lucide-react";
 import { useFileStore, FileNode } from "@/store/useFileStore";
-import { useOperationsStore, ApprovalTask } from "@/store/useOperationsStore";
+import { useOperationsStore } from "@/store/useOperationsStore";
 import { cn } from "@/lib/utils";
 
 export default function ExecutiveOverview() {

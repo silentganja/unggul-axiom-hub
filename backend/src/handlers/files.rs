@@ -368,7 +368,10 @@ pub async fn upload_file(
         while let Some(item) = payload.next().await {
             let mut field = item.map_err(|e| AppError::BadRequest(e.to_string()))?;
             let content_disposition = field.content_disposition();
-            let name = content_disposition.get_name().unwrap_or("");
+            let name = content_disposition
+                .as_ref()
+                .and_then(|cd| cd.get_name())
+                .unwrap_or("");
 
             match name {
                 "parent_id" => {
@@ -424,7 +427,8 @@ pub async fn upload_file(
                 }
                 "file" => {
                     let fname = content_disposition
-                        .get_filename()
+                        .as_ref()
+                        .and_then(|cd| cd.get_filename())
                         .ok_or_else(|| {
                             AppError::BadRequest("No filename in file field".to_string())
                         })?

@@ -10,11 +10,9 @@ import {
   UserPlus,
   Trash2,
   Lock,
-  Globe,
-  Settings,
   Users
 } from "lucide-react";
-import { useFileStore, FileNode, Collaborator } from "@/store/useFileStore";
+import { useFileStore, FileNode } from "@/store/useFileStore";
 import { cn } from "@/lib/utils";
 
 export default function FileAccessSheet() {

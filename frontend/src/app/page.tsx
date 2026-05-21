@@ -1,9 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { Shield, ArrowRight, Lock, Users, TrendingUp, FolderHeart, Globe } from "lucide-react";
+import { Shield, ArrowRight, Users, TrendingUp, Globe } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
-import { cn } from "@/lib/utils";
 
 export default function HomePage() {
   return (

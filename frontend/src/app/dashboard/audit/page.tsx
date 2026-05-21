@@ -2,17 +2,12 @@
 
 import { useState, useId } from "react";
 import {
-  Shield,
   Search,
-  Download,
   CheckCircle,
   AlertTriangle,
   XCircle,
   FileSpreadsheet,
-  Terminal,
-  Clock,
-  User,
-  ArrowRight
+  Terminal
 } from "lucide-react";
 import { useAuditStore, SystemEvent } from "@/store/useAuditStore";
 import { cn } from "@/lib/utils";
