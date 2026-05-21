@@ -5,8 +5,10 @@ FROM rust:slim AS builder
 
 WORKDIR /app
 
+ENV DEBIAN_FRONTEND=noninteractive
+
 # Install build dependencies
-RUN DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     pkg-config \
     libssl-dev \
     && rm -rf /var/lib/apt/lists/*
@@ -29,7 +31,9 @@ FROM debian:bookworm-slim AS runtime
 
 WORKDIR /app
 
-RUN DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y --no-install-recommends \
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     libssl3 \
     curl \

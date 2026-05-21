@@ -10,6 +10,7 @@ env:
   BACKEND_IMAGE_NAME:  unggul-axiom-hub-backend
   FRONTEND_IMAGE_NAME: unggul-axiom-hub-frontend
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  NODE_OPTIONS: "--no-deprecation"
 
 jobs:
   # ─── 1. FRONTEND LINT & TYPE-CHECK ──────────────────────────────────────────
