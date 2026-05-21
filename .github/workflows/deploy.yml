@@ -9,6 +9,7 @@ env:
   ECR_REGISTRY:        ${{ secrets.AWS_ACCOUNT_ID || '300978239288' }}.dkr.ecr.${{ vars.AWS_REGION || 'ap-southeast-1' }}.amazonaws.com
   BACKEND_IMAGE_NAME:  unggul-axiom-hub-backend
   FRONTEND_IMAGE_NAME: unggul-axiom-hub-frontend
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   # ─── 1. FRONTEND LINT & TYPE-CHECK ──────────────────────────────────────────
@@ -23,7 +24,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 
