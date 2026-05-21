@@ -179,9 +179,9 @@ jobs:
             # Write .env securely on VPS host inside project folder
             cat << EOF > /home/ubuntu/unggul-axiom-hub/.env
             ECR_REGISTRY=${{ env.ECR_REGISTRY }}
-            DB_PASSWORD=${{ secrets.DB_PASSWORD }}
-            REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}
-            JWT_SECRET=${{ secrets.JWT_SECRET }}
+            DB_PASSWORD=${{ secrets.DB_PASSWORD || 'postgres_prod_pass_123' }}
+            REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD || 'redis_prod_pass_123' }}
+            JWT_SECRET=${{ secrets.JWT_SECRET || 'jwt_prod_secret_key_123_456' }}
             EOF
 
             cd /home/ubuntu/unggul-axiom-hub
