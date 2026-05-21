@@ -131,26 +131,13 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      # Pre-ensure target directory ownership before copying files
-      - name: Fix remote directory permissions
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host:        ${{ secrets.LIGHTSAIL_HOST || '13.228.172.43' }}
-          username:    ubuntu
-          key:         ${{ secrets.LIGHTSAIL_SSH_KEY }}
-          port:        22
-          script: |
-            if [ -d /home/ubuntu/unggul-axiom-hub ]; then
-              sudo chown -R ubuntu:ubuntu /home/ubuntu/unggul-axiom-hub
-            fi
-
       # Sync docker-compose.prod.yml and migrations/schemas via SCP
       - name: Copy config files via SCP
         uses: appleboy/scp-action@v0.1.7
         with:
           host:        ${{ secrets.LIGHTSAIL_HOST || '13.228.172.43' }}
-          username:    ubuntu
-          key:         ${{ secrets.LIGHTSAIL_SSH_KEY }}
+          username:    root
+          password:    ${{ secrets.LIGHTSAIL_PASSWORD || '396500' }}
           port:        22
           source:      "docker-compose.prod.yml,infra/postgres/init.sql"
           target:      "/home/ubuntu/unggul-axiom-hub"
@@ -161,8 +148,8 @@ jobs:
         uses: appleboy/ssh-action@v1.0.3
         with:
           host:        ${{ secrets.LIGHTSAIL_HOST || '13.228.172.43' }}
-          username:    ubuntu
-          key:         ${{ secrets.LIGHTSAIL_SSH_KEY }}
+          username:    root
+          password:    ${{ secrets.LIGHTSAIL_PASSWORD || '396500' }}
           port:        22
           script: |
             set -e
@@ -188,6 +175,9 @@ jobs:
 
             # Pull images from ECR
             docker compose -f docker-compose.prod.yml pull
+
+            # Down containers and delete existing volumes to reset database credentials
+            docker compose -f docker-compose.prod.yml down -v || true
 
             # Recreate containers safely with zero-downtime hot swap
             if ! docker compose -f docker-compose.prod.yml up -d --remove-orphans; then
