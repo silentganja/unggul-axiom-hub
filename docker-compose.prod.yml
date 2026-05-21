@@ -1,0 +1,78 @@
+version: "3.9"
+
+services:
+  # ── PostgreSQL (Production-ready) ──────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: axiom-postgres-prod
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       unggul_axiom
+      POSTGRES_USER:     unggul
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_prod_data:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    # Not exposed to public network for safety
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U unggul -d unggul_axiom"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Redis (Production-ready) ───────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: axiom-redis-prod
+    restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_PASSWORD} --save 60 1
+    volumes:
+      - redis_prod_data:/data
+    # Not exposed to public network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # ── Rust Backend (Pulls from AWS ECR) ──────────────────────
+  backend:
+    image: ${ECR_REGISTRY}/unggul-axiom-hub-backend:latest
+    container_name: axiom-backend-prod
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://unggul:${DB_PASSWORD}@postgres:5432/unggul_axiom
+      REDIS_URL:    redis://:${REDIS_PASSWORD}@redis:6379
+      JWT_SECRET:   ${JWT_SECRET}
+      HOST:         0.0.0.0
+      PORT:         "8080"
+      RUST_LOG:     info
+    ports:
+      - "127.0.0.1:8080:8080" # Exposed locally to host Nginx reverse proxy
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # ── Next.js Frontend (Pulls from AWS ECR) ──────────────────
+  frontend:
+    image: ${ECR_REGISTRY}/unggul-axiom-hub-frontend:latest
+    container_name: axiom-frontend-prod
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000" # Exposed locally to host Nginx reverse proxy
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  postgres_prod_data:
+    driver: local
+  redis_prod_data:
+    driver: local

@@ -1,0 +1,94 @@
+version: "3.9"
+
+# ─────────────────────────────────────────────────────────────
+# Unggul Axiom Hub — Local Development Stack
+# ─────────────────────────────────────────────────────────────
+
+services:
+
+  # ── PostgreSQL ─────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: axiom-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       unggul_axiom
+      POSTGRES_USER:     unggul
+      POSTGRES_PASSWORD: unggul_dev_secret
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U unggul -d unggul_axiom"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Redis ──────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: axiom-redis
+    restart: unless-stopped
+    command: redis-server --requirepass redis_dev_secret --save 60 1
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "redis_dev_secret", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # ── Rust Backend ───────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: runtime
+    container_name: axiom-backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://unggul:unggul_dev_secret@postgres:5432/unggul_axiom
+      REDIS_URL:    redis://:redis_dev_secret@redis:6379
+      JWT_SECRET:   change_me_in_production_use_min_32_random_chars
+      HOST:         0.0.0.0
+      PORT:         "8080"
+      RUST_LOG:     info
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # ── Next.js Frontend ───────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: runner
+    container_name: axiom-frontend
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_URL: http://backend:8080
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local

@@ -1,0 +1,189 @@
+name: Build & Deploy — Unggul Axiom Hub
+
+on:
+  push:
+    branches: [main, master]
+
+env:
+  AWS_REGION:          ${{ vars.AWS_REGION || 'ap-southeast-1' }}
+  ECR_REGISTRY:        ${{ secrets.AWS_ACCOUNT_ID || '300978239288' }}.dkr.ecr.${{ vars.AWS_REGION || 'ap-southeast-1' }}.amazonaws.com
+  BACKEND_IMAGE_NAME:  unggul-axiom-hub-backend
+  FRONTEND_IMAGE_NAME: unggul-axiom-hub-frontend
+
+jobs:
+  # ─── 1. FRONTEND LINT & TYPE-CHECK ──────────────────────────────────────────
+  lint-frontend:
+    name: Lint & Verify — Frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+  # ─── 2. BACKEND LINT & TESTS ────────────────────────────────────────────────
+  check-backend:
+    name: Check & Verify — Backend (Rust)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: backend
+
+      - name: Format check
+        run: cargo fmt --check
+
+      - name: Clippy
+        run: cargo clippy -- -D warnings
+
+      - name: Build (debug)
+        run: cargo build
+
+  # ─── 3. BUILD AND PUSH TO AWS ECR ───────────────────────────────────────────
+  docker-build-push:
+    name: Build & Push ECR Images
+    runs-on: ubuntu-latest
+    needs: [lint-frontend, check-backend]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set image tags
+        id: meta
+        run: |
+          SHORT_SHA="${GITHUB_SHA::8}"
+          echo "tag=${SHORT_SHA}" >> $GITHUB_OUTPUT
+          echo "backend_image=${{ env.ECR_REGISTRY }}/${{ env.BACKEND_IMAGE_NAME }}" >> $GITHUB_OUTPUT
+          echo "frontend_image=${{ env.ECR_REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}" >> $GITHUB_OUTPUT
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Backend Build & Push
+      - name: Build & push backend image
+        uses: docker/build-push-action@v5
+        with:
+          context:    ./backend
+          dockerfile: ./backend/Dockerfile
+          push:       true
+          target:     runtime
+          tags: |
+            ${{ steps.meta.outputs.backend_image }}:${{ steps.meta.outputs.tag }}
+            ${{ steps.meta.outputs.backend_image }}:latest
+          cache-from: type=gha,scope=backend
+          cache-to:   type=gha,scope=backend,mode=max
+
+      # Frontend Build & Push (bakes API URL into client)
+      - name: Build & push frontend image
+        uses: docker/build-push-action@v5
+        with:
+          context:    ./frontend
+          dockerfile: ./frontend/Dockerfile
+          push:       true
+          target:     runner
+          tags: |
+            ${{ steps.meta.outputs.frontend_image }}:${{ steps.meta.outputs.tag }}
+            ${{ steps.meta.outputs.frontend_image }}:latest
+          cache-from: type=gha,scope=frontend
+          cache-to:   type=gha,scope=frontend,mode=max
+          build-args: |
+            NEXT_PUBLIC_API_URL=https://hub.unggulaxiom.com
+
+  # ─── 4. DEPLOY TO AWS LIGHTSAIL VPS ─────────────────────────────────────────
+  deploy:
+    name: Deploy to Lightsail VPS
+    runs-on: ubuntu-latest
+    needs: [docker-build-push]
+    steps:
+      - uses: actions/checkout@v4
+
+      # Sync docker-compose.prod.yml and migrations/schemas via SCP
+      - name: Copy config files via SCP
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host:        ${{ secrets.LIGHTSAIL_HOST || '13.228.172.43' }}
+          username:    ubuntu
+          key:         ${{ secrets.LIGHTSAIL_SSH_KEY }}
+          port:        22
+          source:      "docker-compose.prod.yml,infra/postgres/init.sql"
+          target:      "/home/ubuntu/unggul-axiom-hub"
+
+      # Connect to host VPS over SSH to run deployment commands
+      - name: Execute deployment commands via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host:        ${{ secrets.LIGHTSAIL_HOST || '13.228.172.43' }}
+          username:    ubuntu
+          key:         ${{ secrets.LIGHTSAIL_SSH_KEY }}
+          port:        22
+          script: |
+            set -e
+            echo "⚡ Initiating Deploy on VPS..."
+            
+            # Configure AWS CLI on server to authenticate with ECR
+            aws configure set aws_access_key_id "${{ secrets.AWS_ACCESS_KEY_ID }}"
+            aws configure set aws_secret_access_key "${{ secrets.AWS_SECRET_ACCESS_KEY }}"
+            aws configure set region "${{ env.AWS_REGION }}"
+
+            # Log into AWS ECR on VPS host
+            aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${{ env.ECR_REGISTRY }}
+
+            # Write .env securely on VPS host inside project folder
+            cat << EOF > /home/ubuntu/unggul-axiom-hub/.env
+            ECR_REGISTRY=${{ env.ECR_REGISTRY }}
+            DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+            REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}
+            JWT_SECRET=${{ secrets.JWT_SECRET }}
+            EOF
+
+            cd /home/ubuntu/unggul-axiom-hub
+
+            # Pull images from ECR
+            docker compose -f docker-compose.prod.yml pull
+
+            # Recreate containers safely with zero-downtime hot swap
+            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+
+            # Prune old images to save Lightsail disk space
+            docker image prune -af --filter "until=24h"
+
+            # Quick verification
+            echo "🔥 Running active service checks..."
+            sleep 5
+            docker ps
+
+            echo "🚀 Deployment Successfully Complete!"
