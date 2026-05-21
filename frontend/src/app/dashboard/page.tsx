@@ -46,7 +46,6 @@ export default function FileExplorerPage() {
   const toggleSelection = useFileStore((state) => state.toggleSelection);
   const selectAll = useFileStore((state) => state.selectAll);
   const deleteFile = useFileStore((state) => state.deleteFile);
-  const deleteSelected = useFileStore((state) => state.deleteSelected);
   const createFolder = useFileStore((state) => state.createFolder);
   const uploadFile = useFileStore((state) => state.uploadFile);
   const toggleFavorite = useFileStore((state) => state.toggleFavorite);

@@ -6,6 +6,8 @@ use argon2::{
 
 /// Hash a plaintext password using Argon2id with a random salt.
 /// The returned string is the PHC-encoded hash (safe to store in DB).
+/// NOTE: Used by the registration endpoint (future phase). Allow until then.
+#[allow(dead_code)]
 pub fn hash_password(plain: &str) -> Result<String, AppError> {
     let salt = SaltString::generate(&mut OsRng);
     let argon2 = Argon2::default(); // Argon2id variant by default
