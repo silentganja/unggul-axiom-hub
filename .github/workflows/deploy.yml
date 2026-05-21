@@ -94,33 +94,31 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # Backend Build & Push
       - name: Build & push backend image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
-          context:    ./backend
-          dockerfile: ./backend/Dockerfile
-          push:       true
-          target:     runtime
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: true
+          target: runtime
           tags: |
             ${{ steps.meta.outputs.backend_image }}:${{ steps.meta.outputs.tag }}
             ${{ steps.meta.outputs.backend_image }}:latest
           cache-from: type=gha,scope=backend
-          cache-to:   type=gha,scope=backend,mode=max
+          cache-to: type=gha,scope=backend,mode=max
 
-      # Frontend Build & Push (bakes API URL into client)
       - name: Build & push frontend image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
-          context:    ./frontend
-          dockerfile: ./frontend/Dockerfile
-          push:       true
-          target:     runner
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: true
+          target: runner
           tags: |
             ${{ steps.meta.outputs.frontend_image }}:${{ steps.meta.outputs.tag }}
             ${{ steps.meta.outputs.frontend_image }}:latest
           cache-from: type=gha,scope=frontend
-          cache-to:   type=gha,scope=frontend,mode=max
+          cache-to: type=gha,scope=frontend,mode=max
           build-args: |
             NEXT_PUBLIC_API_URL=https://hub.unggulaxiom.com
 
