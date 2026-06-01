@@ -118,8 +118,8 @@ function AdminDashboardView() {
   // Form states
   const createEmailId = useId(); const createPassId = useId(); const createNameId = useId();
   const editNameId = useId(); const editPassId = useId();
-  const [createForm, setCreateForm] = useState({ email: "", password: "", fullName: "", role: "staff" });
-  const [editForm, setEditForm] = useState({ fullName: "", role: "staff", password: "" });
+  const [createForm, setCreateForm] = useState({ email: "", password: "", fullName: "", role: "staff", storageQuotaBytes: "" });
+  const [editForm, setEditForm] = useState({ fullName: "", role: "staff", password: "", storageQuotaBytes: "" });
   const [formError, setFormError] = useState<string | null>(null);
   const [formLoading, setFormLoading] = useState(false);
 
@@ -176,21 +176,20 @@ function AdminDashboardView() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault(); setFormError(null); setFormLoading(true);
-    try { await adminApi.createUser(createForm); setCreateForm({ email: "", password: "", fullName: "", role: "staff" }); setIsCreateOpen(false); await fetchUsers(); }
+    try { const quota = createForm.storageQuotaBytes ? Number(createForm.storageQuotaBytes) : null; await adminApi.createUser({ email: createForm.email, password: createForm.password, fullName: createForm.fullName, role: createForm.role, storageQuotaBytes: quota }); setCreateForm({ email: "", password: "", fullName: "", role: "staff", storageQuotaBytes: "" }); setIsCreateOpen(false); await fetchUsers(); }
     catch (e) { setFormError(e instanceof Error ? e.message : "Failed to create user"); }
     finally { setFormLoading(false); }
   };
 
   const openEdit = (user: AdminUserEntry) => {
-    setEditTarget(user); setEditForm({ fullName: user.fullName, role: user.role, password: "" }); setFormError(null); setIsEditOpen(true);
+    setEditTarget(user); setEditForm({ fullName: user.fullName, role: user.role, password: "", storageQuotaBytes: user.storageQuotaBytes != null ? String(user.storageQuotaBytes) : "" }); setFormError(null); setIsEditOpen(true);
   };
 
   const handleEdit = async (e: React.FormEvent) => {
     e.preventDefault(); if (!editTarget) return; setFormError(null); setFormLoading(true);
     try {
-      const payload: Record<string, string> = { fullName: editForm.fullName.trim(), role: editForm.role };
-      if (editForm.password.trim()) payload.password = editForm.password.trim();
-      await adminApi.updateUser(editTarget.id, payload); setIsEditOpen(false); setEditTarget(null); await fetchUsers();
+      const quota = editForm.storageQuotaBytes ? Number(editForm.storageQuotaBytes) : null;
+      await adminApi.updateUser(editTarget.id, { fullName: editForm.fullName.trim(), role: editForm.role, password: editForm.password.trim() || undefined, storageQuotaBytes: quota }); setIsEditOpen(false); setEditTarget(null); await fetchUsers();
     } catch (e) { setFormError(e instanceof Error ? e.message : "Failed to update user"); }
     finally { setFormLoading(false); }
   };
@@ -306,7 +305,7 @@ function AdminDashboardView() {
               <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search users..."
                 className="h-8 w-56 pl-8 pr-3 rounded border border-input-border bg-input-bg text-xs text-foreground placeholder-foreground-subtle/60 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent-ring" />
             </div>
-            <button onClick={() => { setCreateForm({ email: "", password: "", fullName: "", role: "staff" }); setFormError(null); setIsCreateOpen(true); }}
+            <button onClick={() => { setCreateForm({ email: "", password: "", fullName: "", role: "staff", storageQuotaBytes: "" }); setFormError(null); setIsCreateOpen(true); }}
               className="btn-shimmer h-8 px-3 rounded text-[11px] font-bold tracking-wider uppercase font-mono flex items-center gap-1.5 shadow-sm transition-all">
               <UserPlus size={12} /> Create User
             </button>
@@ -413,6 +412,7 @@ function AdminDashboardView() {
               <div><label htmlFor={createEmailId} className="block text-[9px] font-bold font-mono uppercase text-foreground-subtle mb-1">Email</label><input id={createEmailId} type="email" required placeholder="user@unggulaxiom.com" value={createForm.email} onChange={e => setCreateForm(f => ({ ...f, email: e.target.value }))} className="h-8 w-full px-2.5 rounded-sm border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent" /></div>
               <div><label htmlFor={createPassId} className="block text-[9px] font-bold font-mono uppercase text-foreground-subtle mb-1">Password</label><input id={createPassId} type="password" required placeholder="••••••••" value={createForm.password} onChange={e => setCreateForm(f => ({ ...f, password: e.target.value }))} className="h-8 w-full px-2.5 rounded-sm border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent" /></div>
               <div><label className="block text-[9px] font-bold font-mono uppercase text-foreground-subtle mb-1">Role</label><select value={createForm.role} onChange={e => setCreateForm(f => ({ ...f, role: e.target.value }))} className="h-8 w-full px-2 rounded-sm border border-border bg-background text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent"><option value="staff">Staff</option><option value="officer">Officer</option><option value="director">Director</option><option value="chief">Chief</option></select></div>
+              <div><label className="block text-[9px] font-bold font-mono uppercase text-foreground-subtle mb-1">Storage Quota (bytes, empty = default)</label><input type="number" placeholder="e.g. 107374182400 for 100GB" value={createForm.storageQuotaBytes} onChange={e => setCreateForm(f => ({ ...f, storageQuotaBytes: e.target.value }))} className="h-8 w-full px-2.5 rounded-sm border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent" /></div>
               <div className="flex items-center justify-end gap-2 text-[10px] font-bold font-mono pt-2"><button type="button" onClick={() => setIsCreateOpen(false)} className="h-8 px-3 rounded-sm border border-transparent bg-transparent text-foreground-subtle hover:text-foreground hover:bg-background-subtle/50 transition-colors">Cancel</button><button type="submit" disabled={formLoading} className="btn-shimmer h-8 px-4 rounded-sm font-mono text-[11px] font-bold uppercase tracking-wider text-accent-foreground disabled:opacity-50">{formLoading ? <Loader2 size={12} className="animate-spin" /> : "Create User"}</button></div>
             </form>
           </div>
@@ -429,6 +429,7 @@ function AdminDashboardView() {
               <div><label htmlFor={editNameId} className="block text-[9px] font-bold font-mono uppercase text-foreground-subtle mb-1">Full Name</label><input id={editNameId} type="text" required value={editForm.fullName} onChange={e => setEditForm(f => ({ ...f, fullName: e.target.value }))} className="h-8 w-full px-2.5 rounded-sm border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent" /></div>
               <div><label className="block text-[9px] font-bold font-mono uppercase text-foreground-subtle mb-1">Role</label><select value={editForm.role} onChange={e => setEditForm(f => ({ ...f, role: e.target.value }))} className="h-8 w-full px-2 rounded-sm border border-border bg-background text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent"><option value="staff">Staff</option><option value="officer">Officer</option><option value="director">Director</option><option value="chief">Chief</option></select></div>
               <div><label htmlFor={editPassId} className="block text-[9px] font-bold font-mono uppercase text-foreground-subtle mb-1">New Password (leave blank to keep)</label><input id={editPassId} type="password" placeholder="••••••••" value={editForm.password} onChange={e => setEditForm(f => ({ ...f, password: e.target.value }))} className="h-8 w-full px-2.5 rounded-sm border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent" /></div>
+              <div><label className="block text-[9px] font-bold font-mono uppercase text-foreground-subtle mb-1">Storage Quota (bytes, empty = default)</label><input type="number" placeholder="e.g. 107374182400 for 100GB" value={editForm.storageQuotaBytes} onChange={e => setEditForm(f => ({ ...f, storageQuotaBytes: e.target.value }))} className="h-8 w-full px-2.5 rounded-sm border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent" /></div>
               <div className="flex items-center justify-end gap-2 text-[10px] font-bold font-mono pt-2"><button type="button" onClick={() => { setIsEditOpen(false); setEditTarget(null); }} className="h-8 px-3 rounded-sm border border-transparent bg-transparent text-foreground-subtle hover:text-foreground hover:bg-background-subtle/50 transition-colors">Cancel</button><button type="submit" disabled={formLoading} className="btn-shimmer h-8 px-4 rounded-sm font-mono text-[11px] font-bold uppercase tracking-wider text-accent-foreground disabled:opacity-50">{formLoading ? <Loader2 size={12} className="animate-spin" /> : "Save Changes"}</button></div>
             </form>
           </div>

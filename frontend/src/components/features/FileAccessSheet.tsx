@@ -12,34 +12,40 @@ import {
   Lock,
   Users,
   Loader2,
+  CheckCircle,
 } from "lucide-react";
 import { useFileStore, FileNode, Collaborator } from "@/store/useFileStore";
-import { cn } from "@/lib/utils";
+import { filesApi } from "@/lib/api";
 
 export default function FileAccessSheet() {
   const addPersonEmailId = useId();
   const addPersonRoleId = useId();
   const fileClassificationSelectId = useId();
 
-  // Zustand Store Hooks
   const activeFile = useFileStore((state) => state.activeFile);
   const isOpen = useFileStore((state) => state.isAccessSheetOpen);
   const setOpen = useFileStore((state) => state.setAccessSheetOpen);
   const setActiveFile = useFileStore((state) => state.setActiveFile);
   const fileShares = useFileStore((state) => state.fileShares);
+  const updateFileInStore = useFileStore((state) => state.updateFileClassification);
 
-  const updateClassification = useFileStore((state) => state.updateFileClassification);
   const shareFile = useFileStore((state) => state.shareFile);
   const removeShare = useFileStore((state) => state.removeShare);
   const fetchFileShares = useFileStore((state) => state.fetchFileShares);
 
-  // Local state for add collaborator inputs
   const [newEmail, setNewEmail] = useState("");
   const [newRole, setNewRole] = useState<"editor" | "viewer">("viewer");
   const [isSharing, setIsSharing] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
 
-  // Fetch real shares from the backend when the sheet opens
+  // Classification editing — track pending change
+  const [classSaving, setClassSaving] = useState(false);
+  const [classSaved, setClassSaved] = useState(false);
+  const [pendingClass, setPendingClass] = useState<string | null>(null);
+
+  // Editor value: pending edit or actual file classification
+  const editClass = pendingClass ?? activeFile?.classification ?? "TERBUKA";
+
   useEffect(() => {
     if (isOpen && activeFile) {
       fetchFileShares(activeFile.id);
@@ -79,13 +85,27 @@ export default function FileAccessSheet() {
 
   const handleRoleChange = async (userId: string, role: string) => {
     try {
-      // Upsert via the share endpoint
       const userEntry = fileShares.find((s) => s.id === userId);
       if (userEntry) {
         await shareFile(activeFile.id, userEntry.email, role);
       }
     } catch (err) {
       setShareError(err instanceof Error ? err.message : "Failed to update role");
+    }
+  };
+
+  const handleSaveClassification = async () => {
+    setClassSaving(true);
+    setClassSaved(false);
+    try {
+      const updated = await filesApi.updateClassification(activeFile.id, editClass);
+      updateFileInStore(activeFile.id, updated.classification as "RAHSIA" | "SULIT" | "TERHAD" | "TERBUKA");
+      setPendingClass(null);
+      setClassSaved(true);
+    } catch (err) {
+      setShareError(err instanceof Error ? err.message : "Failed to update classification");
+    } finally {
+      setClassSaving(false);
     }
   };
 
@@ -121,7 +141,7 @@ export default function FileAccessSheet() {
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end">
+    <div key={activeFile.id} className="fixed inset-0 z-50 flex justify-end">
       {/* ── Backdrop Blur Overlay ── */}
       <div
         className="absolute inset-0 bg-black/40 backdrop-blur-xs transition-opacity duration-300 animate-in fade-in"
@@ -165,41 +185,29 @@ export default function FileAccessSheet() {
               <Shield size={12} className="text-accent" />
               Security Classification Level
             </h4>
-            <div className="flex items-center gap-3">
-              <label htmlFor={fileClassificationSelectId} className="sr-only">
-                Classification Level
-              </label>
+            <div className="flex items-center gap-2">
               <select
                 id={fileClassificationSelectId}
-                value={activeFile.classification}
-                onChange={(e) =>
-                  updateClassification(
-                    activeFile.id,
-                    e.target.value as "RAHSIA" | "SULIT" | "TERBUKA"
-                  )
-                }
-                className="h-8 flex-grow max-w-[160px] px-2 rounded border border-input-border bg-input-bg text-xs text-foreground focus:outline-none focus:border-accent"
+                value={editClass}
+                onChange={(e) => { setPendingClass(e.target.value); setClassSaved(false); }}
+                className="h-8 flex-grow max-w-[140px] px-2 rounded border border-input-border bg-input-bg text-xs text-foreground focus:outline-none focus:border-accent"
               >
                 <option value="TERBUKA">TERBUKA</option>
+                <option value="TERHAD">TERHAD</option>
                 <option value="SULIT">SULIT</option>
                 <option value="RAHSIA">RAHSIA</option>
               </select>
-              <span
-                className={cn(
-                  "px-2 py-0.5 rounded-sm text-[10px] font-bold tracking-widest font-mono uppercase border",
-                  activeFile.classification === "RAHSIA" &&
-                    "bg-destructive/15 text-destructive border-destructive/25",
-                  activeFile.classification === "SULIT" &&
-                    "bg-warning/15 text-warning border-warning/25",
-                  activeFile.classification === "TERBUKA" &&
-                    "bg-background-muted/40 text-foreground-subtle border-border/40"
-                )}
+              <button
+                onClick={handleSaveClassification}
+                disabled={classSaving || editClass === activeFile.classification}
+                className="h-8 px-3 rounded-sm border border-accent/30 bg-accent/10 hover:bg-accent/20 text-[10px] font-bold font-mono uppercase tracking-wider text-accent transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
               >
-                {activeFile.classification}
-              </span>
+                {classSaving ? <Loader2 size={11} className="animate-spin" /> : classSaved ? <CheckCircle size={11} /> : null}
+                {classSaved ? "Saved" : "Save"}
+              </button>
             </div>
             <p className="text-[10px] text-foreground-subtle leading-relaxed">
-              * Classified objects are subject to audit logging and strict distribution limits.
+              * Classification changes are audited. For restricted files, use the Governance Board.
             </p>
           </div>
 

@@ -197,6 +197,14 @@ pub async fn run_migrations(pool: &PgPool) {
                 "CREATE INDEX IF NOT EXISTS idx_gov_requests_file ON governance_requests (target_file_id)",
             ],
         ),
+        // 9013 — Per-user storage quota
+        (
+            "9013",
+            "Auto: Per-user storage quota",
+            vec![
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS storage_quota_bytes BIGINT",
+            ],
+        ),
         // 9012 — Audit logs table
         (
             "9012",

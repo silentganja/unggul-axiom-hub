@@ -440,6 +440,13 @@ export const filesApi = {
     });
   },
 
+  updateClassification(id: string, classification: string): Promise<BackendFileNode> {
+    return apiFetch(`/api/files/${id}/classification`, {
+      method: "PUT",
+      body: JSON.stringify({ classification }),
+    });
+  },
+
   delete(id: string): Promise<void> {
     return apiFetch(`/api/files/${id}`, { method: "DELETE" });
   },
@@ -476,12 +483,34 @@ export const filesApi = {
     return `${API_BASE}/api/files/${id}/content`;
   },
 
-  /** Fetch file content with proper auth header (no token in URL). */
+  /** Fetch file content with auth + auto-refresh (no token in URL). */
   async getContent(id: string): Promise<{ data: ArrayBuffer; mimeType: string }> {
     const token = localStorage.getItem("auth-token");
-    const res = await fetch(`${API_BASE}/api/files/${id}/content`, {
+    let res = await fetch(`${API_BASE}/api/files/${id}/content`, {
       headers: { Authorization: `Bearer ${token}` },
     });
+
+    // If 401, try refreshing the token first
+    if (res.status === 401) {
+      const rt = localStorage.getItem("auth-refresh-token");
+      if (rt) {
+        const refreshRes = await fetch(`${API_BASE}/api/auth/refresh`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ refreshToken: rt }),
+        });
+        if (refreshRes.ok) {
+          const data = await refreshRes.json();
+          setToken(data.token);
+          setRefreshToken(data.refreshToken);
+          // Retry with new token
+          res = await fetch(`${API_BASE}/api/files/${id}/content`, {
+            headers: { Authorization: `Bearer ${data.token}` },
+          });
+        }
+      }
+    }
+
     if (!res.ok) throw new Error("Failed to fetch content");
     const mimeType = res.headers.get("Content-Type") || "application/octet-stream";
     const data = await res.arrayBuffer();
@@ -670,6 +699,7 @@ export interface AdminUserEntry {
   fullName: string;
   role: string;
   active: boolean;
+  storageQuotaBytes: number | null;
   createdAt: string;
 }
 
@@ -678,12 +708,14 @@ export interface AdminCreateUserPayload {
   password: string;
   fullName: string;
   role: string;
+  storageQuotaBytes?: number | null;
 }
 
 export interface AdminUpdateUserPayload {
   fullName?: string;
   role?: string;
   password?: string;
+  storageQuotaBytes?: number | null;
 }
 
 export const adminApi = {
@@ -777,6 +809,7 @@ export interface UserStorageRow {
   role: string;
   fileCount: number;
   totalBytes: number;
+  storageQuotaBytes: number | null;
 }
 
 export interface AdminDashboard {

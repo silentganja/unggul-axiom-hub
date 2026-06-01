@@ -350,6 +350,10 @@ async fn main() -> std::io::Result<()> {
                         "/{id}/restore",
                         web::post().to(handlers::files::restore_file),
                     )
+                    .route(
+                        "/{id}/classification",
+                        web::put().to(handlers::files::update_classification),
+                    )
                     .route("/{id}/rename", web::put().to(handlers::files::rename_file))
                     .route(
                         "/{id}/permanent",

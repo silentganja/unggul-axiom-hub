@@ -25,10 +25,11 @@ CREATE TABLE IF NOT EXISTS users (
     email         VARCHAR(320) NOT NULL UNIQUE,
     password_hash VARCHAR(512) NOT NULL,
     full_name     VARCHAR(255) NOT NULL,
-    role          VARCHAR(16)  NOT NULL DEFAULT 'staff'
-                               CHECK (role IN ('chief', 'director', 'officer', 'staff')),
-    active        BOOLEAN      NOT NULL DEFAULT TRUE,
-    created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+    role                  VARCHAR(16)  NOT NULL DEFAULT 'staff'
+                                       CHECK (role IN ('chief', 'director', 'officer', 'staff')),
+    active                BOOLEAN      NOT NULL DEFAULT TRUE,
+    storage_quota_bytes   BIGINT,
+    created_at            TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_users_email ON users (email);
@@ -204,5 +205,6 @@ VALUES
     ('0008', 'Admin Tier 2 — system configuration'),
     ('0009', 'Server-side favorites table'),
     ('0010', 'File versioning system'),
-    ('0011', 'Governance requests table')
+    ('0011', 'Governance requests table'),
+    ('0012', 'Per-user storage quota')
 ON CONFLICT (version) DO NOTHING;

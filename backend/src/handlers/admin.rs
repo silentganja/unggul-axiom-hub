@@ -36,6 +36,7 @@ pub struct CreateUserRequest {
     pub password: String,
     pub full_name: String,
     pub role: String,
+    pub storage_quota_bytes: Option<i64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -43,7 +44,8 @@ pub struct CreateUserRequest {
 pub struct UpdateUserRequest {
     pub full_name: Option<String>,
     pub role: Option<String>,
-    pub password: Option<String>, // Optional — only set if the admin wants to reset it
+    pub password: Option<String>,
+    pub storage_quota_bytes: Option<i64>,
 }
 
 // ── POST /api/admin/login ────────────────────────────────────────────────────
@@ -112,14 +114,15 @@ pub async fn create_user(
     let password_hash = password::hash_password(&body.password)?;
 
     let user: User = sqlx::query_as::<_, User>(
-        "INSERT INTO users (email, password_hash, full_name, role)
-         VALUES ($1, $2, $3, $4)
-         RETURNING id, email, password_hash, full_name, role, active, created_at",
+        "INSERT INTO users (email, password_hash, full_name, role, storage_quota_bytes)
+         VALUES ($1, $2, $3, $4, $5)
+         RETURNING id, email, password_hash, full_name, role, active, storage_quota_bytes, created_at",
     )
     .bind(&email)
     .bind(&password_hash)
     .bind(&full_name)
     .bind(&role)
+    .bind(body.storage_quota_bytes)
     .fetch_one(pool.get_ref())
     .await
     .map_err(|e| {
@@ -156,7 +159,7 @@ pub async fn update_user(
 
     // Fetch the existing user first
     let existing: Option<User> = sqlx::query_as::<_, User>(
-        "SELECT id, email, password_hash, full_name, role, active, created_at
+        "SELECT id, email, password_hash, full_name, role, active, storage_quota_bytes, created_at
          FROM users WHERE id = $1",
     )
     .bind(user_id)
@@ -196,15 +199,23 @@ pub async fn update_user(
         existing.password_hash
     };
 
+    // Storage quota: explicit `null` clears it (use default), absent keeps existing
+    let new_quota = if body.storage_quota_bytes.is_some() {
+        body.storage_quota_bytes // can be Some(null) → explicitly set to None
+    } else {
+        existing.storage_quota_bytes
+    };
+
     let user: User = sqlx::query_as::<_, User>(
         "UPDATE users
-         SET full_name = $1, role = $2, password_hash = $3
-         WHERE id = $4
-         RETURNING id, email, password_hash, full_name, role, active, created_at",
+         SET full_name = $1, role = $2, password_hash = $3, storage_quota_bytes = $4
+         WHERE id = $5
+         RETURNING id, email, password_hash, full_name, role, active, storage_quota_bytes, created_at",
     )
     .bind(&new_full_name)
     .bind(&new_role)
     .bind(&password_hash)
+    .bind(new_quota)
     .bind(user_id)
     .fetch_one(pool.get_ref())
     .await
@@ -606,6 +617,7 @@ struct UserStorageRow {
     role: String,
     file_count: i64,
     total_bytes: i64,
+    storage_quota_bytes: Option<i64>,
 }
 
 pub async fn storage_breakdown(
@@ -614,7 +626,8 @@ pub async fn storage_breakdown(
 ) -> Result<HttpResponse, AppError> {
     let rows: Vec<UserStorageRow> = sqlx::query_as(
         "SELECT u.id AS user_id, u.full_name, u.email, u.role,
-                COUNT(f.id) AS file_count, COALESCE(SUM(f.size_bytes), 0) AS total_bytes
+                COUNT(f.id) AS file_count, COALESCE(SUM(f.size_bytes), 0) AS total_bytes,
+                u.storage_quota_bytes
          FROM users u LEFT JOIN files f ON f.owner_id = u.id AND f.deleted_at IS NULL
          GROUP BY u.id ORDER BY total_bytes DESC",
     )

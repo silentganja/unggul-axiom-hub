@@ -12,6 +12,8 @@ pub struct User {
     pub full_name: String,
     pub role: String,
     pub active: bool,
+    #[sqlx(default)]
+    pub storage_quota_bytes: Option<i64>,
     pub created_at: DateTime<Utc>,
 }
 
@@ -24,6 +26,7 @@ pub struct UserProfile {
     pub full_name: String,
     pub role: String,
     pub active: bool,
+    pub storage_quota_bytes: Option<i64>,
     pub created_at: DateTime<Utc>,
 }
 

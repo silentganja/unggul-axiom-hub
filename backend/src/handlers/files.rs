@@ -276,6 +276,66 @@ pub async fn create_folder(
 /// The resource MUST be owned by the authenticated user.
 /// Returns `404` if not found or ownership mismatch — never leaks existence
 /// of resources belonging to other users.
+// ─────────────────────────────────────────────────────────────────────────────
+// PUT /api/files/{id}/classification
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct UpdateClassificationRequest {
+    classification: String,
+}
+
+/// Update the classification of a file. Owner only.
+pub async fn update_classification(
+    pool: web::Data<PgPool>,
+    user: AuthUser,
+    req: HttpRequest,
+    path: web::Path<Uuid>,
+    body: web::Json<UpdateClassificationRequest>,
+) -> Result<HttpResponse, AppError> {
+    let file_id = path.into_inner();
+
+    if !crate::models::file::VALID_CLASSIFICATIONS.contains(&body.classification.as_str()) {
+        return Err(AppError::BadRequest(
+            "Invalid classification".into(),
+        ));
+    }
+
+    let updated: Option<FileNode> = sqlx::query_as::<_, FileNode>(
+        "UPDATE files
+         SET classification = $1
+         WHERE id = $2 AND owner_id = $3
+         RETURNING id, parent_id, owner_id, name, is_folder,
+                   size_bytes, mime_type, classification, created_at, updated_at, locked_by, locked_at",
+    )
+    .bind(&body.classification)
+    .bind(file_id)
+    .bind(user.id)
+    .fetch_optional(pool.get_ref())
+    .await
+    .map_err(AppError::Database)?;
+
+    let file = updated.ok_or(AppError::NotFound)?;
+
+    let ip = req.peer_addr().map(|a| a.to_string()).unwrap_or_default();
+    let _ = write_audit_log_internal(pool.get_ref(), user.id, "UPDATE_CLASSIFICATION", &file_id.to_string(), &ip)
+        .await;
+
+    tracing::info!(
+        user_id = %user.id,
+        file_id = %file_id,
+        classification = %body.classification,
+        "File classification updated"
+    );
+
+    Ok(HttpResponse::Ok().json(file))
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PUT /api/files/{id}/rename
+// ─────────────────────────────────────────────────────────────────────────────
+
 pub async fn rename_file(
     pool: web::Data<PgPool>,
     user: AuthUser,
@@ -579,9 +639,23 @@ pub async fn get_quota(pool: web::Data<PgPool>, user: AuthUser) -> Result<HttpRe
     .await
     .map_err(AppError::Database)?;
 
+    // Check per-user quota, falling back to system default
+    let user_quota: Option<i64> = sqlx::query_scalar(
+        "SELECT storage_quota_bytes FROM users WHERE id = $1",
+    )
+    .bind(user.id)
+    .fetch_optional(pool.get_ref())
+    .await
+    .map_err(AppError::Database)?
+    .flatten();
+
+    let quota_bytes = user_quota
+        .filter(|&q| q > 0)
+        .unwrap_or(DEFAULT_QUOTA);
+
     Ok(HttpResponse::Ok().json(QuotaResponse {
         used_bytes: used,
-        quota_bytes: DEFAULT_QUOTA,
+        quota_bytes,
         file_count,
         folder_count,
     }))

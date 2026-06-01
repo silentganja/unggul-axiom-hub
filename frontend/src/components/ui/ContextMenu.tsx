@@ -8,35 +8,39 @@ interface ContextMenuProps {
   onClose?: () => void;
 }
 
-/** Renders a dropdown using fixed positioning, outside overflow-hidden ancestors. */
+/** Renders a dropdown menu using fixed positioning. */
 export default function ContextMenu({ trigger, children, onClose }: ContextMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
-  const triggerRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+  const rootRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
   const close = useCallback(() => {
     setIsOpen(false);
-    setPosition(null);
     onClose?.();
   }, [onClose]);
 
-  const open = useCallback(() => {
-    const el = triggerRef.current;
+  const handleTriggerClick = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (isOpen) {
+      close();
+      return;
+    }
+    const el = rootRef.current;
     if (!el) return;
     const btn = el.querySelector("button") || el;
     const rect = btn.getBoundingClientRect();
-    const menuWidth = 176;
+    const mw = 176;
     const top = rect.bottom + 4;
-    let left = rect.right - menuWidth;
+    let left = rect.right - mw;
     if (left < 8) left = 8;
-    if (left + menuWidth > window.innerWidth - 8) left = window.innerWidth - menuWidth - 8;
-    const menuHeight = 300;
-    const finalTop =
-      top + menuHeight > window.innerHeight - 8 ? rect.top - menuHeight - 4 : top;
-    setPosition({ top: finalTop, left });
+    if (left + mw > window.innerWidth - 8) left = window.innerWidth - mw - 8;
+    const mh = 320;
+    const finalTop = top + mh > window.innerHeight - 8 ? rect.top - mh - 4 : top;
+    setPos({ top: finalTop, left });
     setIsOpen(true);
-  }, []);
+  }, [isOpen, close]);
 
   // Close on outside click
   useEffect(() => {
@@ -45,8 +49,8 @@ export default function ContextMenu({ trigger, children, onClose }: ContextMenuP
       if (
         menuRef.current &&
         !menuRef.current.contains(e.target as Node) &&
-        triggerRef.current &&
-        !triggerRef.current.contains(e.target as Node)
+        rootRef.current &&
+        !rootRef.current.contains(e.target as Node)
       ) {
         close();
       }
@@ -69,19 +73,21 @@ export default function ContextMenu({ trigger, children, onClose }: ContextMenuP
   }, [isOpen, close]);
 
   return (
-    <>
-      <div ref={triggerRef} onClick={open} className="inline-flex">
-        {trigger}
-      </div>
-      {isOpen && position && (
+    <div ref={rootRef} onClick={handleTriggerClick} className="inline-flex">
+      {trigger}
+      {isOpen && (
         <div
           ref={menuRef}
           className="fixed z-[100] w-44 rounded border border-border/80 bg-background-panel shadow-lg p-1 space-y-0.5 text-left font-mono animate-in fade-in zoom-in-95 duration-100"
-          style={{ top: position.top, left: position.left }}
+          style={{ top: pos.top, left: pos.left }}
+          onClick={(e) => {
+            // Don't let menu clicks propagate to the trigger
+            e.stopPropagation();
+          }}
         >
           {children}
         </div>
       )}
-    </>
+    </div>
   );
 }
