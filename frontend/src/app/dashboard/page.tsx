@@ -712,15 +712,11 @@ export default function FileExplorerPage() {
                     <td className="px-4 py-2 font-mono text-[11px] text-foreground-muted">{file.modifiedAt}</td>
                     <td className="px-4 py-2 text-right">
                       <ContextMenu
-                        trigger={({ ref, onClick }) => (
-                          <button
-                            ref={ref}
-                            onClick={onClick}
-                            className="h-7 w-7 rounded flex items-center justify-center border border-transparent hover:border-border hover:bg-background/40 text-foreground-subtle hover:text-foreground transition-colors"
-                          >
+                        trigger={
+                          <button className="h-7 w-7 rounded flex items-center justify-center border border-transparent hover:border-border hover:bg-background/40 text-foreground-subtle hover:text-foreground transition-colors">
                             <MoreHorizontal size={14} />
                           </button>
-                        )}
+                        }
                       >
                         <button
                           onClick={() => { if (file.type !== "folder") setPreviewFileId(file.id); else openAccessControl(file); }}
@@ -1039,15 +1035,11 @@ export default function FileExplorerPage() {
                       </td>
                       <td className="px-4 py-2 text-right">
                         <ContextMenu
-                          trigger={({ ref, onClick }) => (
-                            <button
-                              ref={ref}
-                              onClick={onClick}
-                              className="h-7 w-7 rounded flex items-center justify-center border border-transparent hover:border-border hover:bg-background/40 text-foreground-subtle hover:text-foreground transition-colors"
-                            >
+                          trigger={
+                            <button className="h-7 w-7 rounded flex items-center justify-center border border-transparent hover:border-border hover:bg-background/40 text-foreground-subtle hover:text-foreground transition-colors">
                               <MoreHorizontal size={14} />
                             </button>
-                          )}
+                          }
                         >
                           <button
                             onClick={() => { if (file.type !== "folder") setPreviewFileId(file.id); else openAccessControl(file); }}

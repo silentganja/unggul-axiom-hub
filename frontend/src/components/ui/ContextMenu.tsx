@@ -3,11 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 
 interface ContextMenuProps {
-  trigger: (props: {
-    ref: (el: HTMLButtonElement | null) => void;
-    onClick: () => void;
-    isOpen: boolean;
-  }) => React.ReactNode;
+  trigger: React.ReactNode;
   children: React.ReactNode;
   onClose?: () => void;
 }
@@ -16,7 +12,7 @@ interface ContextMenuProps {
 export default function ContextMenu({ trigger, children, onClose }: ContextMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
-  const triggerEl = useRef<HTMLButtonElement | null>(null);
+  const triggerRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
   const close = useCallback(() => {
@@ -25,13 +21,10 @@ export default function ContextMenu({ trigger, children, onClose }: ContextMenuP
     onClose?.();
   }, [onClose]);
 
-  const toggle = useCallback(() => {
-    if (isOpen) {
-      close();
-      return;
-    }
-    const btn = triggerEl.current;
-    if (!btn) return;
+  const open = useCallback(() => {
+    const el = triggerRef.current;
+    if (!el) return;
+    const btn = el.querySelector("button") || el;
     const rect = btn.getBoundingClientRect();
     const menuWidth = 176;
     const top = rect.bottom + 4;
@@ -43,11 +36,6 @@ export default function ContextMenu({ trigger, children, onClose }: ContextMenuP
       top + menuHeight > window.innerHeight - 8 ? rect.top - menuHeight - 4 : top;
     setPosition({ top: finalTop, left });
     setIsOpen(true);
-  }, [isOpen, close]);
-
-  // Callback ref — stable across renders, no ref-forwarding issues
-  const setTriggerRef = useCallback((el: HTMLButtonElement | null) => {
-    triggerEl.current = el;
   }, []);
 
   // Close on outside click
@@ -57,13 +45,12 @@ export default function ContextMenu({ trigger, children, onClose }: ContextMenuP
       if (
         menuRef.current &&
         !menuRef.current.contains(e.target as Node) &&
-        triggerEl.current &&
-        !triggerEl.current.contains(e.target as Node)
+        triggerRef.current &&
+        !triggerRef.current.contains(e.target as Node)
       ) {
         close();
       }
     };
-    // Delay to avoid the opening click from also closing
     const id = setTimeout(() => document.addEventListener("click", handler), 0);
     return () => {
       clearTimeout(id);
@@ -83,7 +70,9 @@ export default function ContextMenu({ trigger, children, onClose }: ContextMenuP
 
   return (
     <>
-      {trigger({ ref: setTriggerRef, onClick: toggle, isOpen })}
+      <div ref={triggerRef} onClick={open} className="inline-flex">
+        {trigger}
+      </div>
       {isOpen && position && (
         <div
           ref={menuRef}
