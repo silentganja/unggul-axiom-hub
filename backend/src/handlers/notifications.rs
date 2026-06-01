@@ -19,6 +19,7 @@ static NOTIFICATION_TX: LazyLock<broadcast::Sender<NotificationEvent>> = LazyLoc
 });
 
 /// Get a sender handle for broadcasting events from handler code.
+#[allow(dead_code)]
 pub fn notification_sender() -> broadcast::Sender<NotificationEvent> {
     NOTIFICATION_TX.clone()
 }

@@ -3,6 +3,10 @@
 //
 // Default implementation uses the local filesystem. Set STORAGE_BACKEND=s3
 // and configure AWS_* env vars to switch to S3-compatible storage (MinIO, R2, etc.).
+//
+// NOTE: This module is an abstraction layer prepared for future S3 integration.
+// All types are currently unused by the main application but are kept for
+// the migration path.
 // ─────────────────────────────────────────────────────────────────────────────
 
 use std::path::{Path, PathBuf};

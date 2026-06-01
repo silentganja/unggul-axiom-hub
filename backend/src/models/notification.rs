@@ -3,6 +3,7 @@ use serde::Serialize;
 /// A lightweight event broadcast to SSE clients.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase", tag = "type")]
+#[allow(dead_code)]
 pub enum NotificationEvent {
     #[serde(rename = "governance_update")]
     GovernanceUpdate {
