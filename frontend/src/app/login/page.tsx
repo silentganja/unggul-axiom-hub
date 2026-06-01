@@ -8,6 +8,8 @@ import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { useAuthStore } from "@/store/useAuthStore";
 import { cn } from "@/lib/utils";
 
+const VALID_PORTALS = new Set(["foundation", "chief"]);
+
 function LoginForm() {
   const emailId = useId();
   const passwordId = useId();
@@ -22,9 +24,8 @@ function LoginForm() {
   const { login, isLoading: authLoading, error: authError, isAuthenticated } = useAuthStore();
 
   // Block direct /login access — users must select a portal from the landing page first.
-  const VALID_PORTALS = ["foundation", "chief"];
   useEffect(() => {
-    if (!portal || !VALID_PORTALS.includes(portal)) {
+    if (!portal || !VALID_PORTALS.has(portal)) {
       router.replace("/");
     }
   }, [portal, router]);
