@@ -5,6 +5,7 @@ use uuid::Uuid;
 // ── Database Row ─────────────────────────────────────────────────────────────
 
 #[derive(Debug, sqlx::FromRow)]
+#[allow(dead_code)]
 pub struct FileShare {
     pub id: Uuid,
     pub file_id: Uuid,

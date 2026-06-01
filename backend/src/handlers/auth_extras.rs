@@ -22,13 +22,13 @@ fn generate_token() -> String {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct ForgotPasswordRequest {
+pub(crate) struct ForgotPasswordRequest {
     email: String,
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct ResetPasswordRequest {
+pub(crate) struct ResetPasswordRequest {
     token: String,
     new_password: String,
 }
@@ -123,7 +123,7 @@ pub async fn reset_password(
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct MagicLinkRequest {
+pub(crate) struct MagicLinkRequest {
     email: String,
 }
 
@@ -203,7 +203,7 @@ pub async fn verify_magic_link(
 }
 
 #[derive(Deserialize)]
-struct MagicLinkVerify {
+pub(crate) struct MagicLinkVerify {
     token: String,
 }
 

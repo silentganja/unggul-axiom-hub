@@ -49,6 +49,7 @@ pub fn can_govern_classified(role: &str) -> bool {
 }
 
 /// Whether this role can manage users.
+#[allow(dead_code)]
 pub fn can_manage_users(role: &str) -> bool {
     role_level(role) >= 3 // director+
 }

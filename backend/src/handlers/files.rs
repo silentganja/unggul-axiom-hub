@@ -61,7 +61,7 @@ pub async fn list_files(
     query: web::Query<ListFilesQuery>,
 ) -> Result<HttpResponse, AppError> {
     let page = query.page.unwrap_or(1).max(1);
-    let per_page = query.per_page.unwrap_or(50).min(200).max(1);
+    let per_page = query.per_page.unwrap_or(50).clamp(1, 200);
     let offset = ((page - 1) * per_page) as i64;
     let search = query.q.as_deref().unwrap_or("").trim();
 
@@ -390,7 +390,7 @@ pub async fn delete_file(
 
             let locker_level = locker_role
                 .as_deref()
-                .map(|r| user::role_level(r))
+                .map(user::role_level)
                 .unwrap_or(0);
 
             if user::role_level(&user.role) < locker_level {
@@ -596,7 +596,7 @@ pub async fn get_quota(pool: web::Data<PgPool>, user: AuthUser) -> Result<HttpRe
 
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct MoveFilesRequest {
+pub(crate) struct MoveFilesRequest {
     file_ids: Vec<Uuid>,
     target_folder_id: Option<Uuid>,
 }
