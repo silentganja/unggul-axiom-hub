@@ -388,10 +388,7 @@ pub async fn delete_file(
                     .await
                     .map_err(AppError::Database)?;
 
-            let locker_level = locker_role
-                .as_deref()
-                .map(user::role_level)
-                .unwrap_or(0);
+            let locker_level = locker_role.as_deref().map(user::role_level).unwrap_or(0);
 
             if user::role_level(&user.role) < locker_level {
                 return Err(AppError::Conflict(
