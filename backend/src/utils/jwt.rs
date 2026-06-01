@@ -21,8 +21,8 @@ pub struct Claims {
 
 // ── Token lifetimes ───────────────────────────────────────────────────────────
 
-/// Access token lifetime: 15 minutes.
-const ACCESS_TOKEN_EXPIRY_MINUTES: i64 = 15;
+/// Access token lifetime: 1 hour.
+const ACCESS_TOKEN_EXPIRY_MINUTES: i64 = 60;
 
 /// Refresh token lifetime: 7 days.
 const _REFRESH_TOKEN_EXPIRY_DAYS: i64 = 7;

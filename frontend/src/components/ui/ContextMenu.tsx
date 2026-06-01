@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 
 interface ContextMenuProps {
   trigger: (props: {
-    ref: React.RefObject<HTMLButtonElement | null>;
+    ref: (el: HTMLButtonElement | null) => void;
     onClick: () => void;
     isOpen: boolean;
   }) => React.ReactNode;
@@ -12,11 +12,11 @@ interface ContextMenuProps {
   onClose?: () => void;
 }
 
-/** Renders a dropdown menu using fixed positioning, outside any overflow-hidden ancestors. */
+/** Renders a dropdown using fixed positioning, outside overflow-hidden ancestors. */
 export default function ContextMenu({ trigger, children, onClose }: ContextMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
-  const triggerRef = useRef<HTMLButtonElement>(null);
+  const triggerEl = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
   const close = useCallback(() => {
@@ -30,23 +30,25 @@ export default function ContextMenu({ trigger, children, onClose }: ContextMenuP
       close();
       return;
     }
-    const btn = triggerRef.current;
+    const btn = triggerEl.current;
     if (!btn) return;
     const rect = btn.getBoundingClientRect();
-    // Position dropdown below the button, aligned to the right edge
-    const menuWidth = 176; // ~w-44
+    const menuWidth = 176;
     const top = rect.bottom + 4;
     let left = rect.right - menuWidth;
-    // Keep within viewport
     if (left < 8) left = 8;
     if (left + menuWidth > window.innerWidth - 8) left = window.innerWidth - menuWidth - 8;
-    // If too close to bottom, flip above
-    const menuHeight = 300; // estimate
+    const menuHeight = 300;
     const finalTop =
       top + menuHeight > window.innerHeight - 8 ? rect.top - menuHeight - 4 : top;
     setPosition({ top: finalTop, left });
     setIsOpen(true);
   }, [isOpen, close]);
+
+  // Callback ref — stable across renders, no ref-forwarding issues
+  const setTriggerRef = useCallback((el: HTMLButtonElement | null) => {
+    triggerEl.current = el;
+  }, []);
 
   // Close on outside click
   useEffect(() => {
@@ -55,13 +57,13 @@ export default function ContextMenu({ trigger, children, onClose }: ContextMenuP
       if (
         menuRef.current &&
         !menuRef.current.contains(e.target as Node) &&
-        triggerRef.current &&
-        !triggerRef.current.contains(e.target as Node)
+        triggerEl.current &&
+        !triggerEl.current.contains(e.target as Node)
       ) {
         close();
       }
     };
-    // Delay to avoid the same click that opened it from closing it
+    // Delay to avoid the opening click from also closing
     const id = setTimeout(() => document.addEventListener("click", handler), 0);
     return () => {
       clearTimeout(id);
@@ -81,11 +83,11 @@ export default function ContextMenu({ trigger, children, onClose }: ContextMenuP
 
   return (
     <>
-      {trigger({ ref: triggerRef, onClick: toggle, isOpen })}
+      {trigger({ ref: setTriggerRef, onClick: toggle, isOpen })}
       {isOpen && position && (
         <div
           ref={menuRef}
-          className="fixed z-[100] w-44 rounded border border-border/80 bg-background-panel shadow-md p-1 space-y-0.5 text-left font-mono animate-in fade-in zoom-in-95 duration-100"
+          className="fixed z-[100] w-44 rounded border border-border/80 bg-background-panel shadow-lg p-1 space-y-0.5 text-left font-mono animate-in fade-in zoom-in-95 duration-100"
           style={{ top: position.top, left: position.left }}
         >
           {children}

@@ -1,9 +1,9 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // Auto-migration runner — applies idempotent schema migrations on every startup.
 //
-// This ensures the database schema stays in sync with the application code
-// regardless of whether the Docker volume was reset or manual migrations were
-// run. All statements use IF NOT EXISTS / IF EXISTS to be safely re-runnable.
+// Uses version numbers in the 9000+ range to avoid conflicts with any existing
+// _migrations records that may have been created by an older init.sql.
+// All statements use IF NOT EXISTS / IF EXISTS to be safely re-runnable.
 // ─────────────────────────────────────────────────────────────────────────────
 
 use sqlx::PgPool;
@@ -25,56 +25,21 @@ pub async fn run_migrations(pool: &PgPool) {
     .await;
 
     // ── Migration definitions ──────────────────────────────────────────────────
-    // Each entry: (version, description, list of SQL statements)
+    // Using 9000+ versions to avoid conflicts with any pre-existing records.
     let migrations: Vec<(&str, &str, Vec<&str>)> = vec![
-        // 001 — Core extensions
+        // 9001 — Core extensions
         (
-            "0001",
-            "Core extensions",
+            "9001",
+            "Auto: Core extensions",
             vec![
                 "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\"",
                 "CREATE EXTENSION IF NOT EXISTS \"pgcrypto\"",
             ],
         ),
-        // 006 — Role hierarchy (update CHECK constraint)
+        // 9002 — File shares table
         (
-            "0006",
-            "Role hierarchy — chief/director/officer/staff",
-            vec![
-                "ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check",
-                "ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('chief', 'director', 'officer', 'staff'))",
-            ],
-        ),
-        // 007 — Active flag on users (CRITICAL: fixes login/admin 500 errors)
-        (
-            "0007",
-            "Admin Tier 1 — user active flag",
-            vec![
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE",
-            ],
-        ),
-        // 003 — Soft-delete column on files
-        (
-            "0003",
-            "Soft-delete support — deleted_at column on files",
-            vec![
-                "ALTER TABLE files ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ",
-                "CREATE INDEX IF NOT EXISTS idx_files_deleted_at ON files (deleted_at)",
-            ],
-        ),
-        // 004 — Governance + file locking columns
-        (
-            "0004",
-            "Governance workflow — approval requests + file locking",
-            vec![
-                "ALTER TABLE files ADD COLUMN IF NOT EXISTS locked_by UUID",
-                "ALTER TABLE files ADD COLUMN IF NOT EXISTS locked_at TIMESTAMPTZ",
-            ],
-        ),
-        // 002 — File shares table
-        (
-            "0002",
-            "File sharing — file_shares table",
+            "9002",
+            "Auto: File sharing — file_shares table",
             vec![
                 "CREATE TABLE IF NOT EXISTS file_shares (
                     id          UUID         PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -90,10 +55,28 @@ pub async fn run_migrations(pool: &PgPool) {
                 "CREATE INDEX IF NOT EXISTS idx_file_shares_user_id ON file_shares (user_id)",
             ],
         ),
-        // 005 — Auth extras tables
+        // 9003 — Soft-delete column on files
         (
-            "0005",
-            "Auth extras — password_resets, magic_links, webauthn_credentials",
+            "9003",
+            "Auto: Soft-delete — deleted_at on files",
+            vec![
+                "ALTER TABLE files ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ",
+                "CREATE INDEX IF NOT EXISTS idx_files_deleted_at ON files (deleted_at)",
+            ],
+        ),
+        // 9004 — Governance + file locking columns
+        (
+            "9004",
+            "Auto: Governance + file locking columns",
+            vec![
+                "ALTER TABLE files ADD COLUMN IF NOT EXISTS locked_by UUID",
+                "ALTER TABLE files ADD COLUMN IF NOT EXISTS locked_at TIMESTAMPTZ",
+            ],
+        ),
+        // 9005 — Auth extras tables
+        (
+            "9005",
+            "Auto: Auth extras — password_resets, magic_links, webauthn_credentials",
             vec![
                 "CREATE TABLE IF NOT EXISTS password_resets (
                     id          UUID         PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -121,10 +104,27 @@ pub async fn run_migrations(pool: &PgPool) {
                 )",
             ],
         ),
-        // 008 — System config
+        // 9006 — Role hierarchy
         (
-            "0008",
-            "Admin Tier 2 — system configuration",
+            "9006",
+            "Auto: Role hierarchy — chief/director/officer/staff",
+            vec![
+                "ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check",
+                "ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('chief', 'director', 'officer', 'staff'))",
+            ],
+        ),
+        // 9007 — Active flag on users
+        (
+            "9007",
+            "Auto: Active flag on users",
+            vec![
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE",
+            ],
+        ),
+        // 9008 — System config
+        (
+            "9008",
+            "Auto: System configuration table",
             vec![
                 "CREATE TABLE IF NOT EXISTS system_config (
                     key         VARCHAR(128) PRIMARY KEY,
@@ -138,27 +138,43 @@ pub async fn run_migrations(pool: &PgPool) {
                 ON CONFLICT (key) DO NOTHING",
             ],
         ),
-        // 010 — Audit logs table (if not created by init.sql)
+        // 9009 — Server-side favorites
         (
-            "0010",
-            "Audit logs table",
+            "9009",
+            "Auto: Favorites table",
             vec![
-                "CREATE TABLE IF NOT EXISTS audit_logs (
-                    id              UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
-                    user_id         UUID        REFERENCES users (id) ON DELETE SET NULL,
-                    action          VARCHAR(64) NOT NULL,
-                    target_resource VARCHAR(512),
-                    ip_address      VARCHAR(45),
-                    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                "CREATE TABLE IF NOT EXISTS favorites (
+                    user_id     UUID NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+                    file_id     UUID NOT NULL REFERENCES files (id) ON DELETE CASCADE,
+                    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    PRIMARY KEY (user_id, file_id)
                 )",
-                "CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs (user_id)",
-                "CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs (created_at DESC)",
+                "CREATE INDEX IF NOT EXISTS idx_favorites_user_id ON favorites (user_id)",
             ],
         ),
-        // 011 — Governance requests table (if not created by init.sql)
+        // 9010 — File versioning
         (
-            "0011",
-            "Governance requests table",
+            "9010",
+            "Auto: File versioning table",
+            vec![
+                "CREATE TABLE IF NOT EXISTS file_versions (
+                    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                    file_id         UUID NOT NULL REFERENCES files (id) ON DELETE CASCADE,
+                    version_number  INTEGER NOT NULL,
+                    size_bytes      BIGINT NOT NULL DEFAULT 0,
+                    storage_path    VARCHAR(1024) NOT NULL,
+                    uploaded_by     UUID REFERENCES users (id) ON DELETE SET NULL,
+                    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    UNIQUE (file_id, version_number)
+                )",
+                "CREATE INDEX IF NOT EXISTS idx_file_versions_file_id ON file_versions (file_id)",
+                "CREATE INDEX IF NOT EXISTS idx_file_versions_created ON file_versions (created_at DESC)",
+            ],
+        ),
+        // 9011 — Governance requests table
+        (
+            "9011",
+            "Auto: Governance requests table",
             vec![
                 "CREATE TABLE IF NOT EXISTS governance_requests (
                     id              UUID         PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -181,37 +197,21 @@ pub async fn run_migrations(pool: &PgPool) {
                 "CREATE INDEX IF NOT EXISTS idx_gov_requests_file ON governance_requests (target_file_id)",
             ],
         ),
-        // 009 — Server-side favorites
+        // 9012 — Audit logs table
         (
-            "0009",
-            "Server-side favorites table",
+            "9012",
+            "Auto: Audit logs table",
             vec![
-                "CREATE TABLE IF NOT EXISTS favorites (
-                    user_id     UUID NOT NULL REFERENCES users (id) ON DELETE CASCADE,
-                    file_id     UUID NOT NULL REFERENCES files (id) ON DELETE CASCADE,
-                    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                    PRIMARY KEY (user_id, file_id)
+                "CREATE TABLE IF NOT EXISTS audit_logs (
+                    id              UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
+                    user_id         UUID        REFERENCES users (id) ON DELETE SET NULL,
+                    action          VARCHAR(64) NOT NULL,
+                    target_resource VARCHAR(512),
+                    ip_address      VARCHAR(45),
+                    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
                 )",
-                "CREATE INDEX IF NOT EXISTS idx_favorites_user_id ON favorites (user_id)",
-            ],
-        ),
-        // 010 — File versioning
-        (
-            "0010",
-            "File versioning system",
-            vec![
-                "CREATE TABLE IF NOT EXISTS file_versions (
-                    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-                    file_id         UUID NOT NULL REFERENCES files (id) ON DELETE CASCADE,
-                    version_number  INTEGER NOT NULL,
-                    size_bytes      BIGINT NOT NULL DEFAULT 0,
-                    storage_path    VARCHAR(1024) NOT NULL,
-                    uploaded_by     UUID REFERENCES users (id) ON DELETE SET NULL,
-                    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                    UNIQUE (file_id, version_number)
-                )",
-                "CREATE INDEX IF NOT EXISTS idx_file_versions_file_id ON file_versions (file_id)",
-                "CREATE INDEX IF NOT EXISTS idx_file_versions_created ON file_versions (created_at DESC)",
+                "CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs (user_id)",
+                "CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs (created_at DESC)",
             ],
         ),
     ];
@@ -260,10 +260,10 @@ pub async fn run_migrations(pool: &PgPool) {
             info!(
                 version = %version,
                 description = %description,
-                "Migration applied successfully"
+                "Auto-migration applied"
             );
         }
     }
 
-    info!("Schema migrations check complete");
+    info!("Auto-migration check complete");
 }

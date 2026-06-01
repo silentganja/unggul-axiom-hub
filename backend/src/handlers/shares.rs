@@ -35,7 +35,7 @@ pub async fn list_shared_files(
             u.full_name AS shared_by_full_name,
             u.email AS shared_by_email
          FROM file_shares fs
-         JOIN files f ON f.id = fs.file_id
+         JOIN files f ON f.id = fs.file_id AND f.deleted_at IS NULL
          JOIN users u ON u.id = fs.shared_by
          WHERE fs.user_id = $1
          ORDER BY fs.created_at DESC
