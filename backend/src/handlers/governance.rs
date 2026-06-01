@@ -190,8 +190,10 @@ pub async fn approve_request(
             .flatten();
 
     // Classification changes require director+ authority
-    if matches!(req_type.as_deref(), Some("CLASSIFICATION_UPGRADE" | "CLASSIFICATION_DOWNGRADE"))
-        && !user::can_govern_classified(&user.role)
+    if matches!(
+        req_type.as_deref(),
+        Some("CLASSIFICATION_UPGRADE" | "CLASSIFICATION_DOWNGRADE")
+    ) && !user::can_govern_classified(&user.role)
     {
         return Err(AppError::Unauthorized);
     }
