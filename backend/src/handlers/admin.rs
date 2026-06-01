@@ -290,32 +290,57 @@ pub async fn dashboard(
     pool: web::Data<PgPool>,
     _admin: AdminUser,
 ) -> Result<HttpResponse, AppError> {
-    let total_users: i64 =
-        sqlx::query_scalar("SELECT COUNT(*) FROM users").fetch_one(pool.get_ref()).await.map_err(AppError::Database)?;
+    let total_users: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM users")
+        .fetch_one(pool.get_ref())
+        .await
+        .map_err(AppError::Database)?;
     let active_users: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM users WHERE active = TRUE")
-        .fetch_one(pool.get_ref()).await.map_err(AppError::Database)?;
+        .fetch_one(pool.get_ref())
+        .await
+        .map_err(AppError::Database)?;
     let total_files: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM files WHERE deleted_at IS NULL AND is_folder = FALSE",
-    ).fetch_one(pool.get_ref()).await.map_err(AppError::Database)?;
+    )
+    .fetch_one(pool.get_ref())
+    .await
+    .map_err(AppError::Database)?;
     let total_folders: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM files WHERE deleted_at IS NULL AND is_folder = TRUE",
-    ).fetch_one(pool.get_ref()).await.map_err(AppError::Database)?;
+    )
+    .fetch_one(pool.get_ref())
+    .await
+    .map_err(AppError::Database)?;
     let storage_used_bytes: i64 = sqlx::query_scalar(
         "SELECT COALESCE(SUM(size_bytes), 0) FROM files WHERE deleted_at IS NULL",
-    ).fetch_one(pool.get_ref()).await.map_err(AppError::Database)?;
-    let pending_governance: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM governance_requests WHERE status = 'PENDING'",
-    ).fetch_one(pool.get_ref()).await.map_err(AppError::Database)?;
+    )
+    .fetch_one(pool.get_ref())
+    .await
+    .map_err(AppError::Database)?;
+    let pending_governance: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM governance_requests WHERE status = 'PENDING'")
+            .fetch_one(pool.get_ref())
+            .await
+            .map_err(AppError::Database)?;
     let locked_files: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM files WHERE locked_by IS NOT NULL AND deleted_at IS NULL",
-    ).fetch_one(pool.get_ref()).await.map_err(AppError::Database)?;
-    let shared_files: i64 = sqlx::query_scalar(
-        "SELECT COUNT(DISTINCT file_id) FROM file_shares",
-    ).fetch_one(pool.get_ref()).await.map_err(AppError::Database)?;
+    )
+    .fetch_one(pool.get_ref())
+    .await
+    .map_err(AppError::Database)?;
+    let shared_files: i64 = sqlx::query_scalar("SELECT COUNT(DISTINCT file_id) FROM file_shares")
+        .fetch_one(pool.get_ref())
+        .await
+        .map_err(AppError::Database)?;
 
     Ok(HttpResponse::Ok().json(AdminDashboard {
-        total_users, active_users, total_files, total_folders,
-        storage_used_bytes, pending_governance, locked_files, shared_files,
+        total_users,
+        active_users,
+        total_files,
+        total_folders,
+        storage_used_bytes,
+        pending_governance,
+        locked_files,
+        shared_files,
     }))
 }
 
@@ -358,11 +383,17 @@ pub async fn reset_user_password(
 ) -> Result<HttpResponse, AppError> {
     let user_id = path.into_inner();
     if body.new_password.len() < 6 {
-        return Err(AppError::BadRequest("Password must be at least 6 characters".into()));
+        return Err(AppError::BadRequest(
+            "Password must be at least 6 characters".into(),
+        ));
     }
     let hash = password::hash_password(&body.new_password)?;
     let updated = sqlx::query("UPDATE users SET password_hash = $1 WHERE id = $2")
-        .bind(&hash).bind(user_id).execute(pool.get_ref()).await.map_err(AppError::Database)?;
+        .bind(&hash)
+        .bind(user_id)
+        .execute(pool.get_ref())
+        .await
+        .map_err(AppError::Database)?;
     if updated.rows_affected() == 0 {
         return Err(AppError::NotFound);
     }
@@ -378,9 +409,12 @@ pub async fn toggle_user_active(
 ) -> Result<HttpResponse, AppError> {
     let user_id = path.into_inner();
     // Prevent deactivating the last active chief/director
-    let target: Option<(String, bool)> = sqlx::query_as(
-        "SELECT role, active FROM users WHERE id = $1",
-    ).bind(user_id).fetch_optional(pool.get_ref()).await.map_err(AppError::Database)?;
+    let target: Option<(String, bool)> =
+        sqlx::query_as("SELECT role, active FROM users WHERE id = $1")
+            .bind(user_id)
+            .fetch_optional(pool.get_ref())
+            .await
+            .map_err(AppError::Database)?;
     let (role, currently_active) = target.ok_or(AppError::NotFound)?;
 
     if currently_active && user::role_level(&role) >= 3 {
@@ -388,12 +422,17 @@ pub async fn toggle_user_active(
             "SELECT COUNT(*) FROM users WHERE role IN ('chief','director') AND active = TRUE AND id != $1",
         ).bind(user_id).fetch_one(pool.get_ref()).await.map_err(AppError::Database)?;
         if high_active == 0 {
-            return Err(AppError::Conflict("Cannot deactivate the last active chief/director".into()));
+            return Err(AppError::Conflict(
+                "Cannot deactivate the last active chief/director".into(),
+            ));
         }
     }
 
     sqlx::query("UPDATE users SET active = NOT active WHERE id = $1")
-        .bind(user_id).execute(pool.get_ref()).await.map_err(AppError::Database)?;
+        .bind(user_id)
+        .execute(pool.get_ref())
+        .await
+        .map_err(AppError::Database)?;
     Ok(HttpResponse::Ok().json(serde_json::json!({ "status": "ok" })))
 }
 
@@ -406,7 +445,10 @@ pub async fn force_delete_file(
 ) -> Result<HttpResponse, AppError> {
     let file_id = path.into_inner();
     let deleted = sqlx::query("DELETE FROM files WHERE id = $1")
-        .bind(file_id).execute(pool.get_ref()).await.map_err(AppError::Database)?;
+        .bind(file_id)
+        .execute(pool.get_ref())
+        .await
+        .map_err(AppError::Database)?;
     if deleted.rows_affected() == 0 {
         return Err(AppError::NotFound);
     }
@@ -425,10 +467,13 @@ struct ConfigRow {
 }
 
 pub async fn get_config(
-    pool: web::Data<PgPool>, _admin: AdminUser,
+    pool: web::Data<PgPool>,
+    _admin: AdminUser,
 ) -> Result<HttpResponse, AppError> {
     let rows: Vec<ConfigRow> = sqlx::query_as("SELECT key, value FROM system_config")
-        .fetch_all(pool.get_ref()).await.map_err(AppError::Database)?;
+        .fetch_all(pool.get_ref())
+        .await
+        .map_err(AppError::Database)?;
     let map: std::collections::HashMap<String, String> = rows.into_iter().map(|r| (r.key, r.value)).collect();
     Ok(HttpResponse::Ok().json(map))
 }
@@ -440,10 +485,16 @@ struct UpdateConfigRequest {
 }
 
 pub async fn update_config(
-    pool: web::Data<PgPool>, _admin: AdminUser, body: web::Json<UpdateConfigRequest>,
+    pool: web::Data<PgPool>,
+    _admin: AdminUser,
+    body: web::Json<UpdateConfigRequest>,
 ) -> Result<HttpResponse, AppError> {
     sqlx::query("INSERT INTO system_config (key, value, updated_at) VALUES ($1, $2, NOW()) ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW()")
-        .bind(&body.key).bind(&body.value).execute(pool.get_ref()).await.map_err(AppError::Database)?;
+        .bind(&body.key)
+        .bind(&body.value)
+        .execute(pool.get_ref())
+        .await
+        .map_err(AppError::Database)?;
     Ok(HttpResponse::Ok().json(serde_json::json!({ "status": "ok" })))
 }
 
@@ -452,7 +503,8 @@ pub async fn update_config(
 // ═════════════════════════════════════════════════════════════════════════════
 
 pub async fn admin_governance_list(
-    pool: web::Data<PgPool>, _admin: AdminUser,
+    pool: web::Data<PgPool>,
+    _admin: AdminUser,
 ) -> Result<HttpResponse, AppError> {
     let requests: Vec<crate::models::governance::GovernanceRequestResponse> = sqlx::query_as(
         "SELECT gr.id, gr.type, gr.title, gr.description, gr.status, gr.requested_by,
@@ -466,7 +518,9 @@ pub async fn admin_governance_list(
          LEFT JOIN files f ON f.id = gr.target_file_id
          ORDER BY CASE gr.status WHEN 'PENDING' THEN 0 ELSE 1 END, gr.created_at DESC
          LIMIT 500",
-    ).fetch_all(pool.get_ref()).await.map_err(AppError::Database)?;
+    ).fetch_all(pool.get_ref())
+        .await
+        .map_err(AppError::Database)?;
     Ok(HttpResponse::Ok().json(requests))
 }
 
@@ -477,13 +531,19 @@ struct ForceApproveRequest {
 }
 
 pub async fn force_approve(
-    pool: web::Data<PgPool>, _admin: AdminUser, path: web::Path<Uuid>,
+    pool: web::Data<PgPool>,
+    _admin: AdminUser,
+    path: web::Path<Uuid>,
     body: web::Json<ForceApproveRequest>,
 ) -> Result<HttpResponse, AppError> {
     let request_id = path.into_inner();
     // Mark as approved by the given reviewer
     sqlx::query("UPDATE governance_requests SET status = 'APPROVED', reviewed_by = $1, updated_at = NOW() WHERE id = $2")
-        .bind(body.reviewer_id).bind(request_id).execute(pool.get_ref()).await.map_err(AppError::Database)?;
+        .bind(body.reviewer_id)
+        .bind(request_id)
+        .execute(pool.get_ref())
+        .await
+        .map_err(AppError::Database)?;
     // Execute the associated action (simplified: same logic as approve_request)
     let req_type: Option<String> = sqlx::query_scalar("SELECT type FROM governance_requests WHERE id = $1")
         .bind(request_id).fetch_optional(pool.get_ref()).await.map_err(AppError::Database)?.flatten();
@@ -491,8 +551,21 @@ pub async fn force_approve(
         .bind(request_id).fetch_optional(pool.get_ref()).await.map_err(AppError::Database)?.flatten();
     if let (Some(fid), Some(rt)) = (file_id, req_type) {
         match rt.as_str() {
-            "FILE_LOCK" => { sqlx::query("UPDATE files SET locked_by = (SELECT requested_by FROM governance_requests WHERE id = $1), locked_at = NOW() WHERE id = $2").bind(request_id).bind(fid).execute(pool.get_ref()).await.map_err(AppError::Database)?; }
-            "FILE_UNLOCK" => { sqlx::query("UPDATE files SET locked_by = NULL, locked_at = NULL WHERE id = $1").bind(fid).execute(pool.get_ref()).await.map_err(AppError::Database)?; }
+            "FILE_LOCK" => {
+                sqlx::query("UPDATE files SET locked_by = (SELECT requested_by FROM governance_requests WHERE id = $1), locked_at = NOW() WHERE id = $2")
+                    .bind(request_id)
+                    .bind(fid)
+                    .execute(pool.get_ref())
+                    .await
+                    .map_err(AppError::Database)?;
+            }
+            "FILE_UNLOCK" => {
+                sqlx::query("UPDATE files SET locked_by = NULL, locked_at = NULL WHERE id = $1")
+                    .bind(fid)
+                    .execute(pool.get_ref())
+                    .await
+                    .map_err(AppError::Database)?;
+            }
             _ => {}
         }
     }
@@ -515,14 +588,17 @@ struct UserStorageRow {
 }
 
 pub async fn storage_breakdown(
-    pool: web::Data<PgPool>, _admin: AdminUser,
+    pool: web::Data<PgPool>,
+    _admin: AdminUser,
 ) -> Result<HttpResponse, AppError> {
     let rows: Vec<UserStorageRow> = sqlx::query_as(
         "SELECT u.id AS user_id, u.full_name, u.email, u.role,
                 COUNT(f.id) AS file_count, COALESCE(SUM(f.size_bytes), 0) AS total_bytes
          FROM users u LEFT JOIN files f ON f.owner_id = u.id AND f.deleted_at IS NULL
          GROUP BY u.id ORDER BY total_bytes DESC",
-    ).fetch_all(pool.get_ref()).await.map_err(AppError::Database)?;
+    ).fetch_all(pool.get_ref())
+        .await
+        .map_err(AppError::Database)?;
     Ok(HttpResponse::Ok().json(rows))
 }
 
@@ -546,21 +622,31 @@ struct BulkUsersRequest {
 }
 
 pub async fn bulk_create_users(
-    pool: web::Data<PgPool>, _admin: AdminUser, body: web::Json<BulkUsersRequest>,
+    pool: web::Data<PgPool>,
+    _admin: AdminUser,
+    body: web::Json<BulkUsersRequest>,
 ) -> Result<HttpResponse, AppError> {
     let mut created = 0u32;
     let mut errors: Vec<String> = Vec::new();
     for u in &body.users {
         if u.email.is_empty() || u.password.is_empty() || u.full_name.is_empty() {
-            errors.push(format!("{}: missing fields", u.email)); continue;
+            errors.push(format!("{}: missing fields", u.email));
+            continue;
         }
         if !user::VALID_ROLES.contains(&u.role.as_str()) {
-            errors.push(format!("{}: invalid role", u.email)); continue;
+            errors.push(format!("{}: invalid role", u.email));
+            continue;
         }
         let hash = password::hash_password(&u.password)?;
         let result = sqlx::query(
             "INSERT INTO users (email, password_hash, full_name, role) VALUES ($1, $2, $3, $4)",
-        ).bind(&u.email).bind(&hash).bind(&u.full_name).bind(&u.role).execute(pool.get_ref()).await;
+        )
+        .bind(&u.email)
+        .bind(&hash)
+        .bind(&u.full_name)
+        .bind(&u.role)
+        .execute(pool.get_ref())
+        .await;
         match result {
             Ok(_) => created += 1,
             Err(e) => errors.push(format!("{}: {}", u.email, e)),
@@ -577,7 +663,9 @@ struct BulkRoleUpdate {
 }
 
 pub async fn bulk_role_update(
-    pool: web::Data<PgPool>, _admin: AdminUser, body: web::Json<BulkRoleUpdate>,
+    pool: web::Data<PgPool>,
+    _admin: AdminUser,
+    body: web::Json<BulkRoleUpdate>,
 ) -> Result<HttpResponse, AppError> {
     if !user::VALID_ROLES.contains(&body.new_role.as_str()) {
         return Err(AppError::BadRequest("Invalid role".into()));
@@ -588,7 +676,11 @@ pub async fn bulk_role_update(
     let mut updated = 0u32;
     for uid in &body.user_ids {
         let r = sqlx::query("UPDATE users SET role = $1 WHERE id = $2")
-            .bind(&body.new_role).bind(uid).execute(pool.get_ref()).await.map_err(AppError::Database)?;
+            .bind(&body.new_role)
+            .bind(uid)
+            .execute(pool.get_ref())
+            .await
+            .map_err(AppError::Database)?;
         updated += r.rows_affected() as u32;
     }
     Ok(HttpResponse::Ok().json(serde_json::json!({ "updated": updated })))
