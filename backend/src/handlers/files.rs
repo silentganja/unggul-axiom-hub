@@ -12,6 +12,37 @@ use tokio::io::AsyncWriteExt;
 use uuid::Uuid;
 
 // ─────────────────────────────────────────────────────────────────────────────
+// GET /api/files/{id}
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Get a single file or folder by ID (must be owned by the authenticated user).
+///
+/// Returns `404` if not found or ownership mismatch.
+pub async fn get_file(
+    pool: web::Data<PgPool>,
+    user: AuthUser,
+    path: web::Path<Uuid>,
+) -> Result<HttpResponse, AppError> {
+    let file_id = path.into_inner();
+
+    let file: Option<FileNode> = sqlx::query_as::<_, FileNode>(
+        "SELECT id, parent_id, owner_id, name, is_folder,
+                size_bytes, mime_type, classification, created_at, updated_at
+         FROM files
+         WHERE id = $1 AND owner_id = $2",
+    )
+    .bind(file_id)
+    .bind(user.id)
+    .fetch_optional(pool.get_ref())
+    .await
+    .map_err(AppError::Database)?;
+
+    let file = file.ok_or(AppError::NotFound)?;
+
+    Ok(HttpResponse::Ok().json(file))
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // GET /api/files[?parent_id=uuid]
 // ─────────────────────────────────────────────────────────────────────────────
 

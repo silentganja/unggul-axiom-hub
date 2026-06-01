@@ -150,12 +150,23 @@ async fn main() -> std::io::Result<()> {
             .service(root)
             .service(health_check)
             // /api/auth
-            .service(web::scope("/api/auth").route("/login", web::post().to(handlers::auth::login)))
+            .service(
+                web::scope("/api/auth")
+                    .route("/login", web::post().to(handlers::auth::login))
+                    .route("/me", web::get().to(handlers::auth::me)),
+            )
+            // /api/audit  — all routes require a valid JWT (AuthUser extractor)
+            .service(
+                web::scope("/api/audit")
+                    .route("", web::get().to(handlers::audit::list_audit_logs)),
+            )
             // /api/files  — all routes require a valid JWT (AuthUser extractor)
             .service(
                 web::scope("/api/files")
                     // GET  /api/files[?parent_id=uuid]  — list directory contents
                     .route("", web::get().to(handlers::files::list_files))
+                    // GET  /api/files/{id}              — get single file detail
+                    .route("/{id}", web::get().to(handlers::files::get_file))
                     // POST /api/files/folder             — create a new folder
                     .route("/folder", web::post().to(handlers::files::create_folder))
                     // POST /api/files/upload             — upload a file

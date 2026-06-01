@@ -1,4 +1,5 @@
 use crate::{
+    app_middleware::auth::AuthUser,
     errors::AppError,
     models::user::{User, UserProfile},
     utils::{jwt, password},
@@ -85,4 +86,31 @@ pub async fn login(
         token,
         user: user.into(),
     }))
+}
+
+// ── GET /api/auth/me ─────────────────────────────────────────────────────────
+
+/// Returns the currently authenticated user's profile.
+/// Used by the frontend to validate tokens and hydrate the session.
+///
+/// # Errors
+/// - `401 Unauthorized` — missing or invalid JWT
+/// - `404 Not Found`    — user no longer exists in database
+pub async fn me(
+    pool: web::Data<PgPool>,
+    user: AuthUser,
+) -> Result<HttpResponse, AppError> {
+    let profile: Option<UserProfile> = sqlx::query_as::<_, User>(
+        "SELECT id, email, password_hash, full_name, role, created_at \
+         FROM users WHERE id = $1 LIMIT 1",
+    )
+    .bind(user.id)
+    .fetch_optional(pool.get_ref())
+    .await
+    .map_err(AppError::Database)?
+    .map(|u| u.into());
+
+    let profile = profile.ok_or(AppError::NotFound)?;
+
+    Ok(HttpResponse::Ok().json(profile))
 }

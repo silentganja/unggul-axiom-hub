@@ -1,4 +1,12 @@
 import { create } from "zustand";
+import {
+  filesApi,
+  BackendFileNode,
+  formatFileSize,
+  formatTimestamp,
+} from "@/lib/api";
+
+// ── Frontend FileNode (UI-facing shape) ──────────────────────────────────────
 
 export interface Collaborator {
   id: string;
@@ -11,16 +19,39 @@ export interface FileNode {
   id: string;
   name: string;
   type: "file" | "folder";
-  size: string; // Pre-formatted or "--" for folders
+  size: string; // Pre-formatted human-readable
+  sizeBytes: number; // Raw bytes from backend
   modifiedAt: string;
-  classification: "RAHSIA" | "SULIT" | "TERBUKA";
+  classification: string;
   accessRole: "owner" | "editor" | "viewer";
-  isFavorite?: boolean;
+  isFavorite: boolean;
   collaborators: Collaborator[];
-  parentId: string | null; // Phase 4 parent folder linking
-  lockedBy?: string | null; // Phase 5 file locking
+  parentId: string | null;
+  lockedBy?: string | null;
   lockReason?: string | null;
+  mimeType?: string | null;
 }
+
+// ── Transform backend → frontend ─────────────────────────────────────────────
+
+function transformFile(bf: BackendFileNode): FileNode {
+  return {
+    id: bf.id,
+    name: bf.name,
+    type: bf.isFolder ? "folder" : "file",
+    size: bf.isFolder ? "--" : formatFileSize(bf.sizeBytes),
+    sizeBytes: bf.sizeBytes,
+    modifiedAt: formatTimestamp(bf.updatedAt),
+    classification: bf.classification,
+    accessRole: "owner", // Backend enforces ownership — all owned files default to owner
+    isFavorite: false,
+    collaborators: [],
+    parentId: bf.parentId,
+    mimeType: bf.mimeType,
+  };
+}
+
+// ── State shape ──────────────────────────────────────────────────────────────
 
 interface FileState {
   files: FileNode[];
@@ -29,261 +60,103 @@ interface FileState {
   currentFolderId: string | null;
   activeFile: FileNode | null;
   isAccessSheetOpen: boolean;
-  activeView: "overview" | "files" | "shared" | "recent" | "favorites" | "trash" | "governance"; // Phase 5 view navigation
-  previewFileId: string | null; // Phase 6 file preview overlay
-  
+  activeView: "overview" | "files" | "shared" | "recent" | "favorites" | "trash" | "governance";
+  previewFileId: string | null;
+  isLoading: boolean;
+  error: string | null;
+
+  // ── Data fetching ─────────────────────────────────────────────────────────
+  fetchFiles: () => Promise<void>;
+  fetchFileDetail: (id: string) => Promise<FileNode | null>;
+
+  // ── UI state ──────────────────────────────────────────────────────────────
   setSearchQuery: (query: string) => void;
   toggleSelection: (id: string) => void;
   selectAll: (ids: string[]) => void;
   clearSelection: () => void;
-  deleteFile: (id: string) => void;
-  deleteSelected: () => void;
-  createFolder: (name: string) => void;
-  uploadFile: (name: string, size: string, classification: "RAHSIA" | "SULIT" | "TERBUKA") => void;
-  toggleFavorite: (id: string) => void;
-  
-  // Phase 3 & 4 Advanced Panel & Navigation Integrations
   setActiveFile: (file: FileNode | null) => void;
   setAccessSheetOpen: (open: boolean) => void;
-  updateFileClassification: (id: string, classification: "RAHSIA" | "SULIT" | "TERBUKA") => void;
-  addCollaborator: (fileId: string, name: string, email: string, role: "owner" | "editor" | "viewer") => void;
-  updateCollaboratorRole: (fileId: string, collaboratorId: string, role: "owner" | "editor" | "viewer") => void;
-  removeCollaborator: (fileId: string, collaboratorId: string) => void;
-  renameFile: (id: string, newName: string) => void;
-  
-  // Phase 4 Navigation Mechanics
+  setActiveView: (view: FileState["activeView"]) => void;
+  setPreviewFileId: (id: string | null) => void;
   mapsToFolder: (folderId: string | null) => void;
   goBack: () => void;
- 
-  // Phase 5 File Locking Actions & View Setter
-  setActiveView: (view: "overview" | "files" | "shared" | "recent" | "favorites" | "trash" | "governance") => void;
-  setPreviewFileId: (id: string | null) => void; // Phase 6 file preview overlay
+
+  // ── CRUD operations ───────────────────────────────────────────────────────
+  createFolder: (name: string, classification?: string) => Promise<void>;
+  uploadFileReal: (file: File, classification?: string) => Promise<void>;
+  renameFile: (id: string, newName: string) => Promise<void>;
+  deleteFile: (id: string) => Promise<void>;
+  deleteSelected: () => Promise<void>;
+
+  // ── Client-side extras (backend support pending) ───────────────────────────
+  toggleFavorite: (id: string) => void;
+  updateFileClassification: (id: string, classification: string) => void;
+  addCollaborator: (
+    fileId: string,
+    name: string,
+    email: string,
+    role: "owner" | "editor" | "viewer"
+  ) => void;
+  updateCollaboratorRole: (
+    fileId: string,
+    collaboratorId: string,
+    role: "owner" | "editor" | "viewer"
+  ) => void;
+  removeCollaborator: (fileId: string, collaboratorId: string) => void;
   lockFile: (id: string, user: string, reason: string) => void;
   unlockFile: (id: string) => void;
 }
 
-const INITIAL_FILES: FileNode[] = [
-  // --- Root Level Folders ---
-  {
-    id: "f-2",
-    name: "Architecture_Blueprints",
-    type: "folder",
-    size: "--",
-    modifiedAt: "2026-05-20 09:15",
-    classification: "RAHSIA",
-    accessRole: "editor",
-    isFavorite: false,
-    collaborators: [
-      { id: "col-owner", name: "Elena Rostova", email: "elena.rostova@unggulaxiom.com", role: "owner" },
-      { id: "col-admin", name: "C-Suite Admin", email: "admin@unggul.axiom", role: "editor" },
-    ],
-    parentId: null,
-  },
-  {
-    id: "f-4",
-    name: "Operations_Handbook_2026",
-    type: "folder",
-    size: "--",
-    modifiedAt: "2026-05-18 11:20",
-    classification: "TERBUKA",
-    accessRole: "viewer",
-    isFavorite: false,
-    collaborators: [
-      { id: "col-owner", name: "David Chen", email: "david.chen@unggulaxiom.com", role: "owner" },
-      { id: "col-admin", name: "C-Suite Admin", email: "admin@unggul.axiom", role: "viewer" },
-    ],
-    parentId: null,
-  },
-  {
-    id: "f-8",
-    name: "Legal_Contracts_Archived",
-    type: "folder",
-    size: "--",
-    modifiedAt: "2026-05-01 10:12",
-    classification: "SULIT",
-    accessRole: "viewer",
-    isFavorite: false,
-    collaborators: [
-      { id: "col-owner", name: "Marcus Vance", email: "marcus.vance@unggulaxiom.com", role: "owner" },
-      { id: "col-admin", name: "C-Suite Admin", email: "admin@unggul.axiom", role: "viewer" },
-    ],
-    parentId: null,
-  },
+// ── Store ────────────────────────────────────────────────────────────────────
 
-  // --- Root Level Files ---
-  {
-    id: "f-1",
-    name: "Q3_Financial_Projections.xlsx",
-    type: "file",
-    size: "4.2 MB",
-    modifiedAt: "2026-05-21 14:32",
-    classification: "SULIT",
-    accessRole: "owner",
-    isFavorite: true,
-    collaborators: [
-      { id: "col-owner", name: "C-Suite Admin", email: "admin@unggul.axiom", role: "owner" },
-      { id: "col-1", name: "Marcus Vance", email: "marcus.vance@unggulaxiom.com", role: "editor" },
-      { id: "col-2", name: "David Chen", email: "david.chen@unggulaxiom.com", role: "viewer" },
-    ],
-    parentId: null,
-    lockedBy: "C-Suite Governance",
-    lockReason: "Pending Corporate Approval",
-  },
-  {
-    id: "f-3",
-    name: "Platform_Security_Framework_v2.pdf",
-    type: "file",
-    size: "18.7 MB",
-    modifiedAt: "2026-05-19 16:45",
-    classification: "RAHSIA",
-    accessRole: "owner",
-    isFavorite: true,
-    collaborators: [
-      { id: "col-owner", name: "C-Suite Admin", email: "admin@unggul.axiom", role: "owner" },
-      { id: "col-3", name: "Elena Rostova", email: "elena.rostova@unggulaxiom.com", role: "editor" },
-      { id: "col-2", name: "David Chen", email: "david.chen@unggulaxiom.com", role: "viewer" },
-    ],
-    parentId: null,
-  },
-  {
-    id: "f-5",
-    name: "Investor_Pitch_Deck_Final.pptx",
-    type: "file",
-    size: "32.1 MB",
-    modifiedAt: "2026-05-15 08:30",
-    classification: "TERBUKA",
-    accessRole: "owner",
-    isFavorite: false,
-    collaborators: [
-      { id: "col-owner", name: "C-Suite Admin", email: "admin@unggul.axiom", role: "owner" },
-      { id: "col-1", name: "Marcus Vance", email: "marcus.vance@unggulaxiom.com", role: "editor" },
-    ],
-    parentId: null,
-  },
-  {
-    id: "f-6",
-    name: "Corporate_Governance_Guidelines.docx",
-    type: "file",
-    size: "1.4 MB",
-    modifiedAt: "2026-05-10 17:05",
-    classification: "TERBUKA",
-    accessRole: "editor",
-    isFavorite: false,
-    collaborators: [
-      { id: "col-owner", name: "David Chen", email: "david.chen@unggulaxiom.com", role: "owner" },
-      { id: "col-admin", name: "C-Suite Admin", email: "admin@unggul.axiom", role: "editor" },
-    ],
-    parentId: null,
-  },
-  {
-    id: "f-7",
-    name: "Secure_JV_Tokens_Log.csv",
-    type: "file",
-    size: "450 KB",
-    modifiedAt: "2026-05-09 13:00",
-    classification: "SULIT",
-    accessRole: "owner",
-    isFavorite: true,
-    collaborators: [
-      { id: "col-owner", name: "C-Suite Admin", email: "admin@unggul.axiom", role: "owner" },
-      { id: "col-2", name: "David Chen", email: "david.chen@unggulaxiom.com", role: "viewer" },
-    ],
-    parentId: null,
-  },
-
-  // --- Sub-level files inside "Architecture_Blueprints" (parentId: "f-2") ---
-  {
-    id: "sub-1-1",
-    name: "Blueprint_Q3_System.pdf",
-    type: "file",
-    size: "8.4 MB",
-    modifiedAt: "2026-05-20 10:15",
-    classification: "RAHSIA",
-    accessRole: "owner",
-    isFavorite: false,
-    collaborators: [
-      { id: "col-owner", name: "Elena Rostova", email: "elena.rostova@unggulaxiom.com", role: "owner" },
-      { id: "col-admin", name: "C-Suite Admin", email: "admin@unggul.axiom", role: "editor" },
-    ],
-    parentId: "f-2",
-    lockedBy: "Architectural Board",
-    lockReason: "Pending Architecture Review",
-  },
-  {
-    id: "sub-1-2",
-    name: "Database_Clustering_Specs.docx",
-    type: "file",
-    size: "3.1 MB",
-    modifiedAt: "2026-05-20 11:45",
-    classification: "SULIT",
-    accessRole: "editor",
-    isFavorite: true,
-    collaborators: [
-      { id: "col-owner", name: "Elena Rostova", email: "elena.rostova@unggulaxiom.com", role: "owner" },
-      { id: "col-admin", name: "C-Suite Admin", email: "admin@unggul.axiom", role: "editor" },
-    ],
-    parentId: "f-2",
-  },
-
-  // --- Sub-level files inside "Operations_Handbook_2026" (parentId: "f-4") ---
-  {
-    id: "sub-2-1",
-    name: "Security_Protocols_v1.docx",
-    type: "file",
-    size: "1.2 MB",
-    modifiedAt: "2026-05-18 14:00",
-    classification: "TERBUKA",
-    accessRole: "viewer",
-    isFavorite: false,
-    collaborators: [
-      { id: "col-owner", name: "David Chen", email: "david.chen@unggulaxiom.com", role: "owner" },
-      { id: "col-admin", name: "C-Suite Admin", email: "admin@unggul.axiom", role: "viewer" },
-    ],
-    parentId: "f-4",
-  },
-  {
-    id: "sub-2-2",
-    name: "Emergency_Escalation_Matrix.xlsx",
-    type: "file",
-    size: "720 KB",
-    modifiedAt: "2026-05-18 15:30",
-    classification: "SULIT",
-    accessRole: "editor",
-    isFavorite: true,
-    collaborators: [
-      { id: "col-owner", name: "David Chen", email: "david.chen@unggulaxiom.com", role: "owner" },
-      { id: "col-admin", name: "C-Suite Admin", email: "admin@unggul.axiom", role: "editor" },
-    ],
-    parentId: "f-4",
-  },
-
-  // --- Sub-level files inside "Legal_Contracts_Archived" (parentId: "f-8") ---
-  {
-    id: "sub-3-1",
-    name: "JV_Core_Agreement_Signed.pdf",
-    type: "file",
-    size: "12.5 MB",
-    modifiedAt: "2026-05-02 09:12",
-    classification: "SULIT",
-    accessRole: "viewer",
-    isFavorite: true,
-    collaborators: [
-      { id: "col-owner", name: "Marcus Vance", email: "marcus.vance@unggulaxiom.com", role: "owner" },
-      { id: "col-admin", name: "C-Suite Admin", email: "admin@unggul.axiom", role: "viewer" },
-    ],
-    parentId: "f-8",
-  },
-];
-
-export const useFileStore = create<FileState>((set) => ({
-  files: INITIAL_FILES,
+export const useFileStore = create<FileState>((set, get) => ({
+  files: [],
   selectedIds: [],
   searchQuery: "",
   currentFolderId: null,
   activeFile: null,
   isAccessSheetOpen: false,
   activeView: "overview",
-  previewFileId: null, // Phase 6 initial state
+  previewFileId: null,
+  isLoading: false,
+  error: null,
+
+  // ── Data fetching ─────────────────────────────────────────────────────────
+
+  fetchFiles: async () => {
+    const { currentFolderId } = get();
+    set({ isLoading: true, error: null });
+    try {
+      const backendFiles = await filesApi.list(currentFolderId);
+      const transformed = backendFiles.map(transformFile);
+      set({ files: transformed, isLoading: false });
+    } catch (err) {
+      set({
+        isLoading: false,
+        error: err instanceof Error ? err.message : "Failed to fetch files",
+      });
+    }
+  },
+
+  fetchFileDetail: async (id: string) => {
+    try {
+      const bf = await filesApi.get(id);
+      const tf = transformFile(bf);
+      // Update the file in the local cache if present
+      const { files } = get();
+      const idx = files.findIndex((f) => f.id === id);
+      if (idx >= 0) {
+        const updated = [...files];
+        updated[idx] = tf;
+        set({ files: updated });
+      }
+      return tf;
+    } catch {
+      return null;
+    }
+  },
+
+  // ── UI state setters ──────────────────────────────────────────────────────
 
   setSearchQuery: (query) => set({ searchQuery: query }),
 
@@ -292,7 +165,7 @@ export const useFileStore = create<FileState>((set) => ({
       const isSelected = state.selectedIds.includes(id);
       return {
         selectedIds: isSelected
-          ? state.selectedIds.filter((selectedId) => selectedId !== id)
+          ? state.selectedIds.filter((sid) => sid !== id)
           : [...state.selectedIds, id],
       };
     }),
@@ -301,100 +174,136 @@ export const useFileStore = create<FileState>((set) => ({
 
   clearSelection: () => set({ selectedIds: [] }),
 
-  deleteFile: (id) =>
-    set((state) => {
-      const updatedFiles = state.files.filter((file) => file.id !== id);
-      const isCurrentActiveDeleted = state.activeFile?.id === id;
-      return {
-        files: updatedFiles,
-        selectedIds: state.selectedIds.filter((selectedId) => selectedId !== id),
-        activeFile: isCurrentActiveDeleted ? null : state.activeFile,
-        isAccessSheetOpen: isCurrentActiveDeleted ? false : state.isAccessSheetOpen,
-      };
-    }),
-
-  deleteSelected: () =>
-    set((state) => {
-      const updatedFiles = state.files.filter((file) => !state.selectedIds.includes(file.id));
-      const isActiveDeleted = state.activeFile && state.selectedIds.includes(state.activeFile.id);
-      return {
-        files: updatedFiles,
-        selectedIds: [],
-        activeFile: isActiveDeleted ? null : state.activeFile,
-        isAccessSheetOpen: isActiveDeleted ? false : state.isAccessSheetOpen,
-      };
-    }),
-
-  createFolder: (name) =>
-    set((state) => {
-      const newFolder: FileNode = {
-        id: `f-${Date.now()}`,
-        name: name.trim() || "New_Folder",
-        type: "folder",
-        size: "--",
-        modifiedAt: new Date().toISOString().slice(0, 16).replace("T", " "),
-        classification: "TERBUKA",
-        accessRole: "owner",
-        isFavorite: false,
-        collaborators: [
-          { id: "col-owner", name: "C-Suite Admin", email: "admin@unggul.axiom", role: "owner" },
-        ],
-        parentId: state.currentFolderId, // Dynamic contextual creation
-      };
-      return { files: [newFolder, ...state.files] };
-    }),
-
-  uploadFile: (name, size, classification) =>
-    set((state) => {
-      const newFile: FileNode = {
-        id: `f-${Date.now()}`,
-        name: name.trim() || "Untitled_File",
-        type: "file",
-        size: size || "0 KB",
-        modifiedAt: new Date().toISOString().slice(0, 16).replace("T", " "),
-        classification: classification || "TERBUKA",
-        accessRole: "owner",
-        isFavorite: false,
-        collaborators: [
-          { id: "col-owner", name: "C-Suite Admin", email: "admin@unggul.axiom", role: "owner" },
-        ],
-        parentId: state.currentFolderId, // Dynamic contextual upload
-      };
-      return { files: [newFile, ...state.files] };
-    }),
-
-  toggleFavorite: (id) =>
-    set((state) => {
-      const updatedFiles = state.files.map((file) =>
-        file.id === id ? { ...file, isFavorite: !file.isFavorite } : file
-      );
-      const updatedActiveFile = state.activeFile && state.activeFile.id === id
-        ? updatedFiles.find((f) => f.id === id) || null
-        : state.activeFile;
-      return {
-        files: updatedFiles,
-        activeFile: updatedActiveFile,
-      };
-    }),
-
-  // Phase 3 Advanced Panel Integrations
   setActiveFile: (file) => set({ activeFile: file }),
-  
+
   setAccessSheetOpen: (open) => set({ isAccessSheetOpen: open }),
 
-  updateFileClassification: (id, classification) =>
-    set((state) => {
-      const updatedFiles = state.files.map((file) =>
-        file.id === id ? { ...file, classification } : file
-      );
-      const updatedActiveFile = state.activeFile && state.activeFile.id === id
-        ? updatedFiles.find((f) => f.id === id) || null
-        : state.activeFile;
-      return {
-        files: updatedFiles,
-        activeFile: updatedActiveFile,
-      };
+  setActiveView: (view) => set({ activeView: view }),
+
+  setPreviewFileId: (id) => set({ previewFileId: id }),
+
+  mapsToFolder: (folderId) =>
+    set({
+      currentFolderId: folderId,
+      selectedIds: [],
+      activeFile: null,
+      isAccessSheetOpen: false,
     }),
+
+  goBack: () => {
+    const { currentFolderId, files } = get();
+    if (!currentFolderId) return;
+    const currentFolder = files.find(
+      (f) => f.id === currentFolderId && f.type === "folder"
+    );
+    const parentId = currentFolder ? currentFolder.parentId : null;
+    set({
+      currentFolderId: parentId,
+      selectedIds: [],
+      activeFile: null,
+      isAccessSheetOpen: false,
+    });
+  },
+
+  // ── CRUD operations ───────────────────────────────────────────────────────
+
+  createFolder: async (name, classification) => {
+    const { currentFolderId, fetchFiles } = get();
+    try {
+      await filesApi.createFolder({
+        name: name.trim(),
+        parentId: currentFolderId,
+        classification: classification || "TERBUKA",
+      });
+      await fetchFiles();
+    } catch (err) {
+      set({ error: err instanceof Error ? err.message : "Failed to create folder" });
+    }
+  },
+
+  uploadFileReal: async (file, classification) => {
+    const { currentFolderId, fetchFiles } = get();
+    const formData = new FormData();
+    if (currentFolderId) {
+      formData.append("parentId", currentFolderId);
+    }
+    formData.append("classification", classification || "TERBUKA");
+    formData.append("file", file);
+
+    try {
+      await filesApi.upload(formData);
+      await fetchFiles();
+    } catch (err) {
+      set({ error: err instanceof Error ? err.message : "Failed to upload file" });
+    }
+  },
+
+  renameFile: async (id, newName) => {
+    try {
+      await filesApi.rename(id, { newName: newName.trim() });
+      // Optimistic update
+      set((state) => ({
+        files: state.files.map((f) =>
+          f.id === id ? { ...f, name: newName.trim() } : f
+        ),
+        activeFile:
+          state.activeFile?.id === id
+            ? { ...state.activeFile, name: newName.trim() }
+            : state.activeFile,
+      }));
+    } catch (err) {
+      set({ error: err instanceof Error ? err.message : "Failed to rename" });
+    }
+  },
+
+  deleteFile: async (id) => {
+    try {
+      await filesApi.delete(id);
+      set((state) => ({
+        files: state.files.filter((f) => f.id !== id),
+        selectedIds: state.selectedIds.filter((sid) => sid !== id),
+        activeFile: state.activeFile?.id === id ? null : state.activeFile,
+        isAccessSheetOpen:
+          state.activeFile?.id === id ? false : state.isAccessSheetOpen,
+        previewFileId:
+          state.previewFileId === id ? null : state.previewFileId,
+      }));
+    } catch (err) {
+      set({ error: err instanceof Error ? err.message : "Failed to delete" });
+    }
+  },
+
+  deleteSelected: async () => {
+    const { selectedIds, deleteFile } = get();
+    // Delete sequentially to respect backend rate limits
+    for (const id of selectedIds) {
+      await deleteFile(id);
+    }
+  },
+
+  // ── Client-side extras (no backend support yet) ───────────────────────────
+
+  toggleFavorite: (id) =>
+    set((state) => ({
+      files: state.files.map((f) =>
+        f.id === id ? { ...f, isFavorite: !f.isFavorite } : f
+      ),
+      activeFile:
+        state.activeFile?.id === id
+          ? { ...state.activeFile, isFavorite: !state.activeFile.isFavorite }
+          : state.activeFile,
+    })),
+
+  updateFileClassification: (id, classification) =>
+    set((state) => ({
+      files: state.files.map((f) =>
+        f.id === id ? { ...f, classification } : f
+      ),
+      activeFile:
+        state.activeFile?.id === id
+          ? { ...state.activeFile, classification }
+          : state.activeFile,
+    })),
 
   addCollaborator: (fileId, name, email, role) =>
     set((state) => {
@@ -404,126 +313,111 @@ export const useFileStore = create<FileState>((set) => ({
         email,
         role,
       };
-      const updatedFiles = state.files.map((file) => {
-        if (file.id === fileId) {
-          const exists = file.collaborators.some((c) => c.email.toLowerCase() === email.toLowerCase());
+      return {
+        files: state.files.map((file) => {
+          if (file.id !== fileId) return file;
+          const exists = file.collaborators.some(
+            (c) => c.email.toLowerCase() === email.toLowerCase()
+          );
           return {
             ...file,
             collaborators: exists
-              ? file.collaborators.map((c) => c.email.toLowerCase() === email.toLowerCase() ? { ...c, role } : c)
+              ? file.collaborators.map((c) =>
+                  c.email.toLowerCase() === email.toLowerCase()
+                    ? { ...c, role }
+                    : c
+                )
               : [...file.collaborators, newCollaborator],
           };
-        }
-        return file;
-      });
-      const updatedActiveFile = state.activeFile && state.activeFile.id === fileId
-        ? updatedFiles.find((f) => f.id === fileId) || null
-        : state.activeFile;
-      return {
-        files: updatedFiles,
-        activeFile: updatedActiveFile,
+        }),
+        activeFile:
+          state.activeFile?.id === fileId
+            ? {
+                ...state.activeFile,
+                collaborators: (() => {
+                  const file = state.files.find((f) => f.id === fileId);
+                  if (!file) return state.activeFile.collaborators;
+                  const exists = file.collaborators.some(
+                    (c) => c.email.toLowerCase() === email.toLowerCase()
+                  );
+                  return exists
+                    ? file.collaborators.map((c) =>
+                        c.email.toLowerCase() === email.toLowerCase()
+                          ? { ...c, role }
+                          : c
+                      )
+                    : [...file.collaborators, newCollaborator];
+                })(),
+              }
+            : state.activeFile,
       };
     }),
 
   updateCollaboratorRole: (fileId, collaboratorId, role) =>
-    set((state) => {
-      const updatedFiles = state.files.map((file) => {
-        if (file.id === fileId) {
-          return {
-            ...file,
-            collaborators: file.collaborators.map((c) =>
-              c.id === collaboratorId ? { ...c, role } : c
-            ),
-          };
-        }
-        return file;
-      });
-      const updatedActiveFile = state.activeFile && state.activeFile.id === fileId
-        ? updatedFiles.find((f) => f.id === fileId) || null
-        : state.activeFile;
-      return {
-        files: updatedFiles,
-        activeFile: updatedActiveFile,
-      };
-    }),
+    set((state) => ({
+      files: state.files.map((file) =>
+        file.id === fileId
+          ? {
+              ...file,
+              collaborators: file.collaborators.map((c) =>
+                c.id === collaboratorId ? { ...c, role } : c
+              ),
+            }
+          : file
+      ),
+      activeFile:
+        state.activeFile?.id === fileId
+          ? {
+              ...state.activeFile,
+              collaborators: state.activeFile.collaborators.map((c) =>
+                c.id === collaboratorId ? { ...c, role } : c
+              ),
+            }
+          : state.activeFile,
+    })),
 
   removeCollaborator: (fileId, collaboratorId) =>
-    set((state) => {
-      const updatedFiles = state.files.map((file) => {
-        if (file.id === fileId) {
-          return {
-            ...file,
-            collaborators: file.collaborators.filter((c) => c.id !== collaboratorId),
-          };
-        }
-        return file;
-      });
-      const updatedActiveFile = state.activeFile && state.activeFile.id === fileId
-        ? updatedFiles.find((f) => f.id === fileId) || null
-        : state.activeFile;
-      return {
-        files: updatedFiles,
-        activeFile: updatedActiveFile,
-      };
-    }),
-
-  renameFile: (id, newName) =>
-    set((state) => {
-      const updatedFiles = state.files.map((file) =>
-        file.id === id ? { ...file, name: newName.trim() } : file
-      );
-      const updatedActiveFile = state.activeFile && state.activeFile.id === id
-        ? updatedFiles.find((f) => f.id === id) || null
-        : state.activeFile;
-      return {
-        files: updatedFiles,
-        activeFile: updatedActiveFile,
-      };
-    }),
-
-  // Phase 4 Navigation Mechanics
-  mapsToFolder: (folderId) =>
-    set({
-      currentFolderId: folderId,
-      selectedIds: [], // Always clear selections on folder traversal
-      activeFile: null,
-      isAccessSheetOpen: false,
-    }),
-
-  goBack: () =>
-    set((state) => {
-      if (!state.currentFolderId) return {};
-      const currentFolder = state.files.find((f) => f.id === state.currentFolderId && f.type === "folder");
-      const parentId = currentFolder ? currentFolder.parentId : null;
-      return {
-        currentFolderId: parentId,
-        selectedIds: [],
-        activeFile: null,
-        isAccessSheetOpen: false,
-      };
-    }),
-
-  setActiveView: (view) => set({ activeView: view }),
-
-  setPreviewFileId: (id) => set({ previewFileId: id }),
+    set((state) => ({
+      files: state.files.map((file) =>
+        file.id === fileId
+          ? {
+              ...file,
+              collaborators: file.collaborators.filter(
+                (c) => c.id !== collaboratorId
+              ),
+            }
+          : file
+      ),
+      activeFile:
+        state.activeFile?.id === fileId
+          ? {
+              ...state.activeFile,
+              collaborators: state.activeFile.collaborators.filter(
+                (c) => c.id !== collaboratorId
+              ),
+            }
+          : state.activeFile,
+    })),
 
   lockFile: (id, user, reason) =>
     set((state) => ({
-      files: state.files.map((file) =>
-        file.id === id ? { ...file, lockedBy: user, lockReason: reason } : file
+      files: state.files.map((f) =>
+        f.id === id ? { ...f, lockedBy: user, lockReason: reason } : f
       ),
-      activeFile: state.activeFile && state.activeFile.id === id
-        ? { ...state.activeFile, lockedBy: user, lockReason: reason }
-        : state.activeFile,
+      activeFile:
+        state.activeFile?.id === id
+          ? { ...state.activeFile, lockedBy: user, lockReason: reason }
+          : state.activeFile,
     })),
 
   unlockFile: (id) =>
     set((state) => ({
-      files: state.files.map((file) =>
-        file.id === id ? { ...file, lockedBy: null, lockReason: null } : file
+      files: state.files.map((f) =>
+        f.id === id ? { ...f, lockedBy: null, lockReason: null } : f
       ),
-      activeFile: state.activeFile && state.activeFile.id === id
-        ? { ...state.activeFile, lockedBy: null, lockReason: null }
-        : state.activeFile,
+      activeFile:
+        state.activeFile?.id === id
+          ? { ...state.activeFile, lockedBy: null, lockReason: null }
+          : state.activeFile,
     })),
 }));

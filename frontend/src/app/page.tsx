@@ -1,10 +1,17 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
 import { Shield, ArrowRight, Users, TrendingUp, Globe } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
+import { useAuthStore } from "@/store/useAuthStore";
 
 export default function HomePage() {
+  const { isAuthenticated, hydrate } = useAuthStore();
+
+  useEffect(() => {
+    hydrate();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <div className="relative min-h-dvh flex flex-col bg-background overflow-hidden selection:bg-accent selection:text-accent-foreground">
       
@@ -86,11 +93,11 @@ export default function HomePage() {
             </div>
 
             <div className="pt-2">
-              <Link 
-                href="/login?portal=foundation"
+              <Link
+                href={isAuthenticated ? "/dashboard" : "/login?portal=foundation"}
                 className="btn-shimmer flex h-10 w-full items-center justify-center gap-2 rounded-lg text-xs font-bold tracking-widest uppercase font-mono shadow-md"
               >
-                Sign In to Portal
+                {isAuthenticated ? "Go to Dashboard" : "Sign In to Portal"}
                 <ArrowRight size={14} />
               </Link>
             </div>

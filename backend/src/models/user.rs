@@ -16,6 +16,7 @@ pub struct User {
 
 /// Safe public projection of a user — never includes `password_hash`.
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UserProfile {
     pub id: Uuid,
     pub email: String,

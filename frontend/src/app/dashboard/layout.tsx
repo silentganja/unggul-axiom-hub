@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useId, startTransition } from "react";
+import { useState, useId, useEffect, startTransition } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Shield,
@@ -18,10 +18,12 @@ import {
   Menu,
   LayoutDashboard,
   Terminal,
-  FileCheck
+  FileCheck,
+  Loader2,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { useFileStore } from "@/store/useFileStore";
+import { useAuthStore } from "@/store/useAuthStore";
 import { cn } from "@/lib/utils";
 
 interface SidebarLinkProps {
@@ -59,10 +61,31 @@ export default function DashboardLayout({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
 
+  // ── Auth guard ────────────────────────────────────────────────────────────
+  const { isAuthenticated, isLoading: authLoading, user, hydrate, logout } = useAuthStore();
+
+  useEffect(() => {
+    hydrate();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      router.replace("/login");
+    }
+  }, [authLoading, isAuthenticated, router]);
+
+  // ── File store ────────────────────────────────────────────────────────────
   const activeView = useFileStore((state) => state.activeView);
   const setActiveView = useFileStore((state) => state.setActiveView);
+  const searchQuery = useFileStore((state) => state.searchQuery);
+  const setSearchQuery = useFileStore((state) => state.setSearchQuery);
+  const currentFolderId = useFileStore((state) => state.currentFolderId);
+  const files = useFileStore((state) => state.files);
+  const mapsToFolder = useFileStore((state) => state.mapsToFolder);
 
-  const handleSidebarClick = (view: "overview" | "files" | "governance" | "shared" | "recent" | "favorites" | "trash") => {
+  const handleSidebarClick = (
+    view: "overview" | "files" | "governance" | "shared" | "recent" | "favorites" | "trash"
+  ) => {
     setActiveView(view);
     setSidebarOpen(false);
     if (pathname !== "/dashboard") {
@@ -70,18 +93,9 @@ export default function DashboardLayout({
     }
   };
 
-  // Hook into our Zustand search query
-  const searchQuery = useFileStore((state) => state.searchQuery);
-  const setSearchQuery = useFileStore((state) => state.setSearchQuery);
-  
-  // Phase 4 folder state & breadcrumbs calculation
-  const currentFolderId = useFileStore((state) => state.currentFolderId);
-  const files = useFileStore((state) => state.files);
-  const mapsToFolder = useFileStore((state) => state.mapsToFolder);
-
   const buildBreadcrumbs = () => {
     const crumbs: { id: string | null; name: string }[] = [];
-    let currentId = currentFolderId;
+    let currentId: string | null = currentFolderId;
     while (currentId !== null) {
       const folder = files.find((f) => f.id === currentId && f.type === "folder");
       if (folder) {
@@ -97,13 +111,29 @@ export default function DashboardLayout({
 
   const handleLogout = () => {
     startTransition(() => {
-      router.push("/");
+      logout();
     });
   };
 
+  // ── Loading state ─────────────────────────────────────────────────────────
+  if (authLoading) {
+    return (
+      <div className="min-h-dvh flex items-center justify-center bg-background font-mono text-xs text-foreground-subtle gap-2">
+        <Loader2 size={16} className="animate-spin text-accent" />
+        INITIALIZING SECURE SESSION...
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return null; // Will redirect via useEffect
+  }
+
+  const userEmail = user?.email || "admin@unggul.axiom";
+
   return (
     <div className="relative min-h-dvh flex bg-background text-foreground font-sans overflow-hidden selection:bg-accent selection:text-accent-foreground">
-      
+
       {/* ── Background Scan Grid Overlay ── */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
         <div className="absolute top-[10%] left-[20%] w-[35%] h-[35%] rounded-full bg-accent/5 blur-[120px]" />
@@ -148,7 +178,7 @@ export default function DashboardLayout({
               <span className="font-mono text-[8px] uppercase tracking-wider text-foreground-subtle">Session Status</span>
               <span className="h-1.5 w-1.5 rounded-full bg-success" />
             </div>
-            <p className="font-mono text-[9px] font-bold truncate text-foreground-muted">admin@unggul.axiom</p>
+            <p className="font-mono text-[9px] font-bold truncate text-foreground-muted">{userEmail}</p>
             <div className="flex items-center gap-1.5 text-[8px] text-foreground-subtle font-mono uppercase tracking-wider pt-1.5 border-t border-border/20">
               <Lock size={9} className="text-accent" /> Restricted Sandbox
             </div>
@@ -229,8 +259,8 @@ export default function DashboardLayout({
               <span className="font-bold text-foreground-muted">45.2 GB / 100 GB</span>
             </div>
             <div className="h-1.5 w-full bg-background-subtle rounded-full overflow-hidden border border-border/10">
-              <div 
-                className="h-full bg-gradient-to-r from-accent to-accent-hover transition-all duration-500" 
+              <div
+                className="h-full bg-gradient-to-r from-accent to-accent-hover transition-all duration-500"
                 style={{ width: "45.2%" }}
               />
             </div>
@@ -245,7 +275,7 @@ export default function DashboardLayout({
 
       {/* ── Right Content Panel (Dynamic Viewport) ── */}
       <div className="flex-grow flex flex-col overflow-hidden relative">
-        
+
         {/* ── Sticky Top Navigation (Topbar) ── */}
         <header className="sticky top-0 z-30 h-14 border-b border-border/30 bg-background-panel/60 backdrop-blur-md flex items-center justify-between px-6 shrink-0">
           {/* Mobile hamburger menu & Breadcrumbs */}
@@ -275,7 +305,7 @@ export default function DashboardLayout({
               </span>
             ) : (
               <>
-                <span 
+                <span
                   onClick={() => {
                     setActiveView("files");
                     mapsToFolder(null);
@@ -286,7 +316,7 @@ export default function DashboardLayout({
                 </span>
                 {activeView === "files" ? (
                   breadcrumbs.map((crumb) => (
-                    <div key={crumb.id || 'root'} className="flex items-center gap-2">
+                    <div key={crumb.id || "root"} className="flex items-center gap-2">
                       <ChevronRight size={10} className="text-foreground-subtle/60 shrink-0" />
                       <span
                         onClick={() => mapsToFolder(crumb.id)}
@@ -309,7 +339,7 @@ export default function DashboardLayout({
           </div>
           {/* Search, Theme Toggle, User Profile */}
           <div className="flex items-center gap-4">
-            
+
             {/* Global Search Input */}
             <div className="relative group hidden sm:block">
               <span className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-foreground-subtle">
@@ -339,7 +369,7 @@ export default function DashboardLayout({
                   <User size={10} className="text-accent" />
                 </div>
                 <span className="text-xs font-mono font-semibold hidden md:inline text-foreground-muted">
-                  admin
+                  {user?.fullName?.split(" ")[0] || "admin"}
                 </span>
               </button>
 
@@ -357,10 +387,10 @@ export default function DashboardLayout({
                         Authorized Session
                       </span>
                       <span className="block text-xs font-bold text-foreground mt-1 truncate">
-                        Administrator
+                        {user?.fullName || "Administrator"}
                       </span>
                     </div>
-                    
+
                     <button
                       onClick={() => {
                         setProfileDropdownOpen(false);
@@ -370,7 +400,7 @@ export default function DashboardLayout({
                       <Settings size={12} className="text-foreground-subtle" />
                       Portal Settings
                     </button>
-                    
+
                     <button
                       onClick={handleLogout}
                       className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-destructive hover:bg-destructive/15 rounded text-left transition-colors font-mono border border-transparent hover:border-destructive/25"

@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useId } from "react";
+import { useState, useId, useEffect } from "react";
 import {
   Search,
   CheckCircle,
   AlertTriangle,
   XCircle,
   FileSpreadsheet,
-  Terminal
+  Terminal,
+  Loader2,
 } from "lucide-react";
 import { useAuditStore, SystemEvent } from "@/store/useAuditStore";
 import { cn } from "@/lib/utils";
@@ -15,9 +16,19 @@ import { cn } from "@/lib/utils";
 export default function ForensicAuditPage() {
   const auditSearchInputId = useId();
   const logs = useAuditStore((state) => state.logs);
+  const isLoading = useAuditStore((state) => state.isLoading);
+  const error = useAuditStore((state) => state.error);
+  const fetchLogs = useAuditStore((state) => state.fetchLogs);
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeFilter, setActiveFilter] = useState<"ALL" | "UPLOAD" | "APPROVE" | "LOCK" | "ACCESS_CHANGE">("ALL");
+  const [activeFilter, setActiveFilter] = useState<
+    "ALL" | "UPLOAD" | "APPROVE" | "LOCK" | "ACCESS_CHANGE"
+  >("ALL");
+
+  // Fetch audit logs on mount
+  useEffect(() => {
+    fetchLogs();
+  }, [fetchLogs]);
 
   // Client-side CSV export trigger
   const handleExportCSV = () => {
@@ -28,7 +39,7 @@ export default function ForensicAuditPage() {
           `"${log.id}","${log.timestamp}","${log.actor}","${log.action}","${log.targetResource.replace(/"/g, '""')}","${log.ipAddress}","${log.status}"`
       )
       .join("\n");
-    
+
     const blob = new Blob([headers + rows], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -40,7 +51,7 @@ export default function ForensicAuditPage() {
     URL.revokeObjectURL(url);
   };
 
-  // Filter logs dynamically based on search query and category filters
+  // Filter logs dynamically
   const filteredLogs = logs.filter((log) => {
     const matchesSearch =
       log.actor.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -91,7 +102,7 @@ export default function ForensicAuditPage() {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
-      
+
       {/* ── Header Toolbar ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/20 pb-4 select-none">
         <div>
@@ -111,7 +122,8 @@ export default function ForensicAuditPage() {
         {/* Export action */}
         <button
           onClick={handleExportCSV}
-          className="h-8 px-3 rounded border border-border bg-background-panel hover:bg-background-subtle/50 text-[11px] font-bold tracking-wider uppercase font-mono text-foreground-muted flex items-center gap-1.5 transition-colors self-start sm:self-center"
+          disabled={logs.length === 0}
+          className="h-8 px-3 rounded border border-border bg-background-panel hover:bg-background-subtle/50 text-[11px] font-bold tracking-wider uppercase font-mono text-foreground-muted flex items-center gap-1.5 transition-colors self-start sm:self-center disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <FileSpreadsheet size={12} className="text-success" />
           Export Logs (CSV)
@@ -122,10 +134,10 @@ export default function ForensicAuditPage() {
       <div className="w-full bg-background-panel/40 border border-border/30 px-4 py-1.5 rounded-sm flex flex-col md:flex-row md:items-center justify-between font-mono text-[9px] uppercase tracking-[0.18em] text-foreground-subtle select-none gap-2">
         <div className="flex items-center gap-2">
           <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
-          <span>TELEMETRY FEED: CONNECTED</span>
+          <span>TELEMETRY FEED: {isLoading ? "SYNCING..." : "CONNECTED"}</span>
         </div>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-          <span>PIPELINE BUFFER: NORMAL</span>
+          <span>RECORDS: {logs.length}</span>
           <span className="hidden md:inline text-foreground-subtle/20">|</span>
           <span>INTEGRITY VERIFIED: SHA-256 MATCH</span>
           <span className="hidden md:inline text-foreground-subtle/20">|</span>
@@ -135,66 +147,29 @@ export default function ForensicAuditPage() {
 
       {/* ── Search & Filter Pill Deck ── */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 select-none">
-        {/* SIEM Filter Deck */}
         <div className="flex flex-wrap items-center gap-1.5 font-mono text-[10px] font-bold">
-          <button
-            onClick={() => setActiveFilter("ALL")}
-            className={cn(
-              "px-2.5 py-1 rounded-sm border uppercase transition-colors cursor-pointer",
-              activeFilter === "ALL"
-                ? "bg-accent/10 border-accent/20 text-accent font-extrabold"
-                : "border-border/30 text-foreground-subtle hover:text-foreground hover:bg-background-subtle/50"
-            )}
-          >
-            All Events
-          </button>
-          <button
-            onClick={() => setActiveFilter("UPLOAD")}
-            className={cn(
-              "px-2.5 py-1 rounded-sm border uppercase transition-colors cursor-pointer",
-              activeFilter === "UPLOAD"
-                ? "bg-info/10 border-info/20 text-info font-extrabold"
-                : "border-border/30 text-foreground-subtle hover:text-foreground hover:bg-background-subtle/50"
-            )}
-          >
-            Uploads
-          </button>
-          <button
-            onClick={() => setActiveFilter("APPROVE")}
-            className={cn(
-              "px-2.5 py-1 rounded-sm border uppercase transition-colors cursor-pointer",
-              activeFilter === "APPROVE"
-                ? "bg-success/10 border-success/20 text-success font-extrabold"
-                : "border-border/30 text-foreground-subtle hover:text-foreground hover:bg-background-subtle/50"
-            )}
-          >
-            Approvals
-          </button>
-          <button
-            onClick={() => setActiveFilter("LOCK")}
-            className={cn(
-              "px-2.5 py-1 rounded-sm border uppercase transition-colors cursor-pointer",
-              activeFilter === "LOCK"
-                ? "bg-destructive/10 border-destructive/20 text-destructive font-extrabold"
-                : "border-border/30 text-foreground-subtle hover:text-foreground hover:bg-background-subtle/50"
-            )}
-          >
-            Locks
-          </button>
-          <button
-            onClick={() => setActiveFilter("ACCESS_CHANGE")}
-            className={cn(
-              "px-2.5 py-1 rounded-sm border uppercase transition-colors cursor-pointer",
-              activeFilter === "ACCESS_CHANGE"
-                ? "bg-warning/10 border-warning/20 text-warning font-extrabold"
-                : "border-border/30 text-foreground-subtle hover:text-foreground hover:bg-background-subtle/50"
-            )}
-          >
-            Access Edits
-          </button>
+          {(["ALL", "UPLOAD", "APPROVE", "LOCK", "ACCESS_CHANGE"] as const).map((filter) => (
+            <button
+              key={filter}
+              onClick={() => setActiveFilter(filter)}
+              className={cn(
+                "px-2.5 py-1 rounded-sm border uppercase transition-colors cursor-pointer",
+                activeFilter === filter
+                  ? {
+                      ALL: "bg-accent/10 border-accent/20 text-accent font-extrabold",
+                      UPLOAD: "bg-info/10 border-info/20 text-info font-extrabold",
+                      APPROVE: "bg-success/10 border-success/20 text-success font-extrabold",
+                      LOCK: "bg-destructive/10 border-destructive/20 text-destructive font-extrabold",
+                      ACCESS_CHANGE: "bg-warning/10 border-warning/20 text-warning font-extrabold",
+                    }[filter]
+                  : "border-border/30 text-foreground-subtle hover:text-foreground hover:bg-background-subtle/50"
+              )}
+            >
+              {filter === "ALL" ? "All Events" : filter === "ACCESS_CHANGE" ? "Access Edits" : `${filter}s`}
+            </button>
+          ))}
         </div>
 
-        {/* Inline Search */}
         <div className="relative group">
           <span className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-foreground-subtle">
             <Search size={12} />
@@ -213,12 +188,22 @@ export default function ForensicAuditPage() {
 
       {/* ── Technical Monospace Data Table ── */}
       <div className="border border-border/40 rounded bg-background-panel/40 backdrop-blur-sm overflow-hidden shadow-sm">
-        {filteredLogs.length === 0 ? (
+        {error && (
+          <div className="p-6 text-center text-xs text-destructive font-mono">
+            Failed to load audit logs: {error}
+          </div>
+        )}
+        {isLoading ? (
           <div className="p-12 text-center space-y-3 font-mono">
-            <Terminal className="mx-auto text-foreground-subtle/40 animate-pulse" size={24} />
+            <Loader2 className="mx-auto text-accent animate-spin" size={24} />
+            <p className="text-xs text-foreground-subtle uppercase tracking-widest">FETCHING TELEMETRY STREAM...</p>
+          </div>
+        ) : filteredLogs.length === 0 ? (
+          <div className="p-12 text-center space-y-3 font-mono">
+            <Terminal className="mx-auto text-foreground-subtle/40" size={24} />
             <h3 className="text-xs font-bold text-foreground uppercase tracking-widest">No audit records found</h3>
             <p className="text-[10px] text-foreground-subtle max-w-sm mx-auto leading-relaxed">
-              No physical events matches your query string or system event status filters in buffer.
+              No events match your query string or system event status filters in buffer.
             </p>
           </div>
         ) : (
@@ -241,48 +226,24 @@ export default function ForensicAuditPage() {
                     key={log.id}
                     className="hover:bg-background-subtle/30 transition-colors group select-all"
                   >
-                    {/* Log ID */}
                     <td className="px-4 py-2 text-foreground-subtle select-none font-bold">
-                      {log.id}
+                      {log.id.slice(0, 8)}
                     </td>
-
-                    {/* Timestamp */}
-                    <td className="px-4 py-2 text-foreground-muted">
-                      {log.timestamp}
-                    </td>
-
-                    {/* Action */}
+                    <td className="px-4 py-2 text-foreground-muted">{log.timestamp}</td>
                     <td className="px-4 py-2">
-                      <span
-                        className={cn(
-                          "inline-block px-1.5 py-0.5 rounded-sm text-[8px] font-bold tracking-wider uppercase border leading-none font-mono",
-                          getActionBadge(log.action)
-                        )}
-                      >
+                      <span className={cn("inline-block px-1.5 py-0.5 rounded-sm text-[8px] font-bold tracking-wider uppercase border leading-none font-mono", getActionBadge(log.action))}>
                         {log.action.replace("_", " ")}
                       </span>
                     </td>
-
-                    {/* Target Resource */}
                     <td className="px-4 py-2 text-foreground font-semibold font-sans tracking-tight truncate max-w-xs sm:max-w-sm">
                       {log.targetResource}
                     </td>
-
-                    {/* Actor */}
                     <td className="px-4 py-2 text-foreground-muted truncate max-w-[150px] font-mono select-all">
                       {log.actor}
                     </td>
-
-                    {/* IP Address */}
-                    <td className="px-4 py-2 text-foreground-subtle font-mono select-all">
-                      {log.ipAddress}
-                    </td>
-
-                    {/* Status */}
+                    <td className="px-4 py-2 text-foreground-subtle font-mono select-all">{log.ipAddress}</td>
                     <td className="px-4 py-2 text-center select-none">
-                      <div className="flex items-center justify-center">
-                        {getStatusIcon(log.status)}
-                      </div>
+                      <div className="flex items-center justify-center">{getStatusIcon(log.status)}</div>
                     </td>
                   </tr>
                 ))}
@@ -291,7 +252,6 @@ export default function ForensicAuditPage() {
           </div>
         )}
       </div>
-
     </div>
   );
 }

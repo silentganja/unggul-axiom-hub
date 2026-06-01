@@ -7,6 +7,7 @@ use uuid::Uuid;
 /// Full file/folder row as returned from the `files` table.
 /// Used with `sqlx::query_as::<_, FileNode>(...)` — no compile-time macros.
 #[derive(Debug, Serialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
 pub struct FileNode {
     pub id: Uuid,
     pub parent_id: Option<Uuid>,
@@ -24,13 +25,17 @@ pub struct FileNode {
 
 /// Query parameters for `GET /api/files`.
 /// `parent_id` is optional — omit it to list root-level entries.
+/// Accepts both `parent_id` (snake_case) and `parentId` (camelCase) query params.
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ListFilesQuery {
+    #[serde(alias = "parent_id")]
     pub parent_id: Option<Uuid>,
 }
 
 /// Body for `POST /api/files/folder`.
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CreateFolderReq {
     pub name: String,
     pub parent_id: Option<Uuid>,
@@ -39,6 +44,7 @@ pub struct CreateFolderReq {
 
 /// Body for `PUT /api/files/{id}/rename`.
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RenameFileReq {
     pub new_name: String,
 }
