@@ -6,7 +6,7 @@ import Link from "next/link";
 import { Eye, EyeOff, Shield, AlertCircle, Loader2, Fingerprint, Key, Lock, CheckCircle } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { useAuthStore } from "@/store/useAuthStore";
-import { authApi, webauthnApi } from "@/lib/api";
+import { authApi, webauthnApi, setToken, setRefreshToken } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const VALID_PORTALS = new Set(["foundation", "chief"]);
@@ -32,7 +32,8 @@ function LoginForm() {
   useEffect(() => {
     if (magicLinkUrlToken) {
       authApi.verifyMagicLink(magicLinkUrlToken).then((res) => {
-        localStorage.setItem("auth-token", res.token);
+        setToken(res.token);
+        setRefreshToken(res.refreshToken);
         router.replace("/dashboard");
       }).catch(() => {});
       return;
@@ -71,14 +72,12 @@ function LoginForm() {
   const [forgotEmail, setForgotEmail] = useState("");
   const [forgotLoading, setForgotLoading] = useState(false);
   const [forgotDone, setForgotDone] = useState(false);
-  const [forgotToken, setForgotToken] = useState("");
 
   const handleForgot = async (e: React.FormEvent) => {
     e.preventDefault();
     setForgotLoading(true);
     try {
-      const res = await authApi.forgotPassword(forgotEmail);
-      setForgotToken(res.token || "");
+      await authApi.forgotPassword(forgotEmail);
       setForgotDone(true);
     } catch {
       setForgotDone(true); // Don't reveal if email exists
@@ -92,14 +91,12 @@ function LoginForm() {
   const [magicEmail, setMagicEmail] = useState("");
   const [magicLoading, setMagicLoading] = useState(false);
   const [magicDone, setMagicDone] = useState(false);
-  const [magicToken, setMagicToken] = useState("");
 
   const handleMagicLink = async (e: React.FormEvent) => {
     e.preventDefault();
     setMagicLoading(true);
     try {
-      const res = await authApi.requestMagicLink(magicEmail);
-      setMagicToken(res.token || "");
+      await authApi.requestMagicLink(magicEmail);
       setMagicDone(true);
     } catch {
       setMagicDone(true);
@@ -143,8 +140,9 @@ function LoginForm() {
   const handlePasskeyLogin = async () => {
     setPasskeyLoading(true);
     try {
-      const { token } = await webauthnApi.startLogin();
-      localStorage.setItem("auth-token", token);
+      // webauthnApi.startLogin() already stores token + refreshToken
+      await webauthnApi.startLogin();
+      // Hydrate will load the user profile on dashboard mount
       router.push("/dashboard");
     } catch {
       // Passkey not registered or user cancelled
@@ -516,15 +514,10 @@ function LoginForm() {
                 <div className="space-y-4 text-center">
                   <CheckCircle size={24} className="mx-auto text-success" />
                   <div className="space-y-1">
-                    <h3 className="text-sm font-semibold text-foreground font-serif">Reset Token Generated</h3>
-                    <p className="text-[10px] text-foreground-subtle font-mono">Use this token to reset your password:</p>
-                    {forgotToken ? (
-                      <p className="text-[10px] font-mono text-accent break-all bg-background/50 p-2 rounded border border-border/20 mt-2 select-all">{forgotToken}</p>
-                    ) : (
-                      <p className="text-[10px] text-foreground-subtle font-mono">If an account with that email exists, a reset link has been generated. Contact your administrator to complete the reset.</p>
-                    )}
+                    <h3 className="text-sm font-semibold text-foreground font-serif">Reset Email Sent</h3>
+                    <p className="text-[10px] text-foreground-subtle font-mono">If an account with that email exists, a password reset token has been sent. Check your inbox and spam folder.</p>
                   </div>
-                  <button onClick={() => { setShowForgot(false); setForgotDone(false); setForgotEmail(""); setForgotToken(""); }} className="h-8 px-4 rounded-sm border border-border bg-background hover:bg-background-subtle/50 text-[10px] font-bold font-mono uppercase transition-colors cursor-pointer">Close</button>
+                  <button onClick={() => { setShowForgot(false); setForgotDone(false); setForgotEmail(""); }} className="h-8 px-4 rounded-sm border border-border bg-background hover:bg-background-subtle/50 text-[10px] font-bold font-mono uppercase transition-colors cursor-pointer">Close</button>
                 </div>
               ) : (
                 <>
@@ -553,17 +546,10 @@ function LoginForm() {
                 <div className="space-y-4 text-center">
                   <CheckCircle size={24} className="mx-auto text-success" />
                   <div className="space-y-1">
-                    <h3 className="text-sm font-semibold text-foreground font-serif">Magic Link Generated</h3>
-                    <p className="text-[10px] text-foreground-subtle font-mono">Use this one-time login link:</p>
-                    {magicToken ? (
-                      <p className="text-[10px] font-mono text-accent break-all bg-background/50 p-2 rounded border border-border/20 mt-2 select-all">
-                        {typeof window !== "undefined" ? `${window.location.origin}/login?magic=${magicToken}` : `/login?magic=${magicToken}`}
-                      </p>
-                    ) : (
-                      <p className="text-[10px] text-foreground-subtle font-mono">If an account with that email exists, a login link has been generated.</p>
-                    )}
+                    <h3 className="text-sm font-semibold text-foreground font-serif">Login Link Sent</h3>
+                    <p className="text-[10px] text-foreground-subtle font-mono">If an account with that email exists, a one-time login link has been sent. Check your inbox and spam folder.</p>
                   </div>
-                  <button onClick={() => { setShowMagicLink(false); setMagicDone(false); setMagicEmail(""); setMagicToken(""); }} className="h-8 px-4 rounded-sm border border-border bg-background hover:bg-background-subtle/50 text-[10px] font-bold font-mono uppercase transition-colors cursor-pointer">Close</button>
+                  <button onClick={() => { setShowMagicLink(false); setMagicDone(false); setMagicEmail(""); }} className="h-8 px-4 rounded-sm border border-border bg-background hover:bg-background-subtle/50 text-[10px] font-bold font-mono uppercase transition-colors cursor-pointer">Close</button>
                 </div>
               ) : (
                 <>

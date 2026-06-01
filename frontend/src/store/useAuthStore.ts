@@ -1,21 +1,29 @@
 import { create } from "zustand";
-import { authApi, UserProfile, setToken, clearToken } from "@/lib/api";
+import {
+  authApi,
+  UserProfile,
+  setToken,
+  setRefreshToken,
+  clearToken,
+} from "@/lib/api";
 
 interface AuthState {
   user: UserProfile | null;
   token: string | null;
+  refreshToken: string | null;
   isLoading: boolean;
   isAuthenticated: boolean;
   error: string | null;
 
   login: (email: string, password: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   hydrate: () => Promise<void>; // Restore session from localStorage on app boot
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   token: null,
+  refreshToken: null,
   isLoading: false,
   isAuthenticated: false,
   error: null,
@@ -25,10 +33,12 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       const res = await authApi.login({ email, password });
       setToken(res.token);
-      // Persist user profile for quick hydraton
+      setRefreshToken(res.refreshToken);
+      // Persist user profile for quick hydration
       localStorage.setItem("auth-user", JSON.stringify(res.user));
       set({
         token: res.token,
+        refreshToken: res.refreshToken,
         user: res.user,
         isAuthenticated: true,
         isLoading: false,
@@ -43,10 +53,24 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
 
-  logout: () => {
+  logout: async () => {
+    // Try to notify the backend to revoke the refresh token
+    try {
+      const rt =
+        typeof window !== "undefined"
+          ? localStorage.getItem("auth-refresh-token")
+          : null;
+      if (rt) {
+        await authApi.logout(rt);
+      }
+    } catch {
+      // Ignore errors — logout locally regardless
+    }
+
     clearToken();
     set({
       token: null,
+      refreshToken: null,
       user: null,
       isAuthenticated: false,
       error: null,
@@ -89,13 +113,14 @@ export const useAuthStore = create<AuthState>((set) => ({
       set({ token, user, isAuthenticated: true, isLoading: false });
     } catch {
       if (hasCache) {
-        // Keep cached session alive on transient API errors
+        // Token might be expired — keep cached session on transient API errors
         set({ isLoading: false });
       } else {
         // No cache — must log out
         clearToken();
         set({
           token: null,
+          refreshToken: null,
           user: null,
           isAuthenticated: false,
           isLoading: false,

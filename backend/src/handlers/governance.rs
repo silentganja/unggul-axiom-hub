@@ -246,6 +246,26 @@ pub async fn approve_request(
     .await
     .map_err(AppError::Database)?;
 
+    // ── Emit notification ──────────────────────────────────────────────────
+    let req_title: Option<String> = sqlx::query_scalar(
+        "SELECT title FROM governance_requests WHERE id = $1",
+    )
+    .bind(request_id)
+    .fetch_optional(pool.get_ref())
+    .await
+    .map_err(AppError::Database)?
+    .flatten();
+
+    if let Some(ref title) = req_title {
+        crate::handlers::notifications::emit_notification(
+            crate::models::notification::NotificationEvent::GovernanceUpdate {
+                request_id: request_id.to_string(),
+                status: "APPROVED".into(),
+                title: title.clone(),
+            },
+        );
+    }
+
     tracing::info!(admin = %user.id, request_id = %request_id, "Governance request approved");
 
     Ok(HttpResponse::Ok().json(serde_json::json!({ "status": "approved" })))
@@ -279,6 +299,26 @@ pub async fn reject_request(
 
     if updated.rows_affected() == 0 {
         return Err(AppError::NotFound);
+    }
+
+    // ── Emit notification ──────────────────────────────────────────────────
+    let req_title: Option<String> = sqlx::query_scalar(
+        "SELECT title FROM governance_requests WHERE id = $1",
+    )
+    .bind(request_id)
+    .fetch_optional(pool.get_ref())
+    .await
+    .map_err(AppError::Database)?
+    .flatten();
+
+    if let Some(ref title) = req_title {
+        crate::handlers::notifications::emit_notification(
+            crate::models::notification::NotificationEvent::GovernanceUpdate {
+                request_id: request_id.to_string(),
+                status: "REJECTED".into(),
+                title: title.clone(),
+            },
+        );
     }
 
     tracing::info!(admin = %user.id, request_id = %request_id, "Governance request rejected");

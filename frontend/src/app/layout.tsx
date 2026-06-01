@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter, JetBrains_Mono, Playfair_Display } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
+import { ToastContainer } from "@/components/ui/Toast";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -56,6 +57,7 @@ export default function RootLayout({
           storageKey="unggul-axiom-theme"
         >
           {children}
+          <ToastContainer />
         </ThemeProvider>
       </body>
     </html>

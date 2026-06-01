@@ -1,6 +1,7 @@
 use crate::errors::AppError;
 use chrono::Utc;
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
+use rand_core::{OsRng, RngCore};
 use serde::{Deserialize, Serialize};
 use std::env;
 use uuid::Uuid;
@@ -12,23 +13,31 @@ use uuid::Uuid;
 pub struct Claims {
     /// Subject — the user's UUID as a string.
     pub sub: String,
-    /// User role ('admin' | 'staff').
+    /// User role ('chief' | 'director' | 'officer' | 'staff').
     pub role: String,
     /// Expiry — Unix timestamp (seconds).
     pub exp: usize,
 }
 
-// ── Token lifetime ───────────────────────────────────────────────────────────
+// ── Token lifetimes ───────────────────────────────────────────────────────────
 
-const TOKEN_EXPIRY_HOURS: i64 = 8;
+/// Access token lifetime: 15 minutes.
+const ACCESS_TOKEN_EXPIRY_MINUTES: i64 = 15;
+
+/// Refresh token lifetime: 7 days.
+const _REFRESH_TOKEN_EXPIRY_DAYS: i64 = 7;
+
+/// Admin access token lifetime: 8 hours.
+const ADMIN_TOKEN_EXPIRY_HOURS: i64 = 8;
 
 // ── Public API ───────────────────────────────────────────────────────────────
 
-/// Generate a signed HS256 JWT for the given user.
+/// Generate a signed HS256 access JWT (15-minute expiry).
 pub fn generate_token(user_id: Uuid, role: &str) -> Result<String, AppError> {
     let secret = jwt_secret();
 
-    let exp = (Utc::now() + chrono::Duration::hours(TOKEN_EXPIRY_HOURS)).timestamp() as usize;
+    let exp =
+        (Utc::now() + chrono::Duration::minutes(ACCESS_TOKEN_EXPIRY_MINUTES)).timestamp() as usize;
 
     let claims = Claims {
         sub: user_id.to_string(),
@@ -42,6 +51,14 @@ pub fn generate_token(user_id: Uuid, role: &str) -> Result<String, AppError> {
         &EncodingKey::from_secret(secret.as_bytes()),
     )
     .map_err(AppError::Jwt)
+}
+
+/// Generate a cryptographically random refresh token (opaque, not a JWT).
+/// Stored in Redis with user info; validated on refresh.
+pub fn generate_refresh_token() -> String {
+    let mut bytes = [0u8; 48];
+    OsRng.fill_bytes(&mut bytes);
+    hex::encode(bytes)
 }
 
 /// Decode and validate a JWT, returning the embedded claims.
@@ -60,10 +77,12 @@ pub fn decode_token(token: &str) -> Result<Claims, AppError> {
 
 /// Generate a signed HS256 JWT for the admin panel (hardcoded credentials).
 /// Uses the same JWT_SECRET but embeds the reserved "admin_panel" role.
+/// Admin tokens have a longer lifetime (8 hours) for operational convenience.
 pub fn generate_admin_token(username: &str) -> Result<String, AppError> {
     let secret = jwt_secret();
 
-    let exp = (Utc::now() + chrono::Duration::hours(TOKEN_EXPIRY_HOURS)).timestamp() as usize;
+    let exp =
+        (Utc::now() + chrono::Duration::hours(ADMIN_TOKEN_EXPIRY_HOURS)).timestamp() as usize;
 
     let claims = Claims {
         sub: username.to_string(),

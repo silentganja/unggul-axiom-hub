@@ -16,9 +16,66 @@ export function setToken(token: string): void {
   localStorage.setItem("auth-token", token);
 }
 
+function getRefreshToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem("auth-refresh-token");
+}
+
+export function setRefreshToken(token: string): void {
+  localStorage.setItem("auth-refresh-token", token);
+}
+
 export function clearToken(): void {
   localStorage.removeItem("auth-token");
+  localStorage.removeItem("auth-refresh-token");
   localStorage.removeItem("auth-user");
+}
+
+// ── Token refresh logic ──────────────────────────────────────────────────────
+
+let isRefreshing = false;
+let refreshPromise: Promise<boolean> | null = null;
+
+/**
+ * Attempt to refresh the access token using the stored refresh token.
+ * Returns true if refresh succeeded, false otherwise.
+ * Deduplicates concurrent refresh attempts.
+ */
+async function attemptTokenRefresh(): Promise<boolean> {
+  // If already refreshing, wait for the existing attempt
+  if (isRefreshing && refreshPromise) {
+    return refreshPromise;
+  }
+
+  const rt = getRefreshToken();
+  if (!rt) return false;
+
+  isRefreshing = true;
+  refreshPromise = (async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/refresh`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refreshToken: rt }),
+      });
+
+      if (!res.ok) return false;
+
+      const data = await res.json();
+      setToken(data.token);
+      setRefreshToken(data.refreshToken);
+
+      // Also update the cached user if we have it (token rotation keeps same user)
+      return true;
+    } catch {
+      return false;
+    } finally {
+      isRefreshing = false;
+      refreshPromise = null;
+    }
+  })();
+
+  return refreshPromise;
 }
 
 // ── Admin token management (separate from user auth) ─────────────────────────
@@ -74,7 +131,38 @@ async function apiFetch<T>(
     const isOnLoginPage =
       typeof window !== "undefined" &&
       window.location.pathname === "/login";
+
     if (!isOnLoginPage) {
+      // Try to refresh the access token first (silent renewal)
+      if (!useAdminToken) {
+        const refreshed = await attemptTokenRefresh();
+        if (refreshed) {
+          // Retry the original request with the new token
+          const newToken = getToken();
+          const retryRes = await fetch(`${API_BASE}${path}`, {
+            ...options,
+            headers: {
+              ...headers,
+              ...((options.headers as Record<string, string>) || {}),
+              Authorization: `Bearer ${newToken}`,
+            },
+          });
+
+          if (retryRes.ok) {
+            if (retryRes.status === 204) return undefined as T;
+            return retryRes.json();
+          }
+
+          // If refresh succeeded but the request still fails, check if
+          // it's another 401 (shouldn't happen normally)
+          if (retryRes.status !== 401) {
+            const body = await retryRes.json().catch(() => ({ error: "Request failed" }));
+            throw new Error(body.error || `HTTP ${retryRes.status}`);
+          }
+        }
+      }
+
+      // Refresh failed or not applicable — redirect to login
       if (useAdminToken) {
         clearAdminToken();
         if (typeof window !== "undefined") {
@@ -117,6 +205,7 @@ export interface UserProfile {
 
 export interface LoginResponse {
   token: string;
+  refreshToken: string;
   user: UserProfile;
 }
 
@@ -145,7 +234,21 @@ export const authApi = {
     });
   },
 
-  forgotPassword(email: string): Promise<{ message: string; token?: string }> {
+  refresh(refreshToken: string): Promise<{ token: string; refreshToken: string }> {
+    return apiFetch("/api/auth/refresh", {
+      method: "POST",
+      body: JSON.stringify({ refreshToken }),
+    });
+  },
+
+  logout(refreshToken?: string): Promise<{ status: string }> {
+    return apiFetch("/api/auth/logout", {
+      method: "POST",
+      body: JSON.stringify({ refreshToken: refreshToken || null }),
+    });
+  },
+
+  forgotPassword(email: string): Promise<{ message: string }> {
     return apiFetch("/api/auth/forgot-password", {
       method: "POST",
       body: JSON.stringify({ email }),
@@ -159,14 +262,14 @@ export const authApi = {
     });
   },
 
-  requestMagicLink(email: string): Promise<{ message: string; token?: string }> {
+  requestMagicLink(email: string): Promise<{ message: string }> {
     return apiFetch("/api/auth/magic-link", {
       method: "POST",
       body: JSON.stringify({ email }),
     });
   },
 
-  verifyMagicLink(token: string): Promise<{ token: string }> {
+  verifyMagicLink(token: string): Promise<{ token: string; refreshToken: string }> {
     return apiFetch(`/api/auth/magic-link?token=${encodeURIComponent(token)}`);
   },
 };
@@ -206,7 +309,7 @@ export const webauthnApi = {
     return apiFetch("/api/auth/webauthn/login/begin");
   },
 
-  async loginComplete(credential: PublicKeyCredential): Promise<{ token: string }> {
+  async loginComplete(credential: PublicKeyCredential): Promise<{ token: string; refreshToken: string }> {
     return apiFetch("/api/auth/webauthn/login/complete", {
       method: "POST",
       body: JSON.stringify(credential),
@@ -247,7 +350,11 @@ export const webauthnApi = {
       userVerification: "preferred",
     };
     const cred = await navigator.credentials.get({ publicKey });
-    return this.loginComplete(cred as PublicKeyCredential);
+    const result = await this.loginComplete(cred as PublicKeyCredential);
+    // Store tokens so the session is properly established
+    setToken(result.token);
+    setRefreshToken(result.refreshToken);
+    return result;
   },
 };
 
@@ -360,16 +467,16 @@ export const filesApi = {
     });
   },
 
+  /** Returns a token-free URL for the download endpoint (auth handled via cookies/param in legacy mode). */
   downloadUrl(id: string): string {
-    const token = localStorage.getItem("auth-token");
-    return `${API_BASE}/api/files/${id}/download?token=${token || ""}`;
+    return `${API_BASE}/api/files/${id}/download`;
   },
 
   contentUrl(id: string): string {
-    const token = localStorage.getItem("auth-token");
-    return `${API_BASE}/api/files/${id}/content?token=${token || ""}`;
+    return `${API_BASE}/api/files/${id}/content`;
   },
 
+  /** Fetch file content with proper auth header (no token in URL). */
   async getContent(id: string): Promise<{ data: ArrayBuffer; mimeType: string }> {
     const token = localStorage.getItem("auth-token");
     const res = await fetch(`${API_BASE}/api/files/${id}/content`, {
@@ -379,6 +486,24 @@ export const filesApi = {
     const mimeType = res.headers.get("Content-Type") || "application/octet-stream";
     const data = await res.arrayBuffer();
     return { data, mimeType };
+  },
+
+  /** Download a file with auth header and trigger browser save dialog. */
+  async downloadFile(id: string, filename: string): Promise<void> {
+    const token = localStorage.getItem("auth-token");
+    const res = await fetch(`${API_BASE}/api/files/${id}/download`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error("Download failed");
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   },
 };
 
@@ -663,6 +788,101 @@ export interface AdminDashboard {
   pendingGovernance: number;
   lockedFiles: number;
   sharedFiles: number;
+}
+
+// ── Favorites API ─────────────────────────────────────────────────────────────
+
+export interface FavoriteFile {
+  id: string;
+  parentId: string | null;
+  ownerId: string;
+  name: string;
+  isFolder: boolean;
+  sizeBytes: number;
+  mimeType: string | null;
+  classification: string;
+  createdAt: string;
+  updatedAt: string;
+  favoritedAt: string;
+}
+
+export const favoritesApi = {
+  list(): Promise<FavoriteFile[]> {
+    return apiFetch("/api/files/favorites");
+  },
+
+  add(fileId: string): Promise<{ status: string }> {
+    return apiFetch("/api/files/favorites", {
+      method: "POST",
+      body: JSON.stringify({ fileId }),
+    });
+  },
+
+  remove(fileId: string): Promise<{ status: string }> {
+    return apiFetch(`/api/files/favorites/${fileId}`, { method: "DELETE" });
+  },
+};
+
+// ── File Versions API ─────────────────────────────────────────────────────────
+
+export interface FileVersion {
+  id: string;
+  fileId: string;
+  versionNumber: number;
+  sizeBytes: number;
+  storagePath: string;
+  uploadedBy: string | null;
+  createdAt: string;
+}
+
+export const versionsApi = {
+  list(fileId: string): Promise<FileVersion[]> {
+    return apiFetch(`/api/files/${fileId}/versions`);
+  },
+
+  restore(fileId: string, versionId: string): Promise<{ status: string; versionNumber: number }> {
+    return apiFetch(`/api/files/${fileId}/versions/${versionId}/restore`, { method: "POST" });
+  },
+};
+
+// ── Notifications / SSE ───────────────────────────────────────────────────────
+
+export interface NotificationEvent {
+  type: "governance_update" | "share_added" | "file_locked" | "file_unlocked" | "file_uploaded";
+  requestId?: string;
+  status?: string;
+  title?: string;
+  fileName?: string;
+  fileId?: string;
+  sharedBy?: string;
+  lockedBy?: string;
+  sizeBytes?: number;
+}
+
+export function subscribeToNotifications(
+  onEvent: (event: NotificationEvent) => void
+): () => void {
+  const token = localStorage.getItem("auth-token");
+  if (!token) return () => {};
+
+  const eventSource = new EventSource(
+    `${API_BASE}/api/notifications/stream?token=${token}`
+  );
+
+  eventSource.onmessage = (msg) => {
+    try {
+      const event: NotificationEvent = JSON.parse(msg.data);
+      onEvent(event);
+    } catch {
+      // Ignore parse errors on heartbeat/comment lines
+    }
+  };
+
+  eventSource.onerror = () => {
+    // SSE will auto-reconnect; no action needed
+  };
+
+  return () => eventSource.close();
 }
 
 // ── Utilities ────────────────────────────────────────────────────────────────

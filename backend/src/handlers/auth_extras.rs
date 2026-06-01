@@ -1,11 +1,13 @@
 use crate::{
     app_middleware::auth::AuthUser,
+    app_middleware::rate_limit,
     errors::AppError,
-    models::user::User,
-    utils::{jwt, password},
+    models::user::{User, UserProfile},
+    utils::{email, jwt, password, redis},
 };
 use actix_web::{web, HttpResponse};
 use rand_core::{OsRng, RngCore};
+use redis::aio::ConnectionManager;
 use serde::Deserialize;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -16,6 +18,93 @@ fn generate_token() -> String {
     let mut bytes = [0u8; 32];
     OsRng.fill_bytes(&mut bytes);
     hex::encode(bytes)
+}
+
+// ── Token Refresh & Logout ───────────────────────────────────────────────────
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct RefreshRequest {
+    refresh_token: String,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RefreshResponse {
+    token: String,
+    refresh_token: String,
+}
+
+/// POST /api/auth/refresh
+///
+/// Exchange a valid refresh token for a new access token + rotated refresh token.
+/// The old refresh token is consumed (single-use rotation).
+///
+/// # Errors
+/// - `401 Unauthorized` — invalid, expired, or already-used refresh token
+pub async fn refresh(
+    redis_conn: web::Data<ConnectionManager>,
+    body: web::Json<RefreshRequest>,
+) -> Result<HttpResponse, AppError> {
+    let mut conn = redis_conn.get_ref().clone();
+
+    // Lookup consumes the old token (prevents replay)
+    let Some((user_id, role)) = redis::take_refresh_token(&mut conn, &body.refresh_token)
+        .await
+        .map_err(|e| AppError::Redis(e.to_string()))?
+    else {
+        tracing::warn!("Invalid or expired refresh token used");
+        return Err(AppError::Unauthorized);
+    };
+
+    let user_uuid = Uuid::parse_str(&user_id).map_err(|_| AppError::Unauthorized)?;
+
+    // Issue new access token
+    let access_token = jwt::generate_token(user_uuid, &role)?;
+
+    // Rotate refresh token (issue new one, old one is already deleted)
+    let new_refresh_token = jwt::generate_refresh_token();
+    redis::store_refresh_token(&mut conn, &new_refresh_token, &user_id, &role)
+        .await
+        .map_err(|e| AppError::Redis(e.to_string()))?;
+
+    tracing::info!(user_id = %user_id, "Token refreshed");
+
+    Ok(HttpResponse::Ok().json(RefreshResponse {
+        token: access_token,
+        refresh_token: new_refresh_token,
+    }))
+}
+
+/// POST /api/auth/logout
+///
+/// Revokes the provided refresh token, effectively logging the user out.
+/// Also revokes all tokens for the authenticated user if no refresh token is
+/// provided (global logout).
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct LogoutRequest {
+    refresh_token: Option<String>,
+}
+
+pub async fn logout(
+    redis_conn: web::Data<ConnectionManager>,
+    user: AuthUser,
+    body: web::Json<LogoutRequest>,
+) -> Result<HttpResponse, AppError> {
+    let mut conn = redis_conn.get_ref().clone();
+
+    // Revoke specific refresh token if provided
+    if let Some(ref rt) = body.refresh_token {
+        let _ = redis::take_refresh_token(&mut conn, rt).await;
+    }
+
+    // Always revoke all tokens for the user (global logout)
+    let _ = redis::revoke_user_tokens(&mut conn, &user.id.to_string()).await;
+
+    tracing::info!(user_id = %user.id, "User logged out, tokens revoked");
+
+    Ok(HttpResponse::Ok().json(serde_json::json!({ "status": "logged_out" })))
 }
 
 // ── Forgot Password ──────────────────────────────────────────────────────────
@@ -34,31 +123,44 @@ pub(crate) struct ResetPasswordRequest {
 }
 
 /// POST /api/auth/forgot-password
+///
+/// Generates a password reset token and sends it via email.
+/// Rate-limited to 3 requests per minute per IP.
+/// Always returns success to prevent email enumeration.
 pub async fn forgot_password(
     pool: web::Data<PgPool>,
+    redis_conn: web::Data<ConnectionManager>,
+    req: actix_web::HttpRequest,
     body: web::Json<ForgotPasswordRequest>,
 ) -> Result<HttpResponse, AppError> {
-    let email = body.email.trim().to_lowercase();
-    if email.is_empty() {
+    // ── Rate limiting ───────────────────────────────────────────────────────────
+    let ip = req
+        .peer_addr()
+        .map(|a| a.ip().to_string())
+        .unwrap_or_else(|| "unknown".to_string());
+    let mut conn = redis_conn.get_ref().clone();
+    rate_limit::check_sensitive_rate_limit(&mut conn, &ip).await?;
+
+    let email_addr = body.email.trim().to_lowercase();
+    if email_addr.is_empty() {
         return Err(AppError::BadRequest("email is required".into()));
     }
 
     let user: Option<User> = sqlx::query_as::<_, User>(
         "SELECT id, email, password_hash, full_name, role, active, created_at FROM users WHERE email = $1",
     )
-    .bind(&email)
+    .bind(&email_addr)
     .fetch_optional(pool.get_ref())
     .await
     .map_err(AppError::Database)?;
 
     // Always return success to prevent email enumeration
-    if user.is_none() {
+    let Some(user) = user else {
         return Ok(HttpResponse::Ok().json(serde_json::json!({
-            "message": "If an account with that email exists, a reset token has been generated."
+            "message": "If an account with that email exists, a reset link has been sent."
         })));
-    }
+    };
 
-    let user = user.unwrap();
     let token = generate_token();
 
     sqlx::query(
@@ -72,15 +174,18 @@ pub async fn forgot_password(
 
     tracing::info!(user_id = %user.id, "Password reset requested");
 
+    // Send email (falls back to console log when SMTP disabled)
+    email::send_password_reset(&user.email, &user.full_name, &token).await;
+
     Ok(HttpResponse::Ok().json(serde_json::json!({
-        "message": "If an account with that email exists, a reset token has been generated.",
-        "token": token // In production, this would be emailed instead
+        "message": "If an account with that email exists, a reset link has been sent."
     })))
 }
 
 /// POST /api/auth/reset-password
 pub async fn reset_password(
     pool: web::Data<PgPool>,
+    redis_conn: web::Data<ConnectionManager>,
     body: web::Json<ResetPasswordRequest>,
 ) -> Result<HttpResponse, AppError> {
     if body.new_password.len() < 6 {
@@ -114,7 +219,11 @@ pub async fn reset_password(
         .await
         .map_err(AppError::Database)?;
 
-    tracing::info!(user_id = %user_id, "Password reset completed");
+    // Revoke all refresh tokens — password was reset
+    let mut conn = redis_conn.get_ref().clone();
+    let _ = redis::revoke_user_tokens(&mut conn, &user_id.to_string()).await;
+
+    tracing::info!(user_id = %user_id, "Password reset completed, all sessions revoked");
 
     Ok(HttpResponse::Ok().json(serde_json::json!({ "message": "Password reset successfully" })))
 }
@@ -128,26 +237,39 @@ pub(crate) struct MagicLinkRequest {
 }
 
 /// POST /api/auth/magic-link
+///
+/// Generates a magic link token and sends it via email.
+/// Rate-limited to 3 requests per minute per IP.
 pub async fn request_magic_link(
     pool: web::Data<PgPool>,
+    redis_conn: web::Data<ConnectionManager>,
+    req: actix_web::HttpRequest,
     body: web::Json<MagicLinkRequest>,
 ) -> Result<HttpResponse, AppError> {
-    let email = body.email.trim().to_lowercase();
-    if email.is_empty() {
+    // ── Rate limiting ───────────────────────────────────────────────────────────
+    let ip = req
+        .peer_addr()
+        .map(|a| a.ip().to_string())
+        .unwrap_or_else(|| "unknown".to_string());
+    let mut conn = redis_conn.get_ref().clone();
+    rate_limit::check_sensitive_rate_limit(&mut conn, &ip).await?;
+
+    let email_addr = body.email.trim().to_lowercase();
+    if email_addr.is_empty() {
         return Err(AppError::BadRequest("email is required".into()));
     }
 
     let user: Option<User> = sqlx::query_as::<_, User>(
         "SELECT id, email, password_hash, full_name, role, active, created_at FROM users WHERE email = $1",
     )
-    .bind(&email)
+    .bind(&email_addr)
     .fetch_optional(pool.get_ref())
     .await
     .map_err(AppError::Database)?;
 
     if user.is_none() {
         return Ok(HttpResponse::Ok().json(serde_json::json!({
-            "message": "If an account with that email exists, a magic link has been generated."
+            "message": "If an account with that email exists, a magic link has been sent."
         })));
     }
 
@@ -165,15 +287,18 @@ pub async fn request_magic_link(
 
     tracing::info!(user_id = %user.id, "Magic link requested");
 
+    // Send email (falls back to console log when SMTP disabled)
+    email::send_magic_link(&user.email, &user.full_name, &token).await;
+
     Ok(HttpResponse::Ok().json(serde_json::json!({
-        "message": "If an account with that email exists, a magic link has been generated.",
-        "token": token
+        "message": "If an account with that email exists, a magic link has been sent."
     })))
 }
 
 /// GET /api/auth/magic-link?token=...
 pub async fn verify_magic_link(
     pool: web::Data<PgPool>,
+    redis_conn: web::Data<ConnectionManager>,
     query: web::Query<MagicLinkVerify>,
 ) -> Result<HttpResponse, AppError> {
     let row: Option<(Uuid, String)> = sqlx::query_as(
@@ -193,12 +318,19 @@ pub async fn verify_magic_link(
         .await
         .map_err(AppError::Database)?;
 
-    let jwt_token = jwt::generate_token(user_id, &role)?;
+    let access_token = jwt::generate_token(user_id, &role)?;
+    let refresh_token = jwt::generate_refresh_token();
+
+    let mut conn = redis_conn.get_ref().clone();
+    redis::store_refresh_token(&mut conn, &refresh_token, &user_id.to_string(), &role)
+        .await
+        .map_err(|e| AppError::Redis(e.to_string()))?;
 
     tracing::info!(user_id = %user_id, "Magic link login");
 
     Ok(HttpResponse::Ok().json(serde_json::json!({
-        "token": jwt_token
+        "token": access_token,
+        "refreshToken": refresh_token
     })))
 }
 
@@ -208,6 +340,8 @@ pub(crate) struct MagicLinkVerify {
 }
 
 // ── WebAuthn / Passkey ───────────────────────────────────────────────────────
+
+const WEBAUTHN_CHALLENGE_TTL_SECS: u64 = 300; // 5 minutes
 
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -221,10 +355,24 @@ struct WebauthnRegisterBeginResponse {
 }
 
 /// GET /api/auth/webauthn/register/begin
-pub async fn webauthn_register_begin(_user: AuthUser) -> Result<HttpResponse, AppError> {
+pub async fn webauthn_register_begin(
+    redis_conn: web::Data<ConnectionManager>,
+    _user: AuthUser,
+) -> Result<HttpResponse, AppError> {
     let mut challenge = [0u8; 32];
     OsRng.fill_bytes(&mut challenge);
     let challenge_b64 = base64_url(&challenge);
+
+    // Store challenge in Redis to verify in complete phase
+    let mut conn = redis_conn.get_ref().clone();
+    let key = format!("webauthn:register:{}", _user.id);
+    let _: () = redis::cmd("SETEX")
+        .arg(&key)
+        .arg(WEBAUTHN_CHALLENGE_TTL_SECS)
+        .arg(&challenge_b64)
+        .query_async(&mut conn)
+        .await
+        .unwrap_or(());
 
     Ok(HttpResponse::Ok().json(WebauthnRegisterBeginResponse {
         challenge: challenge_b64,
@@ -239,9 +387,41 @@ pub async fn webauthn_register_begin(_user: AuthUser) -> Result<HttpResponse, Ap
 /// POST /api/auth/webauthn/register/complete
 pub async fn webauthn_register_complete(
     pool: web::Data<PgPool>,
+    redis_conn: web::Data<ConnectionManager>,
     user: AuthUser,
     body: web::Json<serde_json::Value>,
 ) -> Result<HttpResponse, AppError> {
+    // Verify the challenge matches what we sent
+    let client_challenge = body["response"]["clientDataJSON"]
+        .as_str()
+        .and_then(|json| {
+            let decoded = base64_url_decode(json).ok()?;
+            serde_json::from_slice::<serde_json::Value>(&decoded).ok()
+        })
+        .and_then(|v| v["challenge"].as_str().map(|s| s.to_string()));
+
+    if let Some(ref chal) = client_challenge {
+        let mut conn = redis_conn.get_ref().clone();
+        let key = format!("webauthn:register:{}", user.id);
+        let stored: Option<String> = redis::cmd("GET")
+            .arg(&key)
+            .query_async(&mut conn)
+            .await
+            .unwrap_or(None);
+
+        if stored.as_ref() != Some(chal) {
+            tracing::warn!(user_id = %user.id, "WebAuthn challenge mismatch");
+            return Err(AppError::BadRequest("Challenge verification failed".into()));
+        }
+
+        // Delete used challenge
+        let _: () = redis::cmd("DEL")
+            .arg(&key)
+            .query_async(&mut conn)
+            .await
+            .unwrap_or(());
+    }
+
     let credential_id = body["id"]
         .as_str()
         .ok_or(AppError::BadRequest("Missing credential id".into()))?;
@@ -273,25 +453,80 @@ pub async fn webauthn_register_complete(
 }
 
 /// GET /api/auth/webauthn/login/begin
-pub async fn webauthn_login_begin() -> Result<HttpResponse, AppError> {
+pub async fn webauthn_login_begin(
+    redis_conn: web::Data<ConnectionManager>,
+) -> Result<HttpResponse, AppError> {
     let mut challenge = [0u8; 32];
     OsRng.fill_bytes(&mut challenge);
     let challenge_b64 = base64_url(&challenge);
 
+    // Generate a session ID for this login attempt
+    let session_id = generate_token();
+    let mut conn = redis_conn.get_ref().clone();
+    let key = format!("webauthn:login:{}", session_id);
+    let _: () = redis::cmd("SETEX")
+        .arg(&key)
+        .arg(WEBAUTHN_CHALLENGE_TTL_SECS)
+        .arg(&challenge_b64)
+        .query_async(&mut conn)
+        .await
+        .unwrap_or(());
+
     Ok(HttpResponse::Ok().json(serde_json::json!({
         "challenge": challenge_b64,
-        "rpId": "localhost"
+        "rpId": "localhost",
+        "sessionId": session_id
     })))
 }
 
 /// POST /api/auth/webauthn/login/complete
 pub async fn webauthn_login_complete(
     pool: web::Data<PgPool>,
+    redis_conn: web::Data<ConnectionManager>,
     body: web::Json<serde_json::Value>,
 ) -> Result<HttpResponse, AppError> {
     let credential_id = body["id"]
         .as_str()
         .ok_or(AppError::BadRequest("Missing credential id".into()))?;
+
+    // Verify challenge via session ID
+    let session_id = body["sessionId"]
+        .as_str()
+        .or_else(|| body.get("sessionId").and_then(|v| v.as_str()));
+
+    if let Some(sid) = session_id {
+        let mut conn = redis_conn.get_ref().clone();
+        let key = format!("webauthn:login:{}", sid);
+
+        // Extract challenge from clientDataJSON
+        let client_challenge = body["response"]["clientDataJSON"]
+            .as_str()
+            .and_then(|json| {
+                let decoded = base64_url_decode(json).ok()?;
+                serde_json::from_slice::<serde_json::Value>(&decoded).ok()
+            })
+            .and_then(|v| v["challenge"].as_str().map(|s| s.to_string()));
+
+        if let Some(ref chal) = client_challenge {
+            let stored: Option<String> = redis::cmd("GET")
+                .arg(&key)
+                .query_async(&mut conn)
+                .await
+                .unwrap_or(None);
+
+            if stored.as_ref() != Some(chal) {
+                tracing::warn!("WebAuthn login challenge mismatch");
+                return Err(AppError::BadRequest("Challenge verification failed".into()));
+            }
+
+            // Delete used challenge
+            let _: () = redis::cmd("DEL")
+                .arg(&key)
+                .query_async(&mut conn)
+                .await
+                .unwrap_or(());
+        }
+    }
 
     let row: Option<(Uuid, String)> = sqlx::query_as(
         "SELECT wc.user_id, u.role FROM webauthn_credentials wc JOIN users u ON u.id = wc.user_id WHERE wc.credential_id = $1",
@@ -303,13 +538,32 @@ pub async fn webauthn_login_complete(
 
     let (user_id, role) = row.ok_or(AppError::BadRequest("Unknown credential".into()))?;
 
-    let token = jwt::generate_token(user_id, &role)?;
+    let access_token = jwt::generate_token(user_id, &role)?;
+    let refresh_token = jwt::generate_refresh_token();
+
+    let mut conn = redis_conn.get_ref().clone();
+    redis::store_refresh_token(&mut conn, &refresh_token, &user_id.to_string(), &role)
+        .await
+        .map_err(|e| AppError::Redis(e.to_string()))?;
 
     tracing::info!(user_id = %user_id, "WebAuthn login");
 
     Ok(HttpResponse::Ok().json(serde_json::json!({
-        "token": token
+        "token": access_token,
+        "refreshToken": refresh_token
     })))
+}
+
+fn base64_url_decode(input: &str) -> Result<Vec<u8>, String> {
+    use base64::Engine;
+    let b64 = input.replace('-', "+").replace('_', "/");
+    let padded = match b64.len() % 4 {
+        0 => b64,
+        n => b64 + &"=".repeat(4 - n),
+    };
+    base64::engine::general_purpose::STANDARD
+        .decode(&padded)
+        .map_err(|e| e.to_string())
 }
 
 fn base64_url(data: &[u8]) -> String {

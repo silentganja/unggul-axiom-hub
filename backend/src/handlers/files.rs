@@ -1012,6 +1012,20 @@ pub async fn upload_file(
         }
     };
 
+    // ── File versioning — save as version 1 ──────────────────────────────────
+    let version_path = temp_filepath.to_string_lossy().to_string();
+    let _ = sqlx::query(
+        "INSERT INTO file_versions (file_id, version_number, size_bytes, storage_path, uploaded_by)
+         VALUES ($1, 1, $2, $3, $4)
+         ON CONFLICT (file_id, version_number) DO NOTHING",
+    )
+    .bind(file_node.id)
+    .bind(size_bytes)
+    .bind(&version_path)
+    .bind(user.id)
+    .execute(pool.get_ref())
+    .await;
+
     // ── Audit log ─────────────────────────────────────────────────────────────
     let ip = req.peer_addr().map(|a| a.to_string()).unwrap_or_default();
 
@@ -1023,6 +1037,14 @@ pub async fn upload_file(
         &ip,
     )
     .await;
+
+    // ── Emit notification ────────────────────────────────────────────────────
+    crate::handlers::notifications::emit_notification(
+        crate::models::notification::NotificationEvent::FileUploaded {
+            file_name: filename.clone(),
+            size_bytes,
+        },
+    );
 
     tracing::info!(
         user_id = %user.id,

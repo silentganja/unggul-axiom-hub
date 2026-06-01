@@ -1,6 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // Unggul Axiom Backend — main.rs
 // Phase 7–8: Core schema, Auth Engine & File System API
+// Phase 9: Redis, Rate Limiting, Token Refresh, Email Service
 // ─────────────────────────────────────────────────────────────────────────────
 
 use actix_cors::Cors;
@@ -41,26 +42,38 @@ struct HealthResponse {
     status: &'static str,
     version: &'static str,
     database: bool,
+    redis: bool,
 }
 
 // ─── Handlers ───────────────────────────────────────────────────────────────
 
 /// GET /health
-/// Returns service liveness and database connectivity status.
+/// Returns service liveness and database/redis connectivity status.
 #[get("/health")]
-async fn health_check(pool: web::Data<sqlx::PgPool>) -> impl Responder {
-    // Raw query — NO sqlx macros per engineering rules
+async fn health_check(
+    pool: web::Data<sqlx::PgPool>,
+    redis_conn: web::Data<redis::aio::ConnectionManager>,
+) -> impl Responder {
     let db_ok = sqlx::query("SELECT 1 AS ok")
         .fetch_one(pool.get_ref())
         .await
         .is_ok();
 
-    let status = if db_ok { "ok" } else { "degraded" };
+    let redis_ok = {
+        let mut conn = redis_conn.get_ref().clone();
+        redis::cmd("PING")
+            .query_async::<_, String>(&mut conn)
+            .await
+            .is_ok()
+    };
+
+    let status = if db_ok && redis_ok { "ok" } else { "degraded" };
 
     HttpResponse::Ok().json(HealthResponse {
         status,
         version: env!("CARGO_PKG_VERSION"),
         database: db_ok,
+        redis: redis_ok,
     })
 }
 
@@ -105,7 +118,6 @@ async fn main() -> std::io::Result<()> {
     };
 
     // ── Database pool ─────────────────────────────────────────────────────────
-    // Raw sqlx — no compile-time macros per engineering rules.
     let pool = PgPoolOptions::new()
         .max_connections(20)
         .connect(&database_url)
@@ -113,11 +125,20 @@ async fn main() -> std::io::Result<()> {
         .expect("Failed to connect to PostgreSQL");
 
     info!("✓ Database connected");
+
+    // ── Auto-migrations — ensure schema is up to date ─────────────────────────
+    utils::migrations::run_migrations(&pool).await;
+
+    // ── Redis ─────────────────────────────────────────────────────────────────
+    let redis_conn = utils::redis::connect().await;
+    info!("✓ Redis connected");
+
     info!("✓ Starting Unggul Axiom Backend on {}:{}", host, port);
 
     // ── HTTP server ───────────────────────────────────────────────────────────
     let pool_data = web::Data::new(pool);
     let config_data = web::Data::new(config);
+    let redis_data = web::Data::new(redis_conn);
 
     HttpServer::new(move || {
         // CORS — allow localhost in dev + hub subdomain in production
@@ -140,12 +161,14 @@ async fn main() -> std::io::Result<()> {
         App::new()
             // ── Middleware ────────────────────────────────────────────────────
             .wrap(cors)
+            .wrap(app_middleware::rate_limit::RateLimitMiddleware)
             .wrap(Logger::new(
                 "%a \"%r\" %s %b \"%{Referer}i\" \"%{User-Agent}i\" %T",
             ))
             // ── Shared state ──────────────────────────────────────────────────
             .app_data(pool_data.clone())
             .app_data(config_data.clone())
+            .app_data(redis_data.clone())
             // ── Routes ────────────────────────────────────────────────────────
             .service(root)
             .service(health_check)
@@ -207,6 +230,14 @@ async fn main() -> std::io::Result<()> {
                     .route("/me", web::get().to(handlers::auth::me))
                     .route("/profile", web::put().to(handlers::auth::update_profile))
                     .route(
+                        "/refresh",
+                        web::post().to(handlers::auth_extras::refresh),
+                    )
+                    .route(
+                        "/logout",
+                        web::post().to(handlers::auth_extras::logout),
+                    )
+                    .route(
                         "/forgot-password",
                         web::post().to(handlers::auth_extras::forgot_password),
                     )
@@ -266,65 +297,76 @@ async fn main() -> std::io::Result<()> {
             )
             // /api/audit  — all routes require a valid JWT (AuthUser extractor)
             .service(
-                web::scope("/api/audit").route("", web::get().to(handlers::audit::list_audit_logs)),
+                web::scope("/api/audit")
+                    .route("", web::get().to(handlers::audit::list_audit_logs)),
+            )
+            // /api/notifications — SSE stream
+            .service(
+                web::scope("/api/notifications")
+                    .route("/stream", web::get().to(handlers::notifications::stream)),
             )
             // /api/files  — all routes require a valid JWT (AuthUser extractor)
             .service(
                 web::scope("/api/files")
-                    // GET  /api/files[?parent_id=uuid]  — list directory contents
                     .route("", web::get().to(handlers::files::list_files))
-                    // GET  /api/files/shared            — list files shared with me
                     .route(
                         "/shared",
                         web::get().to(handlers::shares::list_shared_files),
                     )
-                    // GET  /api/files/quota            — storage quota usage
                     .route("/quota", web::get().to(handlers::files::get_quota))
-                    // GET  /api/files/trash             — list trashed files
                     .route("/trash", web::get().to(handlers::files::list_trash))
-                    // POST /api/files/move              — bulk move files
                     .route("/move", web::post().to(handlers::files::move_files))
-                    // GET  /api/files/{id}              — get single file detail
+                    // Favorites
+                    .route(
+                        "/favorites",
+                        web::get().to(handlers::favorites::list_favorites),
+                    )
+                    .route(
+                        "/favorites",
+                        web::post().to(handlers::favorites::add_favorite),
+                    )
+                    .route(
+                        "/favorites/{file_id}",
+                        web::delete().to(handlers::favorites::remove_favorite),
+                    )
+                    // File versions
+                    .route(
+                        "/{id}/versions",
+                        web::get().to(handlers::file_versions::list_versions),
+                    )
+                    .route(
+                        "/{id}/versions/{version_id}/restore",
+                        web::post().to(handlers::file_versions::restore_version),
+                    )
                     .route("/{id}", web::get().to(handlers::files::get_file))
-                    // POST /api/files/folder             — create a new folder
                     .route("/folder", web::post().to(handlers::files::create_folder))
-                    // POST /api/files/upload             — upload a file
                     .route("/upload", web::post().to(handlers::files::upload_file))
-                    // POST /api/files/{id}/share         — share a file with another user
                     .route("/{id}/share", web::post().to(handlers::shares::share_file))
-                    // GET  /api/files/{id}/shares        — list shares for a file
                     .route(
                         "/{id}/shares",
                         web::get().to(handlers::shares::list_file_shares),
                     )
-                    // DELETE /api/files/{id}/share/{uid} — revoke a share
                     .route(
                         "/{id}/share/{uid}",
                         web::delete().to(handlers::shares::remove_share),
                     )
-                    // GET  /api/files/{id}/content       — raw content for preview
                     .route(
                         "/{id}/content",
                         web::get().to(handlers::files::get_file_content),
                     )
-                    // GET  /api/files/{id}/download      — stream download
                     .route(
                         "/{id}/download",
                         web::get().to(handlers::files::download_file),
                     )
-                    // POST /api/files/{id}/restore       — restore from trash
                     .route(
                         "/{id}/restore",
                         web::post().to(handlers::files::restore_file),
                     )
-                    // PUT  /api/files/{id}/rename        — rename a file or folder
                     .route("/{id}/rename", web::put().to(handlers::files::rename_file))
-                    // DELETE /api/files/{id}/permanent   — permanently delete trashed file
                     .route(
                         "/{id}/permanent",
                         web::delete().to(handlers::files::permanent_delete),
                     )
-                    // DELETE /api/files/{id}             — move to trash (soft delete)
                     .route("/{id}", web::delete().to(handlers::files::delete_file)),
             )
     })

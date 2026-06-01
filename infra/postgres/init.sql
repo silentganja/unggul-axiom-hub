@@ -168,12 +168,41 @@ INSERT INTO system_config (key, value) VALUES
     ('allowed_classifications', 'RAHSIA,SULIT,TERHAD,TERBUKA')
 ON CONFLICT (key) DO NOTHING;
 
+-- ── Favorites ─────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS favorites (
+    user_id     UUID         NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    file_id     UUID         NOT NULL REFERENCES files (id) ON DELETE CASCADE,
+    created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (user_id, file_id)
+);
+CREATE INDEX IF NOT EXISTS idx_favorites_user_id ON favorites (user_id);
+
+-- ── File Versions ──────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS file_versions (
+    id              UUID         PRIMARY KEY DEFAULT uuid_generate_v4(),
+    file_id         UUID         NOT NULL REFERENCES files (id) ON DELETE CASCADE,
+    version_number  INTEGER      NOT NULL,
+    size_bytes      BIGINT       NOT NULL DEFAULT 0,
+    storage_path    VARCHAR(1024) NOT NULL,
+    uploaded_by     UUID         REFERENCES users (id) ON DELETE SET NULL,
+    created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    UNIQUE (file_id, version_number)
+);
+CREATE INDEX IF NOT EXISTS idx_file_versions_file_id ON file_versions (file_id);
+CREATE INDEX IF NOT EXISTS idx_file_versions_created ON file_versions (created_at DESC);
+
 -- ── Migration records ─────────────────────────────────────────
 INSERT INTO _migrations (version, description)
 VALUES
-    ('0001', 'Phase 1: Initial schema — extensions and migration table'),
-    ('0002', 'Phase 7: Core schema — users, files, audit_logs'),
-    ('0003', 'Phase 10: File sharing — file_shares table'),
-    ('0004', 'Soft-delete support — deleted_at column on files'),
-    ('0005', 'Governance workflow — approval requests + file locking')
+    ('0001', 'Core extensions — uuid-ossp + pgcrypto'),
+    ('0002', 'File sharing — file_shares table'),
+    ('0003', 'Soft-delete support — deleted_at column on files'),
+    ('0004', 'Governance workflow — approval requests + file locking'),
+    ('0005', 'Auth extras — password_resets, magic_links, webauthn_credentials'),
+    ('0006', 'Role hierarchy — chief/director/officer/staff'),
+    ('0007', 'Admin Tier 1 — user active flag'),
+    ('0008', 'Admin Tier 2 — system configuration'),
+    ('0009', 'Server-side favorites table'),
+    ('0010', 'File versioning system'),
+    ('0011', 'Governance requests table')
 ON CONFLICT (version) DO NOTHING;

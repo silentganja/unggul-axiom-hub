@@ -26,6 +26,12 @@ pub enum AppError {
 
     #[error("JWT error: {0}")]
     Jwt(#[from] jsonwebtoken::errors::Error),
+
+    #[error("Too many requests")]
+    TooManyRequests,
+
+    #[error("Redis error: {0}")]
+    Redis(String),
 }
 
 // ── Serialisable error body ──────────────────────────────────────────────────
@@ -60,6 +66,17 @@ impl actix_web::ResponseError for AppError {
             }
             AppError::Internal(e) => {
                 tracing::error!("Internal error: {:?}", e);
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Internal server error".to_string(),
+                )
+            }
+            AppError::TooManyRequests => (
+                StatusCode::TOO_MANY_REQUESTS,
+                "Too many requests. Please slow down.".to_string(),
+            ),
+            AppError::Redis(e) => {
+                tracing::error!("Redis error: {}", e);
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     "Internal server error".to_string(),
