@@ -12,8 +12,7 @@ pub async fn connect() -> ConnectionManager {
     let url = env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string());
 
     let client = redis::Client::open(url.as_str()).expect("Invalid REDIS_URL");
-    client
-        .get_connection_manager()
+    redis::aio::ConnectionManager::new(client)
         .await
         .expect("Failed to connect to Redis")
 }
@@ -59,7 +58,7 @@ pub async fn take_refresh_token(
     };
 
     // DELETE it so it cannot be reused (token rotation)
-    redis::cmd("DEL").arg(&key).query_async(conn).await?;
+    redis::cmd("DEL").arg(&key).query_async::<_, ()>(conn).await?;
 
     let parsed: serde_json::Value = serde_json::from_str(&raw).unwrap_or(serde_json::Value::Null);
     let user_id = parsed["user_id"].as_str().unwrap_or("").to_string();
@@ -78,7 +77,7 @@ pub async fn revoke_user_tokens(conn: &mut ConnectionManager, user_id: &str) -> 
     // Instead, store a "token generation" counter per user and invalidate
     // all tokens older than the current generation.
     let key = format!("user_token_gen:{}", user_id);
-    redis::cmd("INCR").arg(&key).query_async(conn).await?;
+    redis::cmd("INCR").arg(&key).query_async::<_, ()>(conn).await?;
     Ok(())
 }
 

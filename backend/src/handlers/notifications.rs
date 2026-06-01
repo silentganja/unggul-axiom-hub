@@ -1,7 +1,7 @@
 use crate::{
     app_middleware::auth::AuthUser, errors::AppError, models::notification::NotificationEvent,
 };
-use actix_web::{web, HttpResponse};
+use actix_web::HttpResponse;
 use futures_util::StreamExt;
 use std::sync::LazyLock;
 use tokio::sync::broadcast;

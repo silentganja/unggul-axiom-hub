@@ -161,7 +161,6 @@ async fn main() -> std::io::Result<()> {
         App::new()
             // ── Middleware ────────────────────────────────────────────────────
             .wrap(cors)
-            .wrap(app_middleware::rate_limit::RateLimitMiddleware)
             .wrap(Logger::new(
                 "%a \"%r\" %s %b \"%{Referer}i\" \"%{User-Agent}i\" %T",
             ))

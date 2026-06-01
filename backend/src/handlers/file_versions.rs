@@ -22,7 +22,7 @@ pub async fn list_versions(
             .ok_or(AppError::NotFound)?;
 
     // Also check shared access
-    let has_access = owner == user.id
+    let has_access = owner == Some(user.id)
         || sqlx::query_scalar::<_, bool>(
             "SELECT EXISTS(SELECT 1 FROM file_shares WHERE file_id = $1 AND user_id = $2)",
         )
@@ -70,7 +70,7 @@ pub async fn restore_version(
             .map_err(AppError::Database)?
             .ok_or(AppError::NotFound)?;
 
-    if owner != user.id {
+    if owner != Some(user.id) {
         return Err(AppError::Unauthorized);
     }
 
@@ -88,7 +88,7 @@ pub async fn restore_version(
     let version = version.ok_or(AppError::NotFound)?;
 
     // Get current file info
-    let (file_name, current_storage_path): (String, String) =
+    let (_file_name, current_storage_path): (String, String) =
         sqlx::query_as("SELECT name, COALESCE($2 || '/' || id::text, '') FROM files WHERE id = $1")
             .bind(file_id)
             .bind(&config.storage_path)

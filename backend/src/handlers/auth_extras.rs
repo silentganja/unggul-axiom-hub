@@ -2,7 +2,7 @@ use crate::{
     app_middleware::auth::AuthUser,
     app_middleware::rate_limit,
     errors::AppError,
-    models::user::{User, UserProfile},
+    models::user::User,
     utils::{email, jwt, password, redis},
 };
 use actix_web::{web, HttpResponse};
