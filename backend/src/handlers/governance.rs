@@ -201,7 +201,7 @@ pub async fn approve_request(
     // Execute the action on the target file
     if let Some(file_id) = target_file_id {
         match req_type.as_deref() {
-            "FILE_LOCK" => {
+            Some("FILE_LOCK") => {
                 sqlx::query("UPDATE files SET locked_by = requested_by, locked_at = NOW() FROM governance_requests WHERE files.id = $1 AND governance_requests.id = $2")
                     .bind(file_id)
                     .bind(request_id)
@@ -209,14 +209,14 @@ pub async fn approve_request(
                     .await
                     .map_err(AppError::Database)?;
             }
-            "FILE_UNLOCK" => {
+            Some("FILE_UNLOCK") => {
                 sqlx::query("UPDATE files SET locked_by = NULL, locked_at = NULL WHERE id = $1")
                     .bind(file_id)
                     .execute(pool.get_ref())
                     .await
                     .map_err(AppError::Database)?;
             }
-            "CLASSIFICATION_UPGRADE" | "CLASSIFICATION_DOWNGRADE" => {
+            Some("CLASSIFICATION_UPGRADE") | Some("CLASSIFICATION_DOWNGRADE") => {
                 if let Some(ref meta) = metadata {
                     if let Some(new_class) = meta.get("newClassification").and_then(|v| v.as_str())
                     {
