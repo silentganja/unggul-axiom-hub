@@ -157,8 +157,7 @@ async fn main() -> std::io::Result<()> {
             )
             // /api/audit  — all routes require a valid JWT (AuthUser extractor)
             .service(
-                web::scope("/api/audit")
-                    .route("", web::get().to(handlers::audit::list_audit_logs)),
+                web::scope("/api/audit").route("", web::get().to(handlers::audit::list_audit_logs)),
             )
             // /api/files  — all routes require a valid JWT (AuthUser extractor)
             .service(

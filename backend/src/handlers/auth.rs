@@ -96,10 +96,7 @@ pub async fn login(
 /// # Errors
 /// - `401 Unauthorized` — missing or invalid JWT
 /// - `404 Not Found`    — user no longer exists in database
-pub async fn me(
-    pool: web::Data<PgPool>,
-    user: AuthUser,
-) -> Result<HttpResponse, AppError> {
+pub async fn me(pool: web::Data<PgPool>, user: AuthUser) -> Result<HttpResponse, AppError> {
     let profile: Option<UserProfile> = sqlx::query_as::<_, User>(
         "SELECT id, email, password_hash, full_name, role, created_at \
          FROM users WHERE id = $1 LIMIT 1",
