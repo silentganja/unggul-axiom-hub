@@ -44,7 +44,7 @@ pub async fn forgot_password(
     }
 
     let user: Option<User> = sqlx::query_as::<_, User>(
-        "SELECT id, email, password_hash, full_name, role, created_at FROM users WHERE email = $1",
+        "SELECT id, email, password_hash, full_name, role, active, created_at FROM users WHERE email = $1",
     )
     .bind(&email)
     .fetch_optional(pool.get_ref())
@@ -138,7 +138,7 @@ pub async fn request_magic_link(
     }
 
     let user: Option<User> = sqlx::query_as::<_, User>(
-        "SELECT id, email, password_hash, full_name, role, created_at FROM users WHERE email = $1",
+        "SELECT id, email, password_hash, full_name, role, active, created_at FROM users WHERE email = $1",
     )
     .bind(&email)
     .fetch_optional(pool.get_ref())

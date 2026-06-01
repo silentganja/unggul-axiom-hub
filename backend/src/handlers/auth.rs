@@ -48,7 +48,7 @@ pub async fn login(
     // ── 1. Fetch user from database ───────────────────────────────────────────
     // Using sqlx::query_as — NO compile-time macros per engineering rules.
     let user: Option<User> = sqlx::query_as::<_, User>(
-        "SELECT id, email, password_hash, full_name, role, created_at \
+        "SELECT id, email, password_hash, full_name, role, active, created_at \
          FROM users WHERE email = $1 LIMIT 1",
     )
     .bind(&email)
@@ -57,6 +57,12 @@ pub async fn login(
     .map_err(AppError::Database)?;
 
     let user = user.ok_or(AppError::Unauthorized)?;
+
+    // ── 1.5 Check account is active ──────────────────────────────────────────
+    if !user.active {
+        tracing::warn!(email = %email, "Login attempt on deactivated account");
+        return Err(AppError::Unauthorized);
+    }
 
     // ── 2. Verify password ────────────────────────────────────────────────────
     // Perform verification regardless of whether user exists to prevent
@@ -98,7 +104,7 @@ pub async fn login(
 /// - `404 Not Found`    — user no longer exists in database
 pub async fn me(pool: web::Data<PgPool>, user: AuthUser) -> Result<HttpResponse, AppError> {
     let profile: Option<UserProfile> = sqlx::query_as::<_, User>(
-        "SELECT id, email, password_hash, full_name, role, created_at \
+        "SELECT id, email, password_hash, full_name, role, active, created_at \
          FROM users WHERE id = $1 LIMIT 1",
     )
     .bind(user.id)
@@ -136,7 +142,7 @@ pub async fn update_profile(
 ) -> Result<HttpResponse, AppError> {
     // Fetch current user row (we need the password hash for verification)
     let existing: Option<User> = sqlx::query_as::<_, User>(
-        "SELECT id, email, password_hash, full_name, role, created_at \
+        "SELECT id, email, password_hash, full_name, role, active, created_at \
          FROM users WHERE id = $1 LIMIT 1",
     )
     .bind(user.id)
@@ -180,7 +186,7 @@ pub async fn update_profile(
 
     let updated: User = sqlx::query_as::<_, User>(
         "UPDATE users SET full_name = $1, password_hash = $2 WHERE id = $3
-         RETURNING id, email, password_hash, full_name, role, created_at",
+         RETURNING id, email, password_hash, full_name, role, active, created_at",
     )
     .bind(&new_full_name)
     .bind(&new_password_hash)

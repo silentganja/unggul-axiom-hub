@@ -111,6 +111,7 @@ export interface UserProfile {
   email: string;
   fullName: string;
   role: string;
+  active: boolean;
   createdAt: string;
 }
 
@@ -543,6 +544,7 @@ export interface AdminUserEntry {
   email: string;
   fullName: string;
   role: string;
+  active: boolean;
   createdAt: string;
 }
 
@@ -588,7 +590,80 @@ export const adminApi = {
   deleteUser(id: string): Promise<void> {
     return apiFetch(`/api/admin/users/${id}`, { method: "DELETE" }, true);
   },
+
+  getDashboard(): Promise<AdminDashboard> {
+    return apiFetch("/api/admin/dashboard", {}, true);
+  },
+
+  getUserFiles(userId: string): Promise<BackendFileNode[]> {
+    return apiFetch(`/api/admin/users/${userId}/files`, {}, true);
+  },
+
+  resetUserPassword(userId: string, newPassword: string): Promise<void> {
+    return apiFetch(`/api/admin/users/${userId}/reset-password`, {
+      method: "POST",
+      body: JSON.stringify({ newPassword }),
+    }, true);
+  },
+
+  toggleUserActive(userId: string): Promise<void> {
+    return apiFetch(`/api/admin/users/${userId}/toggle-active`, { method: "POST" }, true);
+  },
+
+  forceDeleteFile(fileId: string): Promise<void> {
+    return apiFetch(`/api/admin/files/${fileId}/force`, { method: "DELETE" }, true);
+  },
+
+  getConfig(): Promise<Record<string, string>> {
+    return apiFetch("/api/admin/config", {}, true);
+  },
+
+  updateConfig(key: string, value: string): Promise<void> {
+    return apiFetch("/api/admin/config", { method: "PUT", body: JSON.stringify({ key, value }) }, true);
+  },
+
+  getAdminGovernance(): Promise<GovernanceRequest[]> {
+    return apiFetch("/api/admin/governance", {}, true);
+  },
+
+  forceApprove(requestId: string, reviewerId: string): Promise<void> {
+    return apiFetch(`/api/admin/governance/${requestId}/force-approve`, {
+      method: "POST", body: JSON.stringify({ reviewerId }),
+    }, true);
+  },
+
+  getStorageBreakdown(): Promise<UserStorageRow[]> {
+    return apiFetch("/api/admin/storage-breakdown", {}, true);
+  },
+
+  bulkCreateUsers(users: Array<{ email: string; password: string; fullName: string; role: string }>): Promise<{ created: number; errors: string[] }> {
+    return apiFetch("/api/admin/users/bulk", { method: "POST", body: JSON.stringify({ users }) }, true);
+  },
+
+  bulkRoleUpdate(userIds: string[], newRole: string): Promise<{ updated: number }> {
+    return apiFetch("/api/admin/users/bulk-role", { method: "PUT", body: JSON.stringify({ userIds, newRole }) }, true);
+  },
 };
+
+export interface UserStorageRow {
+  userId: string;
+  fullName: string;
+  email: string;
+  role: string;
+  fileCount: number;
+  totalBytes: number;
+}
+
+export interface AdminDashboard {
+  totalUsers: number;
+  activeUsers: number;
+  totalFiles: number;
+  totalFolders: number;
+  storageUsedBytes: number;
+  pendingGovernance: number;
+  lockedFiles: number;
+  sharedFiles: number;
+}
 
 // ── Utilities ────────────────────────────────────────────────────────────────
 

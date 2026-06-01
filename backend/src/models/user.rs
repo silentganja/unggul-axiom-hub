@@ -11,6 +11,7 @@ pub struct User {
     pub password_hash: String,
     pub full_name: String,
     pub role: String,
+    pub active: bool,
     pub created_at: DateTime<Utc>,
 }
 
@@ -22,6 +23,7 @@ pub struct UserProfile {
     pub email: String,
     pub full_name: String,
     pub role: String,
+    pub active: bool,
     pub created_at: DateTime<Utc>,
 }
 
@@ -64,6 +66,7 @@ impl From<User> for UserProfile {
             email: u.email,
             full_name: u.full_name,
             role: u.role,
+            active: u.active,
             created_at: u.created_at,
         }
     }

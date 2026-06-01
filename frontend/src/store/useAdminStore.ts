@@ -66,8 +66,11 @@ export const useAdminStore = create<AdminAuthState>((set) => ({
         const { username } = JSON.parse(cached);
         set({ token, username, isAuthenticated: true });
       } catch {
-        clearAdminToken();
+        // Corrupt cache — don't clear the token, just skip
       }
+    } else {
+      // No cache but token exists — still authenticate
+      set({ token, isAuthenticated: true, username: "admin" });
     }
   },
 }));

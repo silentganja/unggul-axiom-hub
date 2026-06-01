@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS users (
     full_name     VARCHAR(255) NOT NULL,
     role          VARCHAR(16)  NOT NULL DEFAULT 'staff'
                                CHECK (role IN ('chief', 'director', 'officer', 'staff')),
+    active        BOOLEAN      NOT NULL DEFAULT TRUE,
     created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
 
@@ -123,6 +124,49 @@ CREATE TABLE IF NOT EXISTS file_shares (
 
 CREATE INDEX IF NOT EXISTS idx_file_shares_file_id ON file_shares (file_id);
 CREATE INDEX IF NOT EXISTS idx_file_shares_user_id ON file_shares (user_id);
+
+-- ── Password Resets ──────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS password_resets (
+    id          UUID         PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id     UUID         NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    token       VARCHAR(128) NOT NULL UNIQUE,
+    expires_at  TIMESTAMPTZ  NOT NULL,
+    used        BOOLEAN      NOT NULL DEFAULT FALSE,
+    created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
+-- ── Magic Links ──────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS magic_links (
+    id          UUID         PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id     UUID         NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    token       VARCHAR(128) NOT NULL UNIQUE,
+    expires_at  TIMESTAMPTZ  NOT NULL,
+    used        BOOLEAN      NOT NULL DEFAULT FALSE,
+    created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
+-- ── WebAuthn Credentials ─────────────────────────────────────
+CREATE TABLE IF NOT EXISTS webauthn_credentials (
+    id              UUID         PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id         UUID         NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    credential_id   TEXT         NOT NULL UNIQUE,
+    public_key      TEXT         NOT NULL,
+    sign_count      BIGINT       NOT NULL DEFAULT 0,
+    created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
+-- ── System Configuration ─────────────────────────────────────
+CREATE TABLE IF NOT EXISTS system_config (
+    key         VARCHAR(128) PRIMARY KEY,
+    value       TEXT NOT NULL,
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+INSERT INTO system_config (key, value) VALUES
+    ('default_storage_quota_bytes', '107374182400'),
+    ('jwt_expiry_hours', '8'),
+    ('allowed_classifications', 'RAHSIA,SULIT,TERHAD,TERBUKA')
+ON CONFLICT (key) DO NOTHING;
 
 -- ── Migration records ─────────────────────────────────────────
 INSERT INTO _migrations (version, description)

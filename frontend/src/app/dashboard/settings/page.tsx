@@ -63,8 +63,8 @@ export default function ProfileSettingsPage() {
 
   // ── Hydrate on mount ──────────────────────────────────────────────────────
   useEffect(() => {
-    hydrate();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!user) hydrate();
+  }, [user, hydrate]);
 
   useEffect(() => {
     if (user) {

@@ -70,6 +70,17 @@ export default function DashboardLayout({
     hydrate();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Timeout: if auth check takes >10s, force-show login
+  const [authTimeout, setAuthTimeout] = useState(false);
+  useEffect(() => {
+    if (authLoading) {
+      const t = setTimeout(() => setAuthTimeout(true), 10000);
+      return () => clearTimeout(t);
+    }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setAuthTimeout(false);
+  }, [authLoading]);
+
   useEffect(() => {
     if (isAuthenticated) fetchQuota();
   }, [isAuthenticated, fetchQuota]);
@@ -123,6 +134,15 @@ export default function DashboardLayout({
 
   // ── Loading state ─────────────────────────────────────────────────────────
   if (authLoading) {
+    if (authTimeout) {
+      return (
+        <div className="min-h-dvh flex flex-col items-center justify-center bg-background gap-4">
+          <p className="font-mono text-xs text-foreground-subtle">Connection timed out. The server may be unavailable.</p>
+          <button onClick={() => { setAuthTimeout(false); hydrate(); }} className="btn-shimmer h-9 px-5 rounded-sm font-mono text-[11px] font-bold uppercase tracking-wider cursor-pointer">Retry</button>
+          <button onClick={() => router.push("/login")} className="h-8 px-4 rounded-sm border border-border bg-background hover:bg-background-subtle/50 text-[10px] font-bold tracking-wider uppercase font-mono text-foreground-subtle transition-colors cursor-pointer">Back to Login</button>
+        </div>
+      );
+    }
     return (
       <div className="min-h-dvh flex items-center justify-center bg-background font-mono text-xs text-foreground-subtle gap-2">
         <Loader2 size={16} className="animate-spin text-accent" />

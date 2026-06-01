@@ -153,12 +153,51 @@ async fn main() -> std::io::Result<()> {
             .service(
                 web::scope("/api/admin")
                     .route("/login", web::post().to(handlers::admin::admin_login))
+                    .route("/dashboard", web::get().to(handlers::admin::dashboard))
+                    .route("/config", web::get().to(handlers::admin::get_config))
+                    .route("/config", web::put().to(handlers::admin::update_config))
+                    .route(
+                        "/governance",
+                        web::get().to(handlers::admin::admin_governance_list),
+                    )
+                    .route(
+                        "/governance/{id}/force-approve",
+                        web::post().to(handlers::admin::force_approve),
+                    )
+                    .route(
+                        "/storage-breakdown",
+                        web::get().to(handlers::admin::storage_breakdown),
+                    )
+                    .route(
+                        "/users/bulk",
+                        web::post().to(handlers::admin::bulk_create_users),
+                    )
+                    .route(
+                        "/users/bulk-role",
+                        web::put().to(handlers::admin::bulk_role_update),
+                    )
                     .route("/users", web::get().to(handlers::admin::list_users))
                     .route("/users", web::post().to(handlers::admin::create_user))
+                    .route(
+                        "/users/{id}/files",
+                        web::get().to(handlers::admin::user_files),
+                    )
+                    .route(
+                        "/users/{id}/reset-password",
+                        web::post().to(handlers::admin::reset_user_password),
+                    )
+                    .route(
+                        "/users/{id}/toggle-active",
+                        web::post().to(handlers::admin::toggle_user_active),
+                    )
                     .route("/users/{id}", web::put().to(handlers::admin::update_user))
                     .route(
                         "/users/{id}",
                         web::delete().to(handlers::admin::delete_user),
+                    )
+                    .route(
+                        "/files/{id}/force",
+                        web::delete().to(handlers::admin::force_delete_file),
                     ),
             )
             // /api/auth

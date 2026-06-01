@@ -68,6 +68,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
 
     // Try to load cached user profile first (instant UI)
+    let hasCache = false;
     const cached =
       typeof window !== "undefined"
         ? localStorage.getItem("auth-user")
@@ -76,6 +77,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       try {
         const user = JSON.parse(cached) as UserProfile;
         set({ token, user, isAuthenticated: true });
+        hasCache = true;
       } catch { /* ignore corrupt cache */ }
     }
 
@@ -86,14 +88,19 @@ export const useAuthStore = create<AuthState>((set) => ({
       localStorage.setItem("auth-user", JSON.stringify(user));
       set({ token, user, isAuthenticated: true, isLoading: false });
     } catch {
-      // Token expired or invalid — clear session
-      clearToken();
-      set({
-        token: null,
-        user: null,
-        isAuthenticated: false,
-        isLoading: false,
-      });
+      if (hasCache) {
+        // Keep cached session alive on transient API errors
+        set({ isLoading: false });
+      } else {
+        // No cache — must log out
+        clearToken();
+        set({
+          token: null,
+          user: null,
+          isAuthenticated: false,
+          isLoading: false,
+        });
+      }
     }
   },
 }));
