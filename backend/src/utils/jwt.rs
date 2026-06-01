@@ -58,6 +58,28 @@ pub fn decode_token(token: &str) -> Result<Claims, AppError> {
     .map_err(|_| AppError::Unauthorized)
 }
 
+/// Generate a signed HS256 JWT for the admin panel (hardcoded credentials).
+/// Uses the same JWT_SECRET but embeds the reserved "admin_panel" role.
+pub fn generate_admin_token(username: &str) -> Result<String, AppError> {
+    let secret = jwt_secret();
+
+    let exp =
+        (Utc::now() + chrono::Duration::hours(TOKEN_EXPIRY_HOURS)).timestamp() as usize;
+
+    let claims = Claims {
+        sub: username.to_string(),
+        role: "admin_panel".to_string(),
+        exp,
+    };
+
+    encode(
+        &Header::default(),
+        &claims,
+        &EncodingKey::from_secret(secret.as_bytes()),
+    )
+    .map_err(AppError::Jwt)
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 fn jwt_secret() -> String {

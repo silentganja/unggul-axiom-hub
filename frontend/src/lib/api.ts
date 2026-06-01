@@ -21,6 +21,22 @@ export function clearToken(): void {
   localStorage.removeItem("auth-user");
 }
 
+// ── Admin token management (separate from user auth) ─────────────────────────
+
+function getAdminToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem("admin-token");
+}
+
+export function setAdminToken(token: string): void {
+  localStorage.setItem("admin-token", token);
+}
+
+export function clearAdminToken(): void {
+  localStorage.removeItem("admin-token");
+  localStorage.removeItem("admin-user");
+}
+
 // ── Core fetch wrapper ───────────────────────────────────────────────────────
 
 class AuthError extends Error {
@@ -32,9 +48,10 @@ class AuthError extends Error {
 
 async function apiFetch<T>(
   path: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  useAdminToken = false
 ): Promise<T> {
-  const token = getToken();
+  const token = useAdminToken ? getAdminToken() : getToken();
   const headers: Record<string, string> = {};
 
   // Only set Content-Type for JSON bodies, not FormData (multipart)
@@ -52,9 +69,23 @@ async function apiFetch<T>(
   });
 
   if (res.status === 401) {
-    clearToken();
-    if (typeof window !== "undefined") {
-      window.location.href = "/login";
+    // Only redirect if we're NOT already on a login page —
+    // a 401 from /api/auth/login means "wrong credentials", not "expired session".
+    const isOnLoginPage =
+      typeof window !== "undefined" &&
+      window.location.pathname === "/login";
+    if (!isOnLoginPage) {
+      if (useAdminToken) {
+        clearAdminToken();
+        if (typeof window !== "undefined") {
+          window.location.href = "/dev/admin";
+        }
+      } else {
+        clearToken();
+        if (typeof window !== "undefined") {
+          window.location.href = "/login";
+        }
+      }
     }
     throw new AuthError();
   }
@@ -176,6 +207,70 @@ export interface AuditLogEntry {
 export const auditApi = {
   list(): Promise<AuditLogEntry[]> {
     return apiFetch("/api/audit");
+  },
+};
+
+// ── Admin API ────────────────────────────────────────────────────────────────
+
+export interface AdminLoginPayload {
+  username: string;
+  password: string;
+}
+
+export interface AdminLoginResponse {
+  token: string;
+  username: string;
+}
+
+export interface AdminUserEntry {
+  id: string;
+  email: string;
+  fullName: string;
+  role: string;
+  createdAt: string;
+}
+
+export interface AdminCreateUserPayload {
+  email: string;
+  password: string;
+  fullName: string;
+  role: string;
+}
+
+export interface AdminUpdateUserPayload {
+  fullName?: string;
+  role?: string;
+  password?: string;
+}
+
+export const adminApi = {
+  login(payload: AdminLoginPayload): Promise<AdminLoginResponse> {
+    return apiFetch("/api/admin/login", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  listUsers(): Promise<AdminUserEntry[]> {
+    return apiFetch("/api/admin/users", {}, true);
+  },
+
+  createUser(payload: AdminCreateUserPayload): Promise<AdminUserEntry> {
+    return apiFetch("/api/admin/users", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }, true);
+  },
+
+  updateUser(id: string, payload: AdminUpdateUserPayload): Promise<AdminUserEntry> {
+    return apiFetch(`/api/admin/users/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }, true);
+  },
+
+  deleteUser(id: string): Promise<void> {
+    return apiFetch(`/api/admin/users/${id}`, { method: "DELETE" }, true);
   },
 };
 

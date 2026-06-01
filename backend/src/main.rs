@@ -149,6 +149,15 @@ async fn main() -> std::io::Result<()> {
             // ── Routes ────────────────────────────────────────────────────────
             .service(root)
             .service(health_check)
+            // /api/admin — admin panel (login is public; CRUD requires AdminUser extractor)
+            .service(
+                web::scope("/api/admin")
+                    .route("/login", web::post().to(handlers::admin::admin_login))
+                    .route("/users", web::get().to(handlers::admin::list_users))
+                    .route("/users", web::post().to(handlers::admin::create_user))
+                    .route("/users/{id}", web::put().to(handlers::admin::update_user))
+                    .route("/users/{id}", web::delete().to(handlers::admin::delete_user)),
+            )
             // /api/auth
             .service(
                 web::scope("/api/auth")

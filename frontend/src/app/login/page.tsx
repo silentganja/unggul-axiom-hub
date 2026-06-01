@@ -21,6 +21,14 @@ function LoginForm() {
 
   const { login, isLoading: authLoading, error: authError, isAuthenticated } = useAuthStore();
 
+  // Block direct /login access — users must select a portal from the landing page first.
+  const VALID_PORTALS = ["foundation", "chief"];
+  useEffect(() => {
+    if (!portal || !VALID_PORTALS.includes(portal)) {
+      router.replace("/");
+    }
+  }, [portal, router]);
+
   // Redirect to dashboard if already authenticated
   useEffect(() => {
     if (isAuthenticated) {
