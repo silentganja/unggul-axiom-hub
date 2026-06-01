@@ -474,7 +474,8 @@ pub async fn get_config(
         .fetch_all(pool.get_ref())
         .await
         .map_err(AppError::Database)?;
-    let map: std::collections::HashMap<String, String> = rows.into_iter().map(|r| (r.key, r.value)).collect();
+    let map: std::collections::HashMap<String, String> =
+        rows.into_iter().map(|r| (r.key, r.value)).collect();
     Ok(HttpResponse::Ok().json(map))
 }
 
@@ -518,9 +519,10 @@ pub async fn admin_governance_list(
          LEFT JOIN files f ON f.id = gr.target_file_id
          ORDER BY CASE gr.status WHEN 'PENDING' THEN 0 ELSE 1 END, gr.created_at DESC
          LIMIT 500",
-    ).fetch_all(pool.get_ref())
-        .await
-        .map_err(AppError::Database)?;
+    )
+    .fetch_all(pool.get_ref())
+    .await
+    .map_err(AppError::Database)?;
     Ok(HttpResponse::Ok().json(requests))
 }
 
@@ -545,10 +547,20 @@ pub async fn force_approve(
         .await
         .map_err(AppError::Database)?;
     // Execute the associated action (simplified: same logic as approve_request)
-    let req_type: Option<String> = sqlx::query_scalar("SELECT type FROM governance_requests WHERE id = $1")
-        .bind(request_id).fetch_optional(pool.get_ref()).await.map_err(AppError::Database)?.flatten();
-    let file_id: Option<Uuid> = sqlx::query_scalar("SELECT target_file_id FROM governance_requests WHERE id = $1")
-        .bind(request_id).fetch_optional(pool.get_ref()).await.map_err(AppError::Database)?.flatten();
+    let req_type: Option<String> =
+        sqlx::query_scalar("SELECT type FROM governance_requests WHERE id = $1")
+            .bind(request_id)
+            .fetch_optional(pool.get_ref())
+            .await
+            .map_err(AppError::Database)?
+            .flatten();
+    let file_id: Option<Uuid> =
+        sqlx::query_scalar("SELECT target_file_id FROM governance_requests WHERE id = $1")
+            .bind(request_id)
+            .fetch_optional(pool.get_ref())
+            .await
+            .map_err(AppError::Database)?
+            .flatten();
     if let (Some(fid), Some(rt)) = (file_id, req_type) {
         match rt.as_str() {
             "FILE_LOCK" => {
@@ -596,9 +608,10 @@ pub async fn storage_breakdown(
                 COUNT(f.id) AS file_count, COALESCE(SUM(f.size_bytes), 0) AS total_bytes
          FROM users u LEFT JOIN files f ON f.owner_id = u.id AND f.deleted_at IS NULL
          GROUP BY u.id ORDER BY total_bytes DESC",
-    ).fetch_all(pool.get_ref())
-        .await
-        .map_err(AppError::Database)?;
+    )
+    .fetch_all(pool.get_ref())
+    .await
+    .map_err(AppError::Database)?;
     Ok(HttpResponse::Ok().json(rows))
 }
 
