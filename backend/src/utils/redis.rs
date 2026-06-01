@@ -74,7 +74,10 @@ pub async fn store_refresh_token_async(
     let t = token.to_string();
     let u = user_id.to_string();
     let r = role.to_string();
-    block_redis(client, move |conn| store_refresh_token_sync(conn, &t, &u, &r)).await
+    block_redis(client, move |conn| {
+        store_refresh_token_sync(conn, &t, &u, &r)
+    })
+    .await
 }
 
 pub async fn take_refresh_token_async(
@@ -196,7 +199,10 @@ pub fn take_refresh_token_sync(
 }
 
 /// Increment the token generation counter for a user (revokes all tokens).
-pub fn revoke_user_tokens_sync(conn: &mut redis::Connection, user_id: &str) -> redis::RedisResult<()> {
+pub fn revoke_user_tokens_sync(
+    conn: &mut redis::Connection,
+    user_id: &str,
+) -> redis::RedisResult<()> {
     let key = format!("user_token_gen:{}", user_id);
     redis::cmd("INCR").arg(&key).query::<()>(conn)?;
     Ok(())

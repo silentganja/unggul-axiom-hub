@@ -182,11 +182,8 @@ pub async fn update_profile(
     .map_err(AppError::Database)?;
 
     if password_changed {
-        let _ = crate::utils::redis::revoke_user_tokens_async(
-            &redis_client,
-            &user.id.to_string(),
-        )
-        .await;
+        let _ = crate::utils::redis::revoke_user_tokens_async(&redis_client, &user.id.to_string())
+            .await;
         tracing::info!(user_id = %user.id, "All sessions revoked after password change");
     }
 

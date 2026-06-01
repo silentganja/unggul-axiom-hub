@@ -15,15 +15,10 @@ pub async fn check_login_rate_limit(
     client: &web::Data<RedisClient>,
     ip: &str,
 ) -> Result<(), AppError> {
-    let allowed = redis::check_rate_limit_async(
-        client,
-        "login",
-        ip,
-        LOGIN_MAX_REQUESTS,
-        LOGIN_WINDOW_SECS,
-    )
-    .await
-    .unwrap_or(true);
+    let allowed =
+        redis::check_rate_limit_async(client, "login", ip, LOGIN_MAX_REQUESTS, LOGIN_WINDOW_SECS)
+            .await
+            .unwrap_or(true);
 
     if !allowed {
         tracing::warn!(ip = %ip, "Login rate limit exceeded");

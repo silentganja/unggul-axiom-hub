@@ -35,8 +35,7 @@ pub async fn refresh(
     redis_client: web::Data<RedisClient>,
     body: web::Json<RefreshRequest>,
 ) -> Result<HttpResponse, AppError> {
-    let result =
-        redis::take_refresh_token_async(&redis_client, &body.refresh_token).await?;
+    let result = redis::take_refresh_token_async(&redis_client, &body.refresh_token).await?;
 
     let Some((user_id, role)) = result else {
         tracing::warn!("Invalid or expired refresh token used");
@@ -47,12 +46,7 @@ pub async fn refresh(
     let access_token = jwt::generate_token(user_uuid, &role)?;
     let new_refresh_token = jwt::generate_refresh_token();
 
-    redis::store_refresh_token_async(
-        &redis_client,
-        &new_refresh_token,
-        &user_id,
-        &role,
-    ).await?;
+    redis::store_refresh_token_async(&redis_client, &new_refresh_token, &user_id, &role).await?;
 
     tracing::info!(user_id = %user_id, "Token refreshed");
 
@@ -278,12 +272,8 @@ pub async fn verify_magic_link(
     let access_token = jwt::generate_token(user_id, &role)?;
     let refresh_token = jwt::generate_refresh_token();
 
-    redis::store_refresh_token_async(
-        &redis_client,
-        &refresh_token,
-        &user_id.to_string(),
-        &role,
-    ).await?;
+    redis::store_refresh_token_async(&redis_client, &refresh_token, &user_id.to_string(), &role)
+        .await?;
 
     tracing::info!(user_id = %user_id, "Magic link login");
 
@@ -322,7 +312,8 @@ pub async fn webauthn_register_begin(
     let challenge_b64 = base64_url(&challenge);
 
     let key = format!("webauthn:register:{}", _user.id);
-    let _ = redis::redis_setex_async(&redis_client, &key, &challenge_b64, WEBAUTHN_CHALLENGE_TTL).await;
+    let _ =
+        redis::redis_setex_async(&redis_client, &key, &challenge_b64, WEBAUTHN_CHALLENGE_TTL).await;
 
     Ok(HttpResponse::Ok().json(WebauthnRegisterBeginResponse {
         challenge: challenge_b64,
@@ -350,7 +341,9 @@ pub async fn webauthn_register_complete(
 
     if let Some(ref chal) = client_challenge {
         let key = format!("webauthn:register:{}", user.id);
-        let stored: Option<String> = redis::redis_get_async(&redis_client, &key).await.unwrap_or(None);
+        let stored: Option<String> = redis::redis_get_async(&redis_client, &key)
+            .await
+            .unwrap_or(None);
 
         if stored.as_ref() != Some(chal) {
             tracing::warn!(user_id = %user.id, "WebAuthn challenge mismatch");
@@ -398,7 +391,8 @@ pub async fn webauthn_login_begin(
 
     let session_id = generate_token();
     let key = format!("webauthn:login:{}", session_id);
-    let _ = redis::redis_setex_async(&redis_client, &key, &challenge_b64, WEBAUTHN_CHALLENGE_TTL).await;
+    let _ =
+        redis::redis_setex_async(&redis_client, &key, &challenge_b64, WEBAUTHN_CHALLENGE_TTL).await;
 
     Ok(HttpResponse::Ok().json(serde_json::json!({
         "challenge": challenge_b64,
@@ -457,12 +451,8 @@ pub async fn webauthn_login_complete(
     let access_token = jwt::generate_token(user_id, &role)?;
     let refresh_token = jwt::generate_refresh_token();
 
-    redis::store_refresh_token_async(
-        &redis_client,
-        &refresh_token,
-        &user_id.to_string(),
-        &role,
-    ).await?;
+    redis::store_refresh_token_async(&redis_client, &refresh_token, &user_id.to_string(), &role)
+        .await?;
 
     tracing::info!(user_id = %user_id, "WebAuthn login");
 
