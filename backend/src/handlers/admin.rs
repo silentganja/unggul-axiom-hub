@@ -588,7 +588,7 @@ pub async fn force_approve(
 // Tier 2: Storage Breakdown
 // ═════════════════════════════════════════════════════════════════════════════
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
 struct UserStorageRow {
     user_id: Uuid,
