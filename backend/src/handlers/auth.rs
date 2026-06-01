@@ -7,7 +7,6 @@ use crate::{
 use actix_web::{web, HttpRequest, HttpResponse};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
-use uuid::Uuid;
 
 // ── Request / Response shapes ─────────────────────────────────────────────────
 

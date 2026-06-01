@@ -1,7 +1,7 @@
 use crate::{
     app_middleware::auth::AuthUser,
     errors::AppError,
-    models::user::{User, UserProfile},
+    models::user::User,
     utils::{jwt, password},
 };
 use actix_web::{web, HttpResponse};
@@ -247,7 +247,7 @@ pub async fn webauthn_register_complete(
         .ok_or(AppError::BadRequest("Missing credential id".into()))?;
     let public_key = body["response"]["publicKey"]
         .as_str()
-        .or(body["response"]["publicKey"].to_string().as_deref())
+        .or_else(|| body["response"]["publicKey"].as_str())
         .unwrap_or("");
     let pubkey_str = if public_key.is_empty() {
         body.to_string()

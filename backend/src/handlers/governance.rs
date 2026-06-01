@@ -190,7 +190,7 @@ pub async fn approve_request(
             .flatten();
 
     // Classification changes require director+ authority
-    if (req_type == "CLASSIFICATION_UPGRADE" || req_type == "CLASSIFICATION_DOWNGRADE")
+    if matches!(req_type.as_deref(), Some("CLASSIFICATION_UPGRADE" | "CLASSIFICATION_DOWNGRADE"))
         && !user::can_govern_classified(&user.role)
     {
         return Err(AppError::Unauthorized);
@@ -198,7 +198,7 @@ pub async fn approve_request(
 
     // Execute the action on the target file
     if let Some(file_id) = target_file_id {
-        match req_type.as_str() {
+        match req_type.as_deref() {
             "FILE_LOCK" => {
                 sqlx::query("UPDATE files SET locked_by = requested_by, locked_at = NOW() FROM governance_requests WHERE files.id = $1 AND governance_requests.id = $2")
                     .bind(file_id)
