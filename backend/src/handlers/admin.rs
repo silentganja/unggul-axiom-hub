@@ -48,9 +48,7 @@ pub struct UpdateUserRequest {
 
 // ── POST /api/admin/login ────────────────────────────────────────────────────
 
-pub async fn admin_login(
-    body: web::Json<AdminLoginRequest>,
-) -> Result<HttpResponse, AppError> {
+pub async fn admin_login(body: web::Json<AdminLoginRequest>) -> Result<HttpResponse, AppError> {
     if body.username != ADMIN_USERNAME || body.password != ADMIN_PASSWORD {
         return Err(AppError::Unauthorized);
     }
@@ -231,19 +229,17 @@ pub async fn delete_user(
 
     // Prevent admin from deleting themselves... well, the admin isn't a DB user,
     // but prevent deleting the last admin user as a safety guard.
-    let admin_count: i64 =
-        sqlx::query_scalar("SELECT COUNT(*) FROM users WHERE role = 'admin'")
-            .fetch_one(pool.get_ref())
-            .await
-            .map_err(AppError::Database)?;
+    let admin_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM users WHERE role = 'admin'")
+        .fetch_one(pool.get_ref())
+        .await
+        .map_err(AppError::Database)?;
 
     // Check if the target user is an admin and is the last one
-    let target_role: Option<String> =
-        sqlx::query_scalar("SELECT role FROM users WHERE id = $1")
-            .bind(user_id)
-            .fetch_optional(pool.get_ref())
-            .await
-            .map_err(AppError::Database)?;
+    let target_role: Option<String> = sqlx::query_scalar("SELECT role FROM users WHERE id = $1")
+        .bind(user_id)
+        .fetch_optional(pool.get_ref())
+        .await
+        .map_err(AppError::Database)?;
 
     if target_role.as_deref() == Some("admin") && admin_count <= 1 {
         return Err(AppError::Conflict(

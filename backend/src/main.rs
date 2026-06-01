@@ -156,7 +156,10 @@ async fn main() -> std::io::Result<()> {
                     .route("/users", web::get().to(handlers::admin::list_users))
                     .route("/users", web::post().to(handlers::admin::create_user))
                     .route("/users/{id}", web::put().to(handlers::admin::update_user))
-                    .route("/users/{id}", web::delete().to(handlers::admin::delete_user)),
+                    .route(
+                        "/users/{id}",
+                        web::delete().to(handlers::admin::delete_user),
+                    ),
             )
             // /api/auth
             .service(
