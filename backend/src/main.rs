@@ -52,20 +52,16 @@ struct HealthResponse {
 #[get("/health")]
 async fn health_check(
     pool: web::Data<sqlx::PgPool>,
-    redis_conn: web::Data<redis::aio::ConnectionManager>,
+    redis_client: web::Data<utils::redis::RedisClient>,
 ) -> impl Responder {
     let db_ok = sqlx::query("SELECT 1 AS ok")
         .fetch_one(pool.get_ref())
         .await
         .is_ok();
 
-    let redis_ok = {
-        let mut conn = redis_conn.get_ref().clone();
-        redis::cmd("PING")
-            .query_async::<_, String>(&mut conn)
-            .await
-            .is_ok()
-    };
+    let redis_ok = redis_client
+        .execute(|conn| redis::cmd("PING").query::<String>(conn))
+        .is_ok();
 
     let status = if db_ok && redis_ok { "ok" } else { "degraded" };
 
@@ -130,7 +126,7 @@ async fn main() -> std::io::Result<()> {
     utils::migrations::run_migrations(&pool).await;
 
     // ── Redis ─────────────────────────────────────────────────────────────────
-    let redis_conn = utils::redis::connect().await;
+    let redis_client = utils::redis::RedisClient::new();
     info!("✓ Redis connected");
 
     info!("✓ Starting Unggul Axiom Backend on {}:{}", host, port);
@@ -138,7 +134,7 @@ async fn main() -> std::io::Result<()> {
     // ── HTTP server ───────────────────────────────────────────────────────────
     let pool_data = web::Data::new(pool);
     let config_data = web::Data::new(config);
-    let redis_data = web::Data::new(redis_conn);
+    let redis_data = web::Data::new(redis_client);
 
     HttpServer::new(move || {
         // CORS — allow localhost in dev + hub subdomain in production

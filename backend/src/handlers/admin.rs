@@ -404,7 +404,7 @@ pub async fn reset_user_password(
 
 pub async fn toggle_user_active(
     pool: web::Data<PgPool>,
-    redis_conn: web::Data<redis::aio::ConnectionManager>,
+    redis_client: web::Data<crate::utils::redis::RedisClient>,
     _admin: AdminUser,
     path: web::Path<Uuid>,
 ) -> Result<HttpResponse, AppError> {
@@ -437,8 +437,10 @@ pub async fn toggle_user_active(
 
     // If deactivating, revoke all refresh tokens for this user
     if currently_active {
-        let mut conn = redis_conn.get_ref().clone();
-        let _ = crate::utils::redis::revoke_user_tokens(&mut conn, &user_id.to_string()).await;
+        let _ = crate::utils::redis::revoke_user_tokens_async(
+            &redis_client,
+            &user_id.to_string(),
+        );
         tracing::info!(user_id = %user_id, "User deactivated — tokens revoked");
     }
 

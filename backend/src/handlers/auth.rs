@@ -1,12 +1,10 @@
 use crate::{
-    app_middleware::auth::AuthUser,
-    app_middleware::rate_limit,
+    app_middleware::{auth::AuthUser, rate_limit},
     errors::AppError,
     models::user::{User, UserProfile},
-    utils::{jwt, password, redis},
+    utils::{jwt, password, redis::RedisClient},
 };
 use actix_web::{web, HttpRequest, HttpResponse};
-use redis::aio::ConnectionManager;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 
@@ -28,33 +26,18 @@ pub struct LoginResponse {
 
 // ── Handler ───────────────────────────────────────────────────────────────────
 
-/// POST /api/auth/login
-///
-/// Authenticates a user by email + password, returns a short-lived access JWT
-/// (15 minutes) and a long-lived opaque refresh token (7 days) for silent renewal.
-///
-/// Rate-limited to 5 attempts per minute per IP.
-///
-/// # Errors
-/// - `400 Bad Request`  — missing or malformed JSON body
-/// - `401 Unauthorized` — unknown email, wrong password, or deactivated account
-/// - `429 Too Many`      — rate limit exceeded
-/// - `500 Internal`     — database / hashing failure
 pub async fn login(
     pool: web::Data<PgPool>,
-    redis_conn: web::Data<ConnectionManager>,
+    redis_client: web::Data<RedisClient>,
     req: HttpRequest,
     body: web::Json<LoginRequest>,
 ) -> Result<HttpResponse, AppError> {
-    // ── Rate limiting ───────────────────────────────────────────────────────────
     let ip = req
         .peer_addr()
         .map(|a| a.ip().to_string())
         .unwrap_or_else(|| "unknown".to_string());
-    let mut conn = redis_conn.get_ref().clone();
-    rate_limit::check_login_rate_limit(&mut conn, &ip).await?;
+    rate_limit::check_login_rate_limit(&redis_client, &ip).await?;
 
-    // Basic input sanitisation
     let email = body.email.trim().to_lowercase();
     if email.is_empty() || body.password.is_empty() {
         return Err(AppError::BadRequest(
@@ -62,7 +45,6 @@ pub async fn login(
         ));
     }
 
-    // ── 1. Fetch user from database ───────────────────────────────────────────
     let user: Option<User> = sqlx::query_as::<_, User>(
         "SELECT id, email, password_hash, full_name, role, active, created_at \
          FROM users WHERE email = $1 LIMIT 1",
@@ -74,37 +56,33 @@ pub async fn login(
 
     let user = user.ok_or(AppError::Unauthorized)?;
 
-    // ── 1.5 Check account is active ──────────────────────────────────────────
     if !user.active {
         tracing::warn!(email = %email, "Login attempt on deactivated account");
         return Err(AppError::Unauthorized);
     }
 
-    // ── 2. Verify password ────────────────────────────────────────────────────
     let password_ok = password::verify_password(&body.password, &user.password_hash)?;
 
     if !password_ok {
-        tracing::warn!(
-            email = %email,
-            ip = %ip,
-            "Failed login attempt"
-        );
+        tracing::warn!(email = %email, ip = %ip, "Failed login attempt");
         return Err(AppError::Unauthorized);
     }
 
-    // ── 3. Issue tokens ──────────────────────────────────────────────────────
     let access_token = jwt::generate_token(user.id, &user.role)?;
     let refresh_token = jwt::generate_refresh_token();
 
-    // Store refresh token in Redis
-    redis::store_refresh_token(&mut conn, &refresh_token, &user.id.to_string(), &user.role)
-        .await
-        .map_err(|e| AppError::Redis(e.to_string()))?;
+    crate::utils::redis::store_refresh_token_async(
+        &redis_client,
+        &refresh_token,
+        &user.id.to_string(),
+        &user.role,
+    )
+    .await?;
 
     tracing::info!(
         user_id = %user.id,
-        role    = %user.role,
-        ip      = %ip,
+        role = %user.role,
+        ip = %ip,
         "Successful login"
     );
 
@@ -117,12 +95,6 @@ pub async fn login(
 
 // ── GET /api/auth/me ─────────────────────────────────────────────────────────
 
-/// Returns the currently authenticated user's profile.
-/// Used by the frontend to validate tokens and hydrate the session.
-///
-/// # Errors
-/// - `401 Unauthorized` — missing or invalid JWT
-/// - `404 Not Found`    — user no longer exists in database
 pub async fn me(pool: web::Data<PgPool>, user: AuthUser) -> Result<HttpResponse, AppError> {
     let profile: Option<UserProfile> = sqlx::query_as::<_, User>(
         "SELECT id, email, password_hash, full_name, role, active, created_at \
@@ -149,22 +121,12 @@ pub struct UpdateProfileRequest {
     pub new_password: Option<String>,
 }
 
-/// Update the authenticated user's own profile.
-/// - `full_name` — optional new display name
-/// - `current_password` + `new_password` — both required to change password
-///
-/// When the password is changed, all existing refresh tokens are revoked.
-///
-/// # Errors
-/// - `401 Unauthorized` — missing or invalid JWT, or wrong current password
-/// - `400 Bad Request` — validation failure
 pub async fn update_profile(
     pool: web::Data<PgPool>,
-    redis_conn: web::Data<ConnectionManager>,
+    redis_client: web::Data<RedisClient>,
     user: AuthUser,
     body: web::Json<UpdateProfileRequest>,
 ) -> Result<HttpResponse, AppError> {
-    // Fetch current user row (we need the password hash for verification)
     let existing: Option<User> = sqlx::query_as::<_, User>(
         "SELECT id, email, password_hash, full_name, role, active, created_at \
          FROM users WHERE id = $1 LIMIT 1",
@@ -176,7 +138,6 @@ pub async fn update_profile(
 
     let existing = existing.ok_or(AppError::NotFound)?;
 
-    // Determine new full name
     let new_full_name = body
         .full_name
         .as_deref()
@@ -184,10 +145,8 @@ pub async fn update_profile(
         .filter(|s| !s.is_empty())
         .unwrap_or(existing.full_name);
 
-    // Track whether password is changing (to revoke tokens)
     let mut password_changed = false;
 
-    // Determine new password hash
     let new_password_hash = if let (Some(current), Some(new)) = (
         body.current_password.as_deref(),
         body.new_password.as_deref(),
@@ -197,7 +156,6 @@ pub async fn update_profile(
                 "new_password must not be empty".into(),
             ));
         }
-        // Verify current password
         let ok = password::verify_password(current, &existing.password_hash)?;
         if !ok {
             return Err(AppError::Unauthorized);
@@ -223,10 +181,12 @@ pub async fn update_profile(
     .await
     .map_err(AppError::Database)?;
 
-    // If password was changed, revoke all refresh tokens for this user
     if password_changed {
-        let mut conn = redis_conn.get_ref().clone();
-        let _ = redis::revoke_user_tokens(&mut conn, &user.id.to_string()).await;
+        let _ = crate::utils::redis::revoke_user_tokens_async(
+            &redis_client,
+            &user.id.to_string(),
+        )
+        .await;
         tracing::info!(user_id = %user.id, "All sessions revoked after password change");
     }
 

@@ -1,20 +1,148 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Redis client — async connection manager shared across the application.
-// Provides helpers for refresh tokens, rate limiting, and cache operations.
+// Redis client — synchronous connection pool shared across the application.
+// Async wrappers use `web::block` to avoid depending on unstable `redis::aio`.
 // ─────────────────────────────────────────────────────────────────────────────
 
-use redis::aio::ConnectionManager;
-use redis::RedisResult;
 use std::env;
+use std::sync::Mutex;
 
-/// Create a Redis connection manager from the REDIS_URL environment variable.
-pub async fn connect() -> ConnectionManager {
-    let url = env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string());
+/// Thin wrapper around a synchronous Redis connection.
+/// Protected by a Mutex for thread safety — actix handlers acquire the lock
+/// briefly for each operation.
+pub struct RedisClient {
+    client: redis::Client,
+    conn: Mutex<redis::Connection>,
+}
 
-    let client = redis::Client::open(url.as_str()).expect("Invalid REDIS_URL");
-    redis::aio::ConnectionManager::new(client)
+impl RedisClient {
+    /// Create a new Redis client and open a persistent connection.
+    pub fn new() -> Self {
+        let url = env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string());
+        let client = redis::Client::open(url.as_str()).expect("Invalid REDIS_URL");
+        let conn = client.get_connection().expect("Failed to connect to Redis");
+        Self {
+            client,
+            conn: Mutex::new(conn),
+        }
+    }
+
+    /// Execute a synchronous Redis command, returning a typed result.
+    /// Locks the connection for the duration of the operation.
+    pub fn execute<T: redis::FromRedisValue>(
+        &self,
+        f: impl FnOnce(&mut redis::Connection) -> redis::RedisResult<T>,
+    ) -> redis::RedisResult<T> {
+        let mut conn = self.conn.lock().unwrap();
+        f(&mut conn)
+    }
+
+    /// Get the underlying client (for spawning new connections if needed).
+    #[allow(dead_code)]
+    pub fn client(&self) -> &redis::Client {
+        &self.client
+    }
+}
+
+// ── Async wrappers for actix handlers ────────────────────────────────────────
+
+use actix_web::web;
+
+/// Run a sync Redis operation via web::block (truly async, non-blocking).
+async fn block_redis<T, F>(
+    client: &web::Data<RedisClient>,
+    f: F,
+) -> Result<T, crate::errors::AppError>
+where
+    T: Send + 'static,
+    F: FnOnce(&mut redis::Connection) -> redis::RedisResult<T> + Send + 'static,
+{
+    let client = client.clone();
+    web::block(move || client.execute(f))
         .await
-        .expect("Failed to connect to Redis")
+        .map_err(|e| crate::errors::AppError::Redis(e.to_string()))
+        .and_then(|r| r.map_err(|e| crate::errors::AppError::Redis(e.to_string())))
+}
+
+// ── High-level async helpers (used in handlers) ──────────────────────────────
+
+pub async fn store_refresh_token_async(
+    client: &web::Data<RedisClient>,
+    token: &str,
+    user_id: &str,
+    role: &str,
+) -> Result<(), crate::errors::AppError> {
+    let t = token.to_string();
+    let u = user_id.to_string();
+    let r = role.to_string();
+    block_redis(client, move |conn| store_refresh_token_sync(conn, &t, &u, &r)).await
+}
+
+pub async fn take_refresh_token_async(
+    client: &web::Data<RedisClient>,
+    token: &str,
+) -> Result<Option<(String, String)>, crate::errors::AppError> {
+    let t = token.to_string();
+    block_redis(client, move |conn| take_refresh_token_sync(conn, &t)).await
+}
+
+pub async fn revoke_user_tokens_async(
+    client: &web::Data<RedisClient>,
+    user_id: &str,
+) -> Result<(), crate::errors::AppError> {
+    let u = user_id.to_string();
+    block_redis(client, move |conn| revoke_user_tokens_sync(conn, &u)).await
+}
+
+pub async fn redis_setex_async(
+    client: &web::Data<RedisClient>,
+    key: &str,
+    value: &str,
+    ttl_secs: u64,
+) -> Result<(), crate::errors::AppError> {
+    let k = key.to_string();
+    let v = value.to_string();
+    block_redis(client, move |conn| {
+        redis::cmd("SETEX")
+            .arg(&k)
+            .arg(ttl_secs)
+            .arg(&v)
+            .query(conn)
+    })
+    .await
+}
+
+pub async fn redis_get_async(
+    client: &web::Data<RedisClient>,
+    key: &str,
+) -> Result<Option<String>, crate::errors::AppError> {
+    let k = key.to_string();
+    block_redis(client, move |conn| redis::cmd("GET").arg(&k).query(conn)).await
+}
+
+pub async fn redis_del_async(
+    client: &web::Data<RedisClient>,
+    key: &str,
+) -> Result<(), crate::errors::AppError> {
+    let k = key.to_string();
+    block_redis(client, move |conn| {
+        redis::cmd("DEL").arg(&k).query::<()>(conn)
+    })
+    .await
+}
+
+pub async fn check_rate_limit_async(
+    client: &web::Data<RedisClient>,
+    prefix: &str,
+    identifier: &str,
+    max_requests: u64,
+    window_secs: u64,
+) -> Result<bool, crate::errors::AppError> {
+    let p = prefix.to_string();
+    let i = identifier.to_string();
+    block_redis(client, move |conn| {
+        check_rate_limit_sync(conn, &p, &i, max_requests, window_secs)
+    })
+    .await
 }
 
 // ── Refresh token helpers ────────────────────────────────────────────────────
@@ -22,12 +150,12 @@ pub async fn connect() -> ConnectionManager {
 pub const REFRESH_TOKEN_TTL_SECS: u64 = 7 * 24 * 3600; // 7 days
 
 /// Store a refresh token in Redis: `refresh:{token}` → JSON payload.
-pub async fn store_refresh_token(
-    conn: &mut ConnectionManager,
+pub fn store_refresh_token_sync(
+    conn: &mut redis::Connection,
     token: &str,
     user_id: &str,
     role: &str,
-) -> RedisResult<()> {
+) -> redis::RedisResult<()> {
     let key = format!("refresh:{}", token);
     let value = serde_json::json!({
         "user_id": user_id,
@@ -38,30 +166,23 @@ pub async fn store_refresh_token(
         .arg(&key)
         .arg(REFRESH_TOKEN_TTL_SECS)
         .arg(&value)
-        .query_async(conn)
-        .await
+        .query(conn)
 }
 
-/// Retrieve and optionally delete a refresh token.
-/// Returns `Some((user_id, role))` if valid, `None` if expired or missing.
-pub async fn take_refresh_token(
-    conn: &mut ConnectionManager,
+/// Retrieve and delete a refresh token (single-use rotation).
+pub fn take_refresh_token_sync(
+    conn: &mut redis::Connection,
     token: &str,
-) -> RedisResult<Option<(String, String)>> {
+) -> redis::RedisResult<Option<(String, String)>> {
     let key = format!("refresh:{}", token);
-
-    // GET the token payload
-    let raw: Option<String> = redis::cmd("GET").arg(&key).query_async(conn).await?;
+    let raw: Option<String> = redis::cmd("GET").arg(&key).query(conn)?;
 
     let Some(raw) = raw else {
         return Ok(None);
     };
 
-    // DELETE it so it cannot be reused (token rotation)
-    redis::cmd("DEL")
-        .arg(&key)
-        .query_async::<_, ()>(conn)
-        .await?;
+    // Delete so it cannot be reused
+    redis::cmd("DEL").arg(&key).query::<()>(conn)?;
 
     let parsed: serde_json::Value = serde_json::from_str(&raw).unwrap_or(serde_json::Value::Null);
     let user_id = parsed["user_id"].as_str().unwrap_or("").to_string();
@@ -74,48 +195,26 @@ pub async fn take_refresh_token(
     Ok(Some((user_id, role)))
 }
 
-/// Revoke all refresh tokens for a user (used on password change / admin deactivation).
-pub async fn revoke_user_tokens(conn: &mut ConnectionManager, user_id: &str) -> RedisResult<()> {
-    // We can't efficiently find all tokens for a user without scanning.
-    // Instead, store a "token generation" counter per user and invalidate
-    // all tokens older than the current generation.
+/// Increment the token generation counter for a user (revokes all tokens).
+pub fn revoke_user_tokens_sync(conn: &mut redis::Connection, user_id: &str) -> redis::RedisResult<()> {
     let key = format!("user_token_gen:{}", user_id);
-    redis::cmd("INCR")
-        .arg(&key)
-        .query_async::<_, ()>(conn)
-        .await?;
+    redis::cmd("INCR").arg(&key).query::<()>(conn)?;
     Ok(())
-}
-
-/// Get the current token generation for a user.
-pub async fn get_token_generation(conn: &mut ConnectionManager, user_id: &str) -> RedisResult<u64> {
-    let key = format!("user_token_gen:{}", user_id);
-    let gen: Option<u64> = redis::cmd("GET").arg(&key).query_async(conn).await?;
-    Ok(gen.unwrap_or(0))
 }
 
 // ── Rate limiting helpers ────────────────────────────────────────────────────
 
-/// Sliding-window rate limit check.
-///
-/// - `prefix`: namespace key (e.g. "login").
-/// - `identifier`: typically the client IP.
-/// - `max_requests`: maximum allowed requests in the window.
-/// - `window_secs`: size of the sliding window in seconds.
-///
-/// Returns `true` if the request is allowed (under the limit), `false` if
-/// rate-limited.
-pub async fn check_rate_limit(
-    conn: &mut ConnectionManager,
+/// Sliding-window rate limit check (synchronous, runs inside web::block).
+pub fn check_rate_limit_sync(
+    conn: &mut redis::Connection,
     prefix: &str,
     identifier: &str,
     max_requests: u64,
     window_secs: u64,
-) -> RedisResult<bool> {
+) -> redis::RedisResult<bool> {
     let key = format!("rl:{}:{}", prefix, identifier);
     let now_ms = current_time_ms();
 
-    // Lua script atomically cleans old entries, counts, and adds the new one
     let script = redis::Script::new(
         r#"
         local key    = KEYS[1]
@@ -123,35 +222,28 @@ pub async fn check_rate_limit(
         local window = tonumber(ARGV[2])
         local max_req = tonumber(ARGV[3])
 
-        -- Remove entries outside the sliding window
         redis.call('ZREMRANGEBYSCORE', key, 0, now - window * 1000)
 
-        -- Count remaining (within-window) entries
         local count = redis.call('ZCARD', key)
 
         if count >= max_req then
             return 0
         end
 
-        -- Add current request timestamp with a unique sub-millisecond member
         redis.call('ZADD', key, now, now .. ':' .. count)
         redis.call('EXPIRE', key, window)
         return 1
         "#,
     );
 
-    let result: i32 = script
+    script
         .key(&key)
         .arg(now_ms)
         .arg(window_secs)
         .arg(max_requests)
-        .invoke_async(conn)
-        .await?;
-
-    Ok(result == 1)
+        .invoke(conn)
 }
 
-/// Return current epoch in milliseconds.
 pub fn current_time_ms() -> u64 {
     use std::time::SystemTime;
     SystemTime::now()
