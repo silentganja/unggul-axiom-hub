@@ -156,11 +156,14 @@ pub async fn update_profile(
         .unwrap_or(existing.full_name);
 
     // Determine new password hash
-    let new_password_hash = if let (Some(current), Some(new)) =
-        (body.current_password.as_deref(), body.new_password.as_deref())
-    {
+    let new_password_hash = if let (Some(current), Some(new)) = (
+        body.current_password.as_deref(),
+        body.new_password.as_deref(),
+    ) {
         if new.is_empty() {
-            return Err(AppError::BadRequest("new_password must not be empty".into()));
+            return Err(AppError::BadRequest(
+                "new_password must not be empty".into(),
+            ));
         }
         // Verify current password
         let ok = password::verify_password(current, &existing.password_hash)?;

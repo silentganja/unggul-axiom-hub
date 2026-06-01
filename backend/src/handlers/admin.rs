@@ -102,9 +102,10 @@ pub async fn create_user(
     }
 
     if !user::VALID_ROLES.contains(&role.as_str()) {
-        return Err(AppError::BadRequest(
-            format!("role must be one of: {}", user::VALID_ROLES.join(", ")),
-        ));
+        return Err(AppError::BadRequest(format!(
+            "role must be one of: {}",
+            user::VALID_ROLES.join(", ")
+        )));
     }
 
     // Hash the password
@@ -178,9 +179,10 @@ pub async fn update_user(
         .unwrap_or(existing.role);
 
     if !user::VALID_ROLES.contains(&new_role.as_str()) {
-        return Err(AppError::BadRequest(
-            format!("role must be one of: {}", user::VALID_ROLES.join(", ")),
-        ));
+        return Err(AppError::BadRequest(format!(
+            "role must be one of: {}",
+            user::VALID_ROLES.join(", ")
+        )));
     }
 
     // Hash new password if provided, otherwise keep existing

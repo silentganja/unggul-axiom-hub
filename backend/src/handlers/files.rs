@@ -330,7 +330,8 @@ pub async fn rename_file(
     // ── Audit log ─────────────────────────────────────────────────────────────
     let ip = req.peer_addr().map(|a| a.to_string()).unwrap_or_default();
 
-    let _ = write_audit_log_internal(pool.get_ref(), user.id, "RENAME", &file_id.to_string(), &ip).await;
+    let _ = write_audit_log_internal(pool.get_ref(), user.id, "RENAME", &file_id.to_string(), &ip)
+        .await;
 
     tracing::info!(
         user_id  = %user.id,
@@ -380,13 +381,12 @@ pub async fn delete_file(
     // ── Enforce lock: hierarchical — must be the locker or have >= role level ──
     if let Some(locker) = file.locked_by {
         if locker != user.id {
-            let locker_role: Option<String> = sqlx::query_scalar(
-                "SELECT role FROM users WHERE id = $1",
-            )
-            .bind(locker)
-            .fetch_optional(pool.get_ref())
-            .await
-            .map_err(AppError::Database)?;
+            let locker_role: Option<String> =
+                sqlx::query_scalar("SELECT role FROM users WHERE id = $1")
+                    .bind(locker)
+                    .fetch_optional(pool.get_ref())
+                    .await
+                    .map_err(AppError::Database)?;
 
             let locker_level = locker_role
                 .as_deref()
@@ -456,10 +456,7 @@ pub async fn delete_file(
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// List files in the authenticated user's trash (soft-deleted).
-pub async fn list_trash(
-    pool: web::Data<PgPool>,
-    user: AuthUser,
-) -> Result<HttpResponse, AppError> {
+pub async fn list_trash(pool: web::Data<PgPool>, user: AuthUser) -> Result<HttpResponse, AppError> {
     let files: Vec<FileNode> = sqlx::query_as::<_, FileNode>(
         "SELECT id, parent_id, owner_id, name, is_folder,
                 size_bytes, mime_type, classification, created_at, updated_at, locked_by, locked_at
@@ -528,14 +525,13 @@ pub async fn permanent_delete(
 ) -> Result<HttpResponse, AppError> {
     let file_id = path.into_inner();
 
-    let deleted = sqlx::query(
-        "DELETE FROM files WHERE id = $1 AND owner_id = $2 AND deleted_at IS NOT NULL",
-    )
-    .bind(file_id)
-    .bind(user.id)
-    .execute(pool.get_ref())
-    .await
-    .map_err(AppError::Database)?;
+    let deleted =
+        sqlx::query("DELETE FROM files WHERE id = $1 AND owner_id = $2 AND deleted_at IS NOT NULL")
+            .bind(file_id)
+            .bind(user.id)
+            .execute(pool.get_ref())
+            .await
+            .map_err(AppError::Database)?;
 
     if deleted.rows_affected() == 0 {
         return Err(AppError::NotFound);
@@ -561,10 +557,7 @@ struct QuotaResponse {
 
 const DEFAULT_QUOTA: i64 = 100 * 1024 * 1024 * 1024; // 100 GB
 
-pub async fn get_quota(
-    pool: web::Data<PgPool>,
-    user: AuthUser,
-) -> Result<HttpResponse, AppError> {
+pub async fn get_quota(pool: web::Data<PgPool>, user: AuthUser) -> Result<HttpResponse, AppError> {
     let used: i64 = sqlx::query_scalar(
         "SELECT COALESCE(SUM(size_bytes), 0) FROM files WHERE owner_id = $1 AND deleted_at IS NULL AND is_folder = FALSE",
     )
@@ -745,11 +738,14 @@ pub async fn download_file(
         return Err(AppError::NotFound);
     }
 
-    let data = tokio::fs::read(&filepath).await.map_err(|e| {
-        AppError::Internal(anyhow::anyhow!("Failed to read file: {}", e))
-    })?;
+    let data = tokio::fs::read(&filepath)
+        .await
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to read file: {}", e)))?;
 
-    let mime = file.mime_type.as_deref().unwrap_or("application/octet-stream");
+    let mime = file
+        .mime_type
+        .as_deref()
+        .unwrap_or("application/octet-stream");
     let filename = &file.name;
 
     Ok(HttpResponse::Ok()
@@ -797,11 +793,14 @@ pub async fn get_file_content(
             .body(Vec::new()));
     }
 
-    let data = tokio::fs::read(&filepath).await.map_err(|e| {
-        AppError::Internal(anyhow::anyhow!("Failed to read file: {}", e))
-    })?;
+    let data = tokio::fs::read(&filepath)
+        .await
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to read file: {}", e)))?;
 
-    let mime = file.mime_type.as_deref().unwrap_or("application/octet-stream");
+    let mime = file
+        .mime_type
+        .as_deref()
+        .unwrap_or("application/octet-stream");
 
     Ok(HttpResponse::Ok()
         .insert_header(("Content-Type", mime.to_string()))

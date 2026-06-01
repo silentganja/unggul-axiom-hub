@@ -1,5 +1,7 @@
 use crate::{
-    app_middleware::auth::AuthUser, errors::AppError, models::user::{User, UserProfile},
+    app_middleware::auth::AuthUser,
+    errors::AppError,
+    models::user::{User, UserProfile},
     utils::{jwt, password},
 };
 use actix_web::{web, HttpResponse};
@@ -219,9 +221,7 @@ struct WebauthnRegisterBeginResponse {
 }
 
 /// GET /api/auth/webauthn/register/begin
-pub async fn webauthn_register_begin(
-    _user: AuthUser,
-) -> Result<HttpResponse, AppError> {
+pub async fn webauthn_register_begin(_user: AuthUser) -> Result<HttpResponse, AppError> {
     let mut challenge = [0u8; 32];
     OsRng.fill_bytes(&mut challenge);
     let challenge_b64 = base64_url(&challenge);

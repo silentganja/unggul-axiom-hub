@@ -21,8 +21,13 @@ pub async fn create_request(
     let req_type = body.r#type.trim().to_string();
     let title = body.title.trim().to_string();
 
-    if !["FILE_LOCK", "FILE_UNLOCK", "CLASSIFICATION_UPGRADE", "CLASSIFICATION_DOWNGRADE"]
-        .contains(&req_type.as_str())
+    if ![
+        "FILE_LOCK",
+        "FILE_UNLOCK",
+        "CLASSIFICATION_UPGRADE",
+        "CLASSIFICATION_DOWNGRADE",
+    ]
+    .contains(&req_type.as_str())
     {
         return Err(AppError::BadRequest("Invalid request type".into()));
     }
@@ -159,13 +164,14 @@ pub async fn approve_request(
     let request_id = path.into_inner();
 
     // Fetch the pending request
-    let req_type: Option<String> =
-        sqlx::query_scalar("SELECT type FROM governance_requests WHERE id = $1 AND status = 'PENDING'")
-            .bind(request_id)
-            .fetch_optional(pool.get_ref())
-            .await
-            .map_err(AppError::Database)?
-            .ok_or(AppError::NotFound)?;
+    let req_type: Option<String> = sqlx::query_scalar(
+        "SELECT type FROM governance_requests WHERE id = $1 AND status = 'PENDING'",
+    )
+    .bind(request_id)
+    .fetch_optional(pool.get_ref())
+    .await
+    .map_err(AppError::Database)?
+    .ok_or(AppError::NotFound)?;
 
     let target_file_id: Option<Uuid> =
         sqlx::query_scalar("SELECT target_file_id FROM governance_requests WHERE id = $1")
@@ -210,7 +216,8 @@ pub async fn approve_request(
             }
             "CLASSIFICATION_UPGRADE" | "CLASSIFICATION_DOWNGRADE" => {
                 if let Some(ref meta) = metadata {
-                    if let Some(new_class) = meta.get("newClassification").and_then(|v| v.as_str()) {
+                    if let Some(new_class) = meta.get("newClassification").and_then(|v| v.as_str())
+                    {
                         if !crate::models::file::VALID_CLASSIFICATIONS.contains(&new_class) {
                             return Err(AppError::BadRequest("Invalid classification".into()));
                         }

@@ -1,7 +1,9 @@
 use crate::{
     app_middleware::auth::AuthUser,
     errors::AppError,
-    models::share::{FileShareEntry, FileShareRow, ShareFileRequest, SharedFileNode, SharedFileRow},
+    models::share::{
+        FileShareEntry, FileShareRow, ShareFileRequest, SharedFileNode, SharedFileRow,
+    },
 };
 use actix_web::{web, HttpRequest, HttpResponse};
 use sqlx::PgPool;
@@ -85,12 +87,11 @@ pub async fn share_file(
             .ok_or(AppError::NotFound)?;
 
     // Find the recipient user by email
-    let recipient_id: Option<Uuid> =
-        sqlx::query_scalar("SELECT id FROM users WHERE email = $1")
-            .bind(&recipient_email)
-            .fetch_optional(pool.get_ref())
-            .await
-            .map_err(AppError::Database)?;
+    let recipient_id: Option<Uuid> = sqlx::query_scalar("SELECT id FROM users WHERE email = $1")
+        .bind(&recipient_email)
+        .fetch_optional(pool.get_ref())
+        .await
+        .map_err(AppError::Database)?;
 
     let recipient_id =
         recipient_id.ok_or(AppError::BadRequest("No user found with that email".into()))?;

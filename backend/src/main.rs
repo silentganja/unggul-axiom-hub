@@ -203,8 +203,14 @@ async fn main() -> std::io::Result<()> {
             // /api/governance  — approval workflow (submit: any user, approve/reject: admin)
             .service(
                 web::scope("/api/governance")
-                    .route("/requests", web::post().to(handlers::governance::create_request))
-                    .route("/requests", web::get().to(handlers::governance::list_requests))
+                    .route(
+                        "/requests",
+                        web::post().to(handlers::governance::create_request),
+                    )
+                    .route(
+                        "/requests",
+                        web::get().to(handlers::governance::list_requests),
+                    )
                     .route(
                         "/requests/{id}/approve",
                         web::post().to(handlers::governance::approve_request),
@@ -216,7 +222,8 @@ async fn main() -> std::io::Result<()> {
             )
             // /api/activity  — activity feed (audit + shares + governance)
             .service(
-                web::scope("/api/activity").route("", web::get().to(handlers::files::activity_feed)),
+                web::scope("/api/activity")
+                    .route("", web::get().to(handlers::files::activity_feed)),
             )
             // /api/audit  — all routes require a valid JWT (AuthUser extractor)
             .service(
@@ -228,7 +235,10 @@ async fn main() -> std::io::Result<()> {
                     // GET  /api/files[?parent_id=uuid]  — list directory contents
                     .route("", web::get().to(handlers::files::list_files))
                     // GET  /api/files/shared            — list files shared with me
-                    .route("/shared", web::get().to(handlers::shares::list_shared_files))
+                    .route(
+                        "/shared",
+                        web::get().to(handlers::shares::list_shared_files),
+                    )
                     // GET  /api/files/quota            — storage quota usage
                     .route("/quota", web::get().to(handlers::files::get_quota))
                     // GET  /api/files/trash             — list trashed files
@@ -244,18 +254,30 @@ async fn main() -> std::io::Result<()> {
                     // POST /api/files/{id}/share         — share a file with another user
                     .route("/{id}/share", web::post().to(handlers::shares::share_file))
                     // GET  /api/files/{id}/shares        — list shares for a file
-                    .route("/{id}/shares", web::get().to(handlers::shares::list_file_shares))
+                    .route(
+                        "/{id}/shares",
+                        web::get().to(handlers::shares::list_file_shares),
+                    )
                     // DELETE /api/files/{id}/share/{uid} — revoke a share
                     .route(
                         "/{id}/share/{uid}",
                         web::delete().to(handlers::shares::remove_share),
                     )
                     // GET  /api/files/{id}/content       — raw content for preview
-                    .route("/{id}/content", web::get().to(handlers::files::get_file_content))
+                    .route(
+                        "/{id}/content",
+                        web::get().to(handlers::files::get_file_content),
+                    )
                     // GET  /api/files/{id}/download      — stream download
-                    .route("/{id}/download", web::get().to(handlers::files::download_file))
+                    .route(
+                        "/{id}/download",
+                        web::get().to(handlers::files::download_file),
+                    )
                     // POST /api/files/{id}/restore       — restore from trash
-                    .route("/{id}/restore", web::post().to(handlers::files::restore_file))
+                    .route(
+                        "/{id}/restore",
+                        web::post().to(handlers::files::restore_file),
+                    )
                     // PUT  /api/files/{id}/rename        — rename a file or folder
                     .route("/{id}/rename", web::put().to(handlers::files::rename_file))
                     // DELETE /api/files/{id}/permanent   — permanently delete trashed file
