@@ -297,9 +297,7 @@ pub async fn update_classification(
     let file_id = path.into_inner();
 
     if !crate::models::file::VALID_CLASSIFICATIONS.contains(&body.classification.as_str()) {
-        return Err(AppError::BadRequest(
-            "Invalid classification".into(),
-        ));
+        return Err(AppError::BadRequest("Invalid classification".into()));
     }
 
     let updated: Option<FileNode> = sqlx::query_as::<_, FileNode>(
@@ -319,8 +317,14 @@ pub async fn update_classification(
     let file = updated.ok_or(AppError::NotFound)?;
 
     let ip = req.peer_addr().map(|a| a.to_string()).unwrap_or_default();
-    let _ = write_audit_log_internal(pool.get_ref(), user.id, "UPDATE_CLASSIFICATION", &file_id.to_string(), &ip)
-        .await;
+    let _ = write_audit_log_internal(
+        pool.get_ref(),
+        user.id,
+        "UPDATE_CLASSIFICATION",
+        &file_id.to_string(),
+        &ip,
+    )
+    .await;
 
     tracing::info!(
         user_id = %user.id,
@@ -640,18 +644,15 @@ pub async fn get_quota(pool: web::Data<PgPool>, user: AuthUser) -> Result<HttpRe
     .map_err(AppError::Database)?;
 
     // Check per-user quota, falling back to system default
-    let user_quota: Option<i64> = sqlx::query_scalar(
-        "SELECT storage_quota_bytes FROM users WHERE id = $1",
-    )
-    .bind(user.id)
-    .fetch_optional(pool.get_ref())
-    .await
-    .map_err(AppError::Database)?
-    .flatten();
+    let user_quota: Option<i64> =
+        sqlx::query_scalar("SELECT storage_quota_bytes FROM users WHERE id = $1")
+            .bind(user.id)
+            .fetch_optional(pool.get_ref())
+            .await
+            .map_err(AppError::Database)?
+            .flatten();
 
-    let quota_bytes = user_quota
-        .filter(|&q| q > 0)
-        .unwrap_or(DEFAULT_QUOTA);
+    let quota_bytes = user_quota.filter(|&q| q > 0).unwrap_or(DEFAULT_QUOTA);
 
     Ok(HttpResponse::Ok().json(QuotaResponse {
         used_bytes: used,
