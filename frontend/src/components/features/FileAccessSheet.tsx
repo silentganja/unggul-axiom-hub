@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useId } from "react";
+import { useState, useId, useEffect } from "react";
 import {
   X,
   Shield,
@@ -10,9 +10,10 @@ import {
   UserPlus,
   Trash2,
   Lock,
-  Users
+  Users,
+  Loader2,
 } from "lucide-react";
-import { useFileStore, FileNode } from "@/store/useFileStore";
+import { useFileStore, FileNode, Collaborator } from "@/store/useFileStore";
 import { cn } from "@/lib/utils";
 
 export default function FileAccessSheet() {
@@ -25,35 +26,66 @@ export default function FileAccessSheet() {
   const isOpen = useFileStore((state) => state.isAccessSheetOpen);
   const setOpen = useFileStore((state) => state.setAccessSheetOpen);
   const setActiveFile = useFileStore((state) => state.setActiveFile);
-  
+  const fileShares = useFileStore((state) => state.fileShares);
+
   const updateClassification = useFileStore((state) => state.updateFileClassification);
-  const addCollaborator = useFileStore((state) => state.addCollaborator);
-  const updateCollaboratorRole = useFileStore((state) => state.updateCollaboratorRole);
-  const removeCollaborator = useFileStore((state) => state.removeCollaborator);
+  const shareFile = useFileStore((state) => state.shareFile);
+  const removeShare = useFileStore((state) => state.removeShare);
+  const fetchFileShares = useFileStore((state) => state.fetchFileShares);
 
   // Local state for add collaborator inputs
   const [newEmail, setNewEmail] = useState("");
-  const [newRole, setNewRole] = useState<"owner" | "editor" | "viewer">("viewer");
+  const [newRole, setNewRole] = useState<"editor" | "viewer">("viewer");
+  const [isSharing, setIsSharing] = useState(false);
+  const [shareError, setShareError] = useState<string | null>(null);
+
+  // Fetch real shares from the backend when the sheet opens
+  useEffect(() => {
+    if (isOpen && activeFile) {
+      fetchFileShares(activeFile.id);
+    }
+  }, [isOpen, activeFile, fetchFileShares]);
 
   if (!isOpen || !activeFile) return null;
 
   const handleClose = () => {
     setOpen(false);
     setActiveFile(null);
+    setShareError(null);
   };
 
-  const handleAddPerson = (e: React.FormEvent) => {
+  const handleAddPerson = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (newEmail.trim()) {
-      // Mock name from email prefix
-      const emailPrefix = newEmail.split("@")[0];
-      const mockName = emailPrefix
-        .split(".")
-        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-        .join(" ");
-
-      addCollaborator(activeFile.id, mockName, newEmail.trim(), newRole);
+    if (!newEmail.trim()) return;
+    setShareError(null);
+    setIsSharing(true);
+    try {
+      await shareFile(activeFile.id, newEmail.trim(), newRole);
       setNewEmail("");
+    } catch (err) {
+      setShareError(err instanceof Error ? err.message : "Failed to share");
+    } finally {
+      setIsSharing(false);
+    }
+  };
+
+  const handleRemoveShare = async (userId: string) => {
+    try {
+      await removeShare(activeFile.id, userId);
+    } catch (err) {
+      setShareError(err instanceof Error ? err.message : "Failed to remove share");
+    }
+  };
+
+  const handleRoleChange = async (userId: string, role: string) => {
+    try {
+      // Upsert via the share endpoint
+      const userEntry = fileShares.find((s) => s.id === userId);
+      if (userEntry) {
+        await shareFile(activeFile.id, userEntry.email, role);
+      }
+    } catch (err) {
+      setShareError(err instanceof Error ? err.message : "Failed to update role");
     }
   };
 
@@ -79,9 +111,17 @@ export default function FileAccessSheet() {
     return <File className="text-foreground-subtle shrink-0" size={18} />;
   };
 
+  // Build the full collaborators list: activeFile.collaborators (owner) + fileShares
+  const ownerEntry: Collaborator | undefined = activeFile.collaborators.find(
+    (c) => c.role === "owner"
+  );
+  const allCollaborators: Collaborator[] = [
+    ...(ownerEntry ? [ownerEntry] : []),
+    ...fileShares,
+  ];
+
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
-      
       {/* ── Backdrop Blur Overlay ── */}
       <div
         className="absolute inset-0 bg-black/40 backdrop-blur-xs transition-opacity duration-300 animate-in fade-in"
@@ -90,10 +130,8 @@ export default function FileAccessSheet() {
 
       {/* ── Opaque Slide-over Container ── */}
       <div className="relative w-full max-w-md h-full bg-background-panel border-l border-border/40 shadow-md flex flex-col justify-between animate-in slide-in-from-right duration-250 z-10">
-        
         {/* Scrollable Container */}
         <div className="flex-grow overflow-y-auto p-6 space-y-6">
-          
           {/* Header section */}
           <div className="flex items-start justify-between border-b border-border/20 pb-4">
             <div className="flex items-center gap-3">
@@ -101,15 +139,18 @@ export default function FileAccessSheet() {
                 {getFileIcon(activeFile)}
               </div>
               <div className="max-w-[240px] truncate">
-                <h3 className="text-sm font-semibold text-foreground truncate font-sans select-all" title={activeFile.name}>
+                <h3
+                  className="text-sm font-semibold text-foreground truncate font-sans select-all"
+                  title={activeFile.name}
+                >
                   {activeFile.name}
                 </h3>
                 <span className="font-mono text-[10px] text-foreground-subtle block mt-0.5 select-none">
-                  {activeFile.size} &bull; {activeFile.type === "folder" ? "Directory" : "File Object"}
+                  {activeFile.size} &bull;{" "}
+                  {activeFile.type === "folder" ? "Directory" : "File Object"}
                 </span>
               </div>
             </div>
-            
             <button
               onClick={handleClose}
               className="h-7 w-7 rounded flex items-center justify-center border border-transparent hover:border-border hover:bg-background/40 text-foreground-subtle hover:text-foreground transition-all"
@@ -125,24 +166,33 @@ export default function FileAccessSheet() {
               Security Classification Level
             </h4>
             <div className="flex items-center gap-3">
-              <label htmlFor={fileClassificationSelectId} className="sr-only">Classification Level</label>
+              <label htmlFor={fileClassificationSelectId} className="sr-only">
+                Classification Level
+              </label>
               <select
                 id={fileClassificationSelectId}
                 value={activeFile.classification}
-                onChange={(e) => updateClassification(activeFile.id, e.target.value as "RAHSIA" | "SULIT" | "TERBUKA")}
+                onChange={(e) =>
+                  updateClassification(
+                    activeFile.id,
+                    e.target.value as "RAHSIA" | "SULIT" | "TERBUKA"
+                  )
+                }
                 className="h-8 flex-grow max-w-[160px] px-2 rounded border border-input-border bg-input-bg text-xs text-foreground focus:outline-none focus:border-accent"
               >
                 <option value="TERBUKA">TERBUKA</option>
                 <option value="SULIT">SULIT</option>
                 <option value="RAHSIA">RAHSIA</option>
               </select>
-
               <span
                 className={cn(
                   "px-2 py-0.5 rounded-sm text-[10px] font-bold tracking-widest font-mono uppercase border",
-                  activeFile.classification === "RAHSIA" && "bg-destructive/15 text-destructive border-destructive/25",
-                  activeFile.classification === "SULIT" && "bg-warning/15 text-warning border-warning/25",
-                  activeFile.classification === "TERBUKA" && "bg-background-muted/40 text-foreground-subtle border-border/40"
+                  activeFile.classification === "RAHSIA" &&
+                    "bg-destructive/15 text-destructive border-destructive/25",
+                  activeFile.classification === "SULIT" &&
+                    "bg-warning/15 text-warning border-warning/25",
+                  activeFile.classification === "TERBUKA" &&
+                    "bg-background-muted/40 text-foreground-subtle border-border/40"
                 )}
               >
                 {activeFile.classification}
@@ -153,16 +203,24 @@ export default function FileAccessSheet() {
             </p>
           </div>
 
-          {/* Add People Section (Google Drive parity) */}
+          {/* Add People Section */}
           <div className="space-y-2.5 border-t border-border/20 pt-5">
             <h4 className="text-[10px] font-bold tracking-wider font-mono text-foreground-subtle uppercase flex items-center gap-1.5">
               <UserPlus size={12} className="text-accent" />
               Add Corporate People & Roles
             </h4>
-            
+
+            {shareError && (
+              <div className="flex items-start gap-1.5 rounded border border-destructive/30 bg-destructive/5 px-3 py-2 text-[10px] text-destructive font-mono">
+                {shareError}
+              </div>
+            )}
+
             <form onSubmit={handleAddPerson} className="flex gap-2">
               <div className="flex-grow flex gap-1.5">
-                <label htmlFor={addPersonEmailId} className="sr-only">Corporate email address</label>
+                <label htmlFor={addPersonEmailId} className="sr-only">
+                  Corporate email address
+                </label>
                 <input
                   id={addPersonEmailId}
                   type="email"
@@ -170,31 +228,40 @@ export default function FileAccessSheet() {
                   placeholder="name@unggulaxiom.com"
                   value={newEmail}
                   onChange={(e) => setNewEmail(e.target.value)}
-                  className="h-8 flex-grow px-2.5 rounded border border-input-border bg-input-bg text-xs text-foreground placeholder-foreground-subtle/55 focus:outline-none focus:border-accent"
+                  disabled={isSharing}
+                  className="h-8 flex-grow px-2.5 rounded border border-input-border bg-input-bg text-xs text-foreground placeholder-foreground-subtle/55 focus:outline-none focus:border-accent disabled:opacity-50"
                 />
-                
-                <label htmlFor={addPersonRoleId} className="sr-only">Collaborator role</label>
+                <label htmlFor={addPersonRoleId} className="sr-only">
+                  Collaborator role
+                </label>
                 <select
                   id={addPersonRoleId}
                   value={newRole}
-                  onChange={(e) => setNewRole(e.target.value as "owner" | "editor" | "viewer")}
-                  className="h-8 w-20 px-1.5 rounded border border-input-border bg-input-bg text-[10px] font-mono text-foreground focus:outline-none focus:border-accent"
+                  onChange={(e) =>
+                    setNewRole(e.target.value as "editor" | "viewer")
+                  }
+                  disabled={isSharing}
+                  className="h-8 w-20 px-1.5 rounded border border-input-border bg-input-bg text-[10px] font-mono text-foreground focus:outline-none focus:border-accent disabled:opacity-50"
                 >
                   <option value="viewer">Viewer</option>
                   <option value="editor">Editor</option>
                 </select>
               </div>
-
               <button
                 type="submit"
-                className="btn-shimmer h-8 px-3 rounded text-[10px] font-bold font-mono uppercase tracking-wider shrink-0"
+                disabled={isSharing}
+                className="btn-shimmer h-8 px-3 rounded text-[10px] font-bold font-mono uppercase tracking-wider shrink-0 disabled:opacity-50"
               >
-                Add
+                {isSharing ? (
+                  <Loader2 size={12} className="animate-spin" />
+                ) : (
+                  "Add"
+                )}
               </button>
             </form>
           </div>
 
-          {/* Collaborator Sharing Parity List */}
+          {/* Collaborator Sharing List */}
           <div className="space-y-3 border-t border-border/20 pt-5">
             <h4 className="text-[10px] font-bold tracking-wider font-mono text-foreground-subtle uppercase flex items-center gap-1.5 mb-1">
               <Users size={12} className="text-accent" />
@@ -202,13 +269,17 @@ export default function FileAccessSheet() {
             </h4>
 
             <div className="divide-y divide-border/10">
-              {activeFile.collaborators.map((collaborator) => (
+              {allCollaborators.length === 0 && (
+                <p className="py-4 text-center text-[10px] text-foreground-subtle font-mono">
+                  No collaborators yet
+                </p>
+              )}
+              {allCollaborators.map((collaborator) => (
                 <div
                   key={collaborator.id}
                   className="flex items-center justify-between gap-4 py-2.5 first:pt-0"
                 >
                   <div className="flex items-center gap-3 truncate">
-                    {/* Compact Avatar initials */}
                     <div className="h-7 w-7 rounded bg-accent/15 border border-accent/25 text-accent text-[9px] font-bold font-mono flex items-center justify-center shrink-0">
                       {getInitials(collaborator.name)}
                     </div>
@@ -222,7 +293,6 @@ export default function FileAccessSheet() {
                     </div>
                   </div>
 
-                  {/* Compact role dropdown controls */}
                   <div className="flex items-center gap-1.5">
                     {collaborator.role === "owner" ? (
                       <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-accent border border-accent/20 bg-accent/5 px-2 py-0.5 rounded select-none">
@@ -230,11 +300,18 @@ export default function FileAccessSheet() {
                       </span>
                     ) : (
                       <>
-                        <label htmlFor={`role-select-${collaborator.id}`} className="sr-only">Role for {collaborator.name}</label>
+                        <label
+                          htmlFor={`role-select-${collaborator.id}`}
+                          className="sr-only"
+                        >
+                          Role for {collaborator.name}
+                        </label>
                         <select
                           id={`role-select-${collaborator.id}`}
                           value={collaborator.role}
-                          onChange={(e) => updateCollaboratorRole(activeFile.id, collaborator.id, e.target.value as "owner" | "editor" | "viewer")}
+                          onChange={(e) =>
+                            handleRoleChange(collaborator.id, e.target.value)
+                          }
                           className="h-6 w-20 px-1 rounded border border-input-border bg-input-bg text-[10px] font-mono text-foreground focus:outline-none focus:border-accent"
                         >
                           <option value="viewer">Viewer</option>
@@ -242,7 +319,7 @@ export default function FileAccessSheet() {
                         </select>
 
                         <button
-                          onClick={() => removeCollaborator(activeFile.id, collaborator.id)}
+                          onClick={() => handleRemoveShare(collaborator.id)}
                           className="h-6 w-6 rounded flex items-center justify-center text-destructive hover:bg-destructive/10 border border-transparent hover:border-destructive/20 transition-colors shrink-0"
                           title="Remove access"
                         >
@@ -251,12 +328,10 @@ export default function FileAccessSheet() {
                       </>
                     )}
                   </div>
-
                 </div>
               ))}
             </div>
           </div>
-
         </div>
 
         {/* Footer Audit Statement */}
@@ -264,9 +339,7 @@ export default function FileAccessSheet() {
           <Lock size={12} className="text-accent" />
           Restricted secure credential verification
         </div>
-
       </div>
-
     </div>
   );
 }

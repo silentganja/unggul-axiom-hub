@@ -1,11 +1,13 @@
 use crate::{
     app_middleware::auth::AuthUser,
     errors::AppError,
-    models::file::{CreateFolderReq, FileNode, ListFilesQuery, RenameFileReq},
+    models::file::{CreateFolderReq, FileListResponse, FileNode, ListFilesQuery, RenameFileReq},
+    models::user,
     AppConfig,
 };
 use actix_multipart::Multipart;
 use actix_web::{web, HttpRequest, HttpResponse};
+use chrono::{DateTime, Utc};
 use futures_util::stream::StreamExt;
 use sqlx::PgPool;
 use tokio::io::AsyncWriteExt;
@@ -27,9 +29,9 @@ pub async fn get_file(
 
     let file: Option<FileNode> = sqlx::query_as::<_, FileNode>(
         "SELECT id, parent_id, owner_id, name, is_folder,
-                size_bytes, mime_type, classification, created_at, updated_at
+                size_bytes, mime_type, classification, created_at, updated_at, locked_by, locked_at
          FROM files
-         WHERE id = $1 AND owner_id = $2",
+         WHERE id = $1 AND owner_id = $2 AND deleted_at IS NULL",
     )
     .bind(file_id)
     .bind(user.id)
@@ -48,65 +50,139 @@ pub async fn get_file(
 
 /// List files and folders owned by the authenticated user.
 ///
-/// - With `?parent_id=<uuid>`: lists children of that folder.
-/// - Without `parent_id`:      lists root-level entries (parent_id IS NULL).
-///
-/// Results are sorted folders-first, then by name ASC.
+/// Supports:
+/// - `?parent_id=<uuid>` — scoped folder listing
+/// - `?q=<search>` — full-text search on name
+/// - `?page=1&perPage=50` — pagination
+/// - `?sort=name&order=asc` — sorting (name, size, classification, updated)
 pub async fn list_files(
     pool: web::Data<PgPool>,
     user: AuthUser,
     query: web::Query<ListFilesQuery>,
 ) -> Result<HttpResponse, AppError> {
-    let files: Vec<FileNode> = match query.parent_id {
-        // ── Scoped listing (inside a folder) ─────────────────────────────────
-        Some(parent_id) => {
-            // First verify the parent folder exists and belongs to this user.
-            // This prevents path-traversal into other users' trees.
-            let parent_exists: bool = sqlx::query_scalar(
-                "SELECT EXISTS(
-                    SELECT 1 FROM files
-                    WHERE id = $1 AND owner_id = $2 AND is_folder = TRUE
-                )",
-            )
-            .bind(parent_id)
+    let page = query.page.unwrap_or(1).max(1);
+    let per_page = query.per_page.unwrap_or(50).min(200).max(1);
+    let offset = ((page - 1) * per_page) as i64;
+    let search = query.q.as_deref().unwrap_or("").trim();
+
+    // Validate sort column
+    let sort_col = match query.sort.as_deref().unwrap_or("name") {
+        "name" => "f.name",
+        "size" => "f.size_bytes",
+        "classification" => "f.classification",
+        "updated" => "f.updated_at",
+        _ => "f.name",
+    };
+    let order = match query.order.as_deref().unwrap_or("asc") {
+        "desc" => "DESC",
+        _ => "ASC",
+    };
+
+    // Build WHERE clauses dynamically
+    let parent_clause = if query.parent_id.is_some() {
+        "AND f.parent_id = $2"
+    } else {
+        "AND f.parent_id IS NULL"
+    };
+    let search_clause = if !search.is_empty() {
+        "AND f.name ILIKE $3"
+    } else {
+        ""
+    };
+
+    // Verify parent if scoped
+    if let Some(parent_id) = query.parent_id {
+        let parent_exists: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM files WHERE id = $1 AND owner_id = $2 AND is_folder = TRUE)",
+        )
+        .bind(parent_id)
+        .bind(user.id)
+        .fetch_one(pool.get_ref())
+        .await
+        .map_err(AppError::Database)?;
+        if !parent_exists {
+            return Err(AppError::NotFound);
+        }
+    }
+
+    // Count query
+    let count_sql = format!(
+        "SELECT COUNT(*) FROM files f WHERE f.owner_id = $1 AND f.deleted_at IS NULL {parent} {search}",
+        parent = parent_clause,
+        search = search_clause,
+    );
+    let total: i64 = if !search.is_empty() {
+        sqlx::query_scalar(&count_sql)
+            .bind(user.id)
+            .bind(query.parent_id.unwrap_or_default())
+            .bind(format!("%{}%", search))
+            .fetch_one(pool.get_ref())
+            .await
+            .map_err(AppError::Database)?
+    } else if query.parent_id.is_some() {
+        sqlx::query_scalar(&count_sql)
+            .bind(user.id)
+            .bind(query.parent_id.unwrap_or_default())
+            .fetch_one(pool.get_ref())
+            .await
+            .map_err(AppError::Database)?
+    } else {
+        sqlx::query_scalar(&count_sql)
             .bind(user.id)
             .fetch_one(pool.get_ref())
             .await
-            .map_err(AppError::Database)?;
+            .map_err(AppError::Database)?
+    };
 
-            if !parent_exists {
-                return Err(AppError::NotFound);
-            }
+    // Data query
+    let data_sql = format!(
+        "SELECT f.id, f.parent_id, f.owner_id, f.name, f.is_folder,
+                f.size_bytes, f.mime_type, f.classification, f.created_at, f.updated_at,
+                f.locked_by, f.locked_at
+         FROM files f
+         WHERE f.owner_id = $1 AND f.deleted_at IS NULL {parent} {search}
+         ORDER BY f.is_folder DESC, {sort_col} {order}
+         LIMIT {per_page} OFFSET {offset}",
+        parent = parent_clause,
+        search = search_clause,
+        sort_col = sort_col,
+        order = order,
+        per_page = per_page,
+        offset = offset,
+    );
 
-            sqlx::query_as::<_, FileNode>(
-                "SELECT id, parent_id, owner_id, name, is_folder,
-                        size_bytes, mime_type, classification, created_at, updated_at
-                 FROM files
-                 WHERE parent_id = $1 AND owner_id = $2
-                 ORDER BY is_folder DESC, name ASC",
-            )
-            .bind(parent_id)
+    let files: Vec<FileNode> = if !search.is_empty() {
+        sqlx::query_as::<_, FileNode>(&data_sql)
+            .bind(user.id)
+            .bind(query.parent_id.unwrap_or_default())
+            .bind(format!("%{}%", search))
+            .fetch_all(pool.get_ref())
+            .await
+            .map_err(AppError::Database)?
+    } else if query.parent_id.is_some() {
+        sqlx::query_as::<_, FileNode>(&data_sql)
+            .bind(user.id)
+            .bind(query.parent_id.unwrap_or_default())
+            .fetch_all(pool.get_ref())
+            .await
+            .map_err(AppError::Database)?
+    } else {
+        sqlx::query_as::<_, FileNode>(&data_sql)
             .bind(user.id)
             .fetch_all(pool.get_ref())
             .await
             .map_err(AppError::Database)?
-        }
-
-        // ── Root listing (parent_id IS NULL) ──────────────────────────────────
-        None => sqlx::query_as::<_, FileNode>(
-            "SELECT id, parent_id, owner_id, name, is_folder,
-                        size_bytes, mime_type, classification, created_at, updated_at
-                 FROM files
-                 WHERE parent_id IS NULL AND owner_id = $1
-                 ORDER BY is_folder DESC, name ASC",
-        )
-        .bind(user.id)
-        .fetch_all(pool.get_ref())
-        .await
-        .map_err(AppError::Database)?,
     };
 
-    Ok(HttpResponse::Ok().json(files))
+    let total_pages = ((total as f64) / (per_page as f64)).ceil() as u32;
+
+    Ok(HttpResponse::Ok().json(FileListResponse {
+        files,
+        total,
+        page,
+        per_page,
+        total_pages,
+    }))
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -159,7 +235,7 @@ pub async fn create_folder(
             (parent_id, owner_id, name, is_folder, size_bytes, classification)
          VALUES ($1, $2, $3, TRUE, 0, $4)
          RETURNING id, parent_id, owner_id, name, is_folder,
-                   size_bytes, mime_type, classification, created_at, updated_at",
+                   size_bytes, mime_type, classification, created_at, updated_at, locked_by, locked_at",
     )
     .bind(body.parent_id)
     .bind(user.id)
@@ -172,7 +248,7 @@ pub async fn create_folder(
     // ── Audit log ─────────────────────────────────────────────────────────────
     let ip = req.peer_addr().map(|a| a.to_string()).unwrap_or_default();
 
-    let _ = write_audit_log(
+    let _ = write_audit_log_internal(
         pool.get_ref(),
         user.id,
         "CREATE_FOLDER",
@@ -215,13 +291,32 @@ pub async fn rename_file(
 
     let new_name = body.new_name.trim().to_string();
 
+    // ── Enforce lock: hierarchical — must be the locker or have >= role level ──
+    let lock_info: Option<(Uuid, String)> = sqlx::query_as(
+        "SELECT f.locked_by, u.role FROM files f JOIN users u ON u.id = f.locked_by WHERE f.id = $1 AND f.owner_id = $2",
+    )
+    .bind(file_id)
+    .bind(user.id)
+    .fetch_optional(pool.get_ref())
+    .await
+    .map_err(AppError::Database)?
+    .map(|(id, role): (Uuid, String)| (id, role));
+
+    if let Some((locker, locker_role)) = lock_info {
+        if locker != user.id && user::role_level(&user.role) < user::role_level(&locker_role) {
+            return Err(AppError::Conflict(
+                "This file is locked by a higher authority and cannot be renamed".into(),
+            ));
+        }
+    }
+
     // ── Update — owner_id in WHERE clause enforces ownership ──────────────────
     let updated: Option<FileNode> = sqlx::query_as::<_, FileNode>(
         "UPDATE files
          SET name = $1
          WHERE id = $2 AND owner_id = $3
          RETURNING id, parent_id, owner_id, name, is_folder,
-                   size_bytes, mime_type, classification, created_at, updated_at",
+                   size_bytes, mime_type, classification, created_at, updated_at, locked_by, locked_at",
     )
     .bind(&new_name)
     .bind(file_id)
@@ -235,7 +330,7 @@ pub async fn rename_file(
     // ── Audit log ─────────────────────────────────────────────────────────────
     let ip = req.peer_addr().map(|a| a.to_string()).unwrap_or_default();
 
-    let _ = write_audit_log(pool.get_ref(), user.id, "RENAME", &file_id.to_string(), &ip).await;
+    let _ = write_audit_log_internal(pool.get_ref(), user.id, "RENAME", &file_id.to_string(), &ip).await;
 
     tracing::info!(
         user_id  = %user.id,
@@ -270,7 +365,7 @@ pub async fn delete_file(
     // ── Fetch the row — verify it exists AND belongs to this user ─────────────
     let file: Option<FileNode> = sqlx::query_as::<_, FileNode>(
         "SELECT id, parent_id, owner_id, name, is_folder,
-                size_bytes, mime_type, classification, created_at, updated_at
+                size_bytes, mime_type, classification, created_at, updated_at, locked_by, locked_at
          FROM files
          WHERE id = $1 AND owner_id = $2",
     )
@@ -281,6 +376,30 @@ pub async fn delete_file(
     .map_err(AppError::Database)?;
 
     let file = file.ok_or(AppError::NotFound)?;
+
+    // ── Enforce lock: hierarchical — must be the locker or have >= role level ──
+    if let Some(locker) = file.locked_by {
+        if locker != user.id {
+            let locker_role: Option<String> = sqlx::query_scalar(
+                "SELECT role FROM users WHERE id = $1",
+            )
+            .bind(locker)
+            .fetch_optional(pool.get_ref())
+            .await
+            .map_err(AppError::Database)?;
+
+            let locker_level = locker_role
+                .as_deref()
+                .map(|r| user::role_level(r))
+                .unwrap_or(0);
+
+            if user::role_level(&user.role) < locker_level {
+                return Err(AppError::Conflict(
+                    "This file is locked by a higher authority and cannot be deleted".into(),
+                ));
+            }
+        }
+    }
 
     // ── Guard: refuse to delete non-empty folders ─────────────────────────────
     if file.is_folder {
@@ -298,8 +417,8 @@ pub async fn delete_file(
         }
     }
 
-    // ── Hard delete ───────────────────────────────────────────────────────────
-    sqlx::query("DELETE FROM files WHERE id = $1 AND owner_id = $2")
+    // ── Soft delete ───────────────────────────────────────────────────────────
+    sqlx::query("UPDATE files SET deleted_at = NOW() WHERE id = $1 AND owner_id = $2")
         .bind(file_id)
         .bind(user.id)
         .execute(pool.get_ref())
@@ -309,13 +428,13 @@ pub async fn delete_file(
     // ── Audit log ─────────────────────────────────────────────────────────────
     let ip = req.peer_addr().map(|a| a.to_string()).unwrap_or_default();
 
-    let _ = write_audit_log(
+    let _ = write_audit_log_internal(
         pool.get_ref(),
         user.id,
         if file.is_folder {
-            "DELETE_FOLDER"
+            "TRASH_FOLDER"
         } else {
-            "DELETE_FILE"
+            "TRASH_FILE"
         },
         &file_id.to_string(),
         &ip,
@@ -326,10 +445,369 @@ pub async fn delete_file(
         user_id   = %user.id,
         file_id   = %file_id,
         is_folder = %file.is_folder,
-        "File/folder deleted"
+        "File/folder moved to trash"
     );
 
     Ok(HttpResponse::NoContent().finish())
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/files/trash
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// List files in the authenticated user's trash (soft-deleted).
+pub async fn list_trash(
+    pool: web::Data<PgPool>,
+    user: AuthUser,
+) -> Result<HttpResponse, AppError> {
+    let files: Vec<FileNode> = sqlx::query_as::<_, FileNode>(
+        "SELECT id, parent_id, owner_id, name, is_folder,
+                size_bytes, mime_type, classification, created_at, updated_at, locked_by, locked_at
+         FROM files
+         WHERE owner_id = $1 AND deleted_at IS NOT NULL
+         ORDER BY updated_at DESC
+         LIMIT 500",
+    )
+    .bind(user.id)
+    .fetch_all(pool.get_ref())
+    .await
+    .map_err(AppError::Database)?;
+
+    Ok(HttpResponse::Ok().json(files))
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/files/{id}/restore
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Restore a file or folder from the trash.
+pub async fn restore_file(
+    pool: web::Data<PgPool>,
+    user: AuthUser,
+    path: web::Path<Uuid>,
+) -> Result<HttpResponse, AppError> {
+    let file_id = path.into_inner();
+
+    let restored = sqlx::query(
+        "UPDATE files SET deleted_at = NULL WHERE id = $1 AND owner_id = $2 AND deleted_at IS NOT NULL",
+    )
+    .bind(file_id)
+    .bind(user.id)
+    .execute(pool.get_ref())
+    .await
+    .map_err(AppError::Database)?;
+
+    if restored.rows_affected() == 0 {
+        return Err(AppError::NotFound);
+    }
+
+    let file: FileNode = sqlx::query_as::<_, FileNode>(
+        "SELECT id, parent_id, owner_id, name, is_folder,
+                size_bytes, mime_type, classification, created_at, updated_at, locked_by, locked_at
+         FROM files WHERE id = $1",
+    )
+    .bind(file_id)
+    .fetch_one(pool.get_ref())
+    .await
+    .map_err(AppError::Database)?;
+
+    tracing::info!(user_id = %user.id, file_id = %file_id, "File restored from trash");
+
+    Ok(HttpResponse::Ok().json(file))
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DELETE /api/files/{id}/permanent
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Permanently delete a file or folder. Only works on already-trashed items.
+pub async fn permanent_delete(
+    pool: web::Data<PgPool>,
+    user: AuthUser,
+    path: web::Path<Uuid>,
+) -> Result<HttpResponse, AppError> {
+    let file_id = path.into_inner();
+
+    let deleted = sqlx::query(
+        "DELETE FROM files WHERE id = $1 AND owner_id = $2 AND deleted_at IS NOT NULL",
+    )
+    .bind(file_id)
+    .bind(user.id)
+    .execute(pool.get_ref())
+    .await
+    .map_err(AppError::Database)?;
+
+    if deleted.rows_affected() == 0 {
+        return Err(AppError::NotFound);
+    }
+
+    tracing::info!(user_id = %user.id, file_id = %file_id, "File permanently deleted");
+
+    Ok(HttpResponse::NoContent().finish())
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/files/quota
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct QuotaResponse {
+    used_bytes: i64,
+    quota_bytes: i64, // Default 100 GB
+    file_count: i64,
+    folder_count: i64,
+}
+
+const DEFAULT_QUOTA: i64 = 100 * 1024 * 1024 * 1024; // 100 GB
+
+pub async fn get_quota(
+    pool: web::Data<PgPool>,
+    user: AuthUser,
+) -> Result<HttpResponse, AppError> {
+    let used: i64 = sqlx::query_scalar(
+        "SELECT COALESCE(SUM(size_bytes), 0) FROM files WHERE owner_id = $1 AND deleted_at IS NULL AND is_folder = FALSE",
+    )
+    .bind(user.id)
+    .fetch_one(pool.get_ref())
+    .await
+    .map_err(AppError::Database)?;
+
+    let file_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM files WHERE owner_id = $1 AND deleted_at IS NULL AND is_folder = FALSE",
+    )
+    .bind(user.id)
+    .fetch_one(pool.get_ref())
+    .await
+    .map_err(AppError::Database)?;
+
+    let folder_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM files WHERE owner_id = $1 AND deleted_at IS NULL AND is_folder = TRUE",
+    )
+    .bind(user.id)
+    .fetch_one(pool.get_ref())
+    .await
+    .map_err(AppError::Database)?;
+
+    Ok(HttpResponse::Ok().json(QuotaResponse {
+        used_bytes: used,
+        quota_bytes: DEFAULT_QUOTA,
+        file_count,
+        folder_count,
+    }))
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/files/move
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct MoveFilesRequest {
+    file_ids: Vec<Uuid>,
+    target_folder_id: Option<Uuid>,
+}
+
+/// Bulk-move files to a target folder. All files must be owned by the user.
+pub async fn move_files(
+    pool: web::Data<PgPool>,
+    user: AuthUser,
+    body: web::Json<MoveFilesRequest>,
+) -> Result<HttpResponse, AppError> {
+    if body.file_ids.is_empty() {
+        return Err(AppError::BadRequest("file_ids must not be empty".into()));
+    }
+
+    // Verify target folder exists and belongs to user (if specified)
+    if let Some(target_id) = body.target_folder_id {
+        let exists: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM files WHERE id = $1 AND owner_id = $2 AND is_folder = TRUE AND deleted_at IS NULL)",
+        )
+        .bind(target_id)
+        .bind(user.id)
+        .fetch_one(pool.get_ref())
+        .await
+        .map_err(AppError::Database)?;
+        if !exists {
+            return Err(AppError::NotFound);
+        }
+    }
+
+    // Use a transaction to move all files atomically
+    let mut tx = pool.begin().await.map_err(AppError::Database)?;
+
+    for file_id in &body.file_ids {
+        let result = sqlx::query(
+            "UPDATE files SET parent_id = $1 WHERE id = $2 AND owner_id = $3 AND deleted_at IS NULL",
+        )
+        .bind(body.target_folder_id)
+        .bind(file_id)
+        .bind(user.id)
+        .execute(&mut *tx)
+        .await
+        .map_err(AppError::Database)?;
+
+        if result.rows_affected() == 0 {
+            return Err(AppError::NotFound);
+        }
+    }
+
+    tx.commit().await.map_err(AppError::Database)?;
+
+    tracing::info!(
+        user_id = %user.id,
+        count = body.file_ids.len(),
+        target = ?body.target_folder_id,
+        "Files moved"
+    );
+
+    Ok(HttpResponse::Ok().json(serde_json::json!({
+        "moved": body.file_ids.len()
+    })))
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/activity
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[derive(serde::Serialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+struct ActivityEntry {
+    id: Uuid,
+    action: String,
+    target_resource: Option<String>,
+    actor: String,
+    occurred_at: DateTime<Utc>,
+}
+
+/// Returns a combined activity feed from audit logs, shares, and governance.
+pub async fn activity_feed(
+    pool: web::Data<PgPool>,
+    user: AuthUser,
+) -> Result<HttpResponse, AppError> {
+    // Recent audit log entries relevant to this user (their actions + shares received)
+    let entries: Vec<ActivityEntry> = sqlx::query_as::<_, ActivityEntry>(
+        "SELECT id, action, target_resource, '' AS actor, created_at AS occurred_at
+         FROM audit_logs
+         WHERE user_id = $1
+         UNION ALL
+         SELECT fs.id, 'SHARED_WITH_YOU' AS action, f.name AS target_resource,
+                u.full_name AS actor, fs.created_at AS occurred_at
+         FROM file_shares fs
+         JOIN files f ON f.id = fs.file_id
+         JOIN users u ON u.id = fs.shared_by
+         WHERE fs.user_id = $1
+         UNION ALL
+         SELECT gr.id, 'GOV_' || gr.status AS action, gr.title AS target_resource,
+                '' AS actor, gr.updated_at AS occurred_at
+         FROM governance_requests gr
+         WHERE gr.requested_by = $1 AND gr.status != 'PENDING'
+         ORDER BY occurred_at DESC
+         LIMIT 50",
+    )
+    .bind(user.id)
+    .fetch_all(pool.get_ref())
+    .await
+    .map_err(AppError::Database)?;
+
+    Ok(HttpResponse::Ok().json(entries))
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/files/{id}/download
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Stream a file to the client for download.
+pub async fn download_file(
+    pool: web::Data<PgPool>,
+    user: AuthUser,
+    config: web::Data<AppConfig>,
+    path: web::Path<Uuid>,
+) -> Result<HttpResponse, AppError> {
+    let file_id = path.into_inner();
+
+    let file: Option<FileNode> = sqlx::query_as::<_, FileNode>(
+        "SELECT id, parent_id, owner_id, name, is_folder,
+                size_bytes, mime_type, classification, created_at, updated_at, locked_by, locked_at
+         FROM files WHERE id = $1 AND owner_id = $2 AND deleted_at IS NULL AND is_folder = FALSE",
+    )
+    .bind(file_id)
+    .bind(user.id)
+    .fetch_optional(pool.get_ref())
+    .await
+    .map_err(AppError::Database)?;
+
+    let file = file.ok_or(AppError::NotFound)?;
+
+    let filepath = std::path::Path::new(&config.storage_path).join(file_id.to_string());
+
+    if !filepath.exists() {
+        return Err(AppError::NotFound);
+    }
+
+    let data = tokio::fs::read(&filepath).await.map_err(|e| {
+        AppError::Internal(anyhow::anyhow!("Failed to read file: {}", e))
+    })?;
+
+    let mime = file.mime_type.as_deref().unwrap_or("application/octet-stream");
+    let filename = &file.name;
+
+    Ok(HttpResponse::Ok()
+        .insert_header(("Content-Type", mime.to_string()))
+        .insert_header((
+            "Content-Disposition",
+            format!("attachment; filename=\"{}\"", filename),
+        ))
+        .insert_header(("Content-Length", data.len().to_string()))
+        .body(data))
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/files/{id}/content
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Return raw file content for preview rendering.
+pub async fn get_file_content(
+    pool: web::Data<PgPool>,
+    user: AuthUser,
+    config: web::Data<AppConfig>,
+    path: web::Path<Uuid>,
+) -> Result<HttpResponse, AppError> {
+    let file_id = path.into_inner();
+
+    let file: Option<FileNode> = sqlx::query_as::<_, FileNode>(
+        "SELECT id, parent_id, owner_id, name, is_folder,
+                size_bytes, mime_type, classification, created_at, updated_at, locked_by, locked_at
+         FROM files WHERE id = $1 AND owner_id = $2 AND deleted_at IS NULL AND is_folder = FALSE",
+    )
+    .bind(file_id)
+    .bind(user.id)
+    .fetch_optional(pool.get_ref())
+    .await
+    .map_err(AppError::Database)?;
+
+    let file = file.ok_or(AppError::NotFound)?;
+
+    let filepath = std::path::Path::new(&config.storage_path).join(file_id.to_string());
+
+    if !filepath.exists() {
+        // Return empty content for files without stored data (folders, etc.)
+        return Ok(HttpResponse::Ok()
+            .insert_header(("Content-Type", "text/plain"))
+            .body(Vec::new()));
+    }
+
+    let data = tokio::fs::read(&filepath).await.map_err(|e| {
+        AppError::Internal(anyhow::anyhow!("Failed to read file: {}", e))
+    })?;
+
+    let mime = file.mime_type.as_deref().unwrap_or("application/octet-stream");
+
+    Ok(HttpResponse::Ok()
+        .insert_header(("Content-Type", mime.to_string()))
+        .insert_header(("Content-Length", data.len().to_string()))
+        .insert_header(("Cache-Control", "private, max-age=300"))
+        .body(data))
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -339,7 +817,7 @@ pub async fn delete_file(
 /// Fire-and-forget append to `audit_logs`.
 /// Errors are logged but NEVER bubble up — we must not fail the primary
 /// request due to an audit write failure.
-async fn write_audit_log(
+pub(crate) async fn write_audit_log_internal(
     pool: &PgPool,
     user_id: Uuid,
     action: &str,
@@ -517,7 +995,7 @@ pub async fn upload_file(
             (id, parent_id, owner_id, name, is_folder, size_bytes, mime_type, classification)
          VALUES ($1, $2, $3, $4, FALSE, $5, $6, $7)
          RETURNING id, parent_id, owner_id, name, is_folder,
-                   size_bytes, mime_type, classification, created_at, updated_at",
+                   size_bytes, mime_type, classification, created_at, updated_at, locked_by, locked_at",
     )
     .bind(generated_uuid)
     .bind(parent_id)
@@ -541,7 +1019,7 @@ pub async fn upload_file(
     // ── Audit log ─────────────────────────────────────────────────────────────
     let ip = req.peer_addr().map(|a| a.to_string()).unwrap_or_default();
 
-    let _ = write_audit_log(
+    let _ = write_audit_log_internal(
         pool.get_ref(),
         user.id,
         "UPLOAD_FILE",

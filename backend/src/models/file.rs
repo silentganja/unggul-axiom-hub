@@ -19,6 +19,8 @@ pub struct FileNode {
     pub classification: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub locked_by: Option<Uuid>,
+    pub locked_at: Option<DateTime<Utc>>,
 }
 
 // ─── Request Payloads ────────────────────────────────────────────────────────
@@ -31,6 +33,27 @@ pub struct FileNode {
 pub struct ListFilesQuery {
     #[serde(alias = "parent_id")]
     pub parent_id: Option<Uuid>,
+    /// Full-text search on file name.
+    pub q: Option<String>,
+    /// Page number (1-based, default 1).
+    pub page: Option<u32>,
+    /// Items per page (default 50, max 200).
+    pub per_page: Option<u32>,
+    /// Sort column: "name", "size", "classification", "updated".
+    pub sort: Option<String>,
+    /// Sort order: "asc" or "desc" (default "asc").
+    pub order: Option<String>,
+}
+
+/// Paginated response wrapper.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileListResponse {
+    pub files: Vec<FileNode>,
+    pub total: i64,
+    pub page: u32,
+    pub per_page: u32,
+    pub total_pages: u32,
 }
 
 /// Body for `POST /api/files/folder`.

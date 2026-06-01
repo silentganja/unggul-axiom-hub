@@ -25,6 +25,37 @@ pub struct UserProfile {
     pub created_at: DateTime<Utc>,
 }
 
+// ── Role hierarchy ──────────────────────────────────────────────────────────
+
+/// Returns the numeric authority level for a role (higher = more authority).
+pub fn role_level(role: &str) -> u8 {
+    match role {
+        "chief" => 4,
+        "director" => 3,
+        "officer" => 2,
+        "staff" => 1,
+        _ => 0,
+    }
+}
+
+/// Whether this role can approve governance requests.
+pub fn can_govern(role: &str) -> bool {
+    role_level(role) >= 2 // officer+
+}
+
+/// Whether this role can approve classification changes and lock overrides.
+pub fn can_govern_classified(role: &str) -> bool {
+    role_level(role) >= 3 // director+
+}
+
+/// Whether this role can manage users.
+pub fn can_manage_users(role: &str) -> bool {
+    role_level(role) >= 3 // director+
+}
+
+/// All valid roles (4-tier hierarchy).
+pub const VALID_ROLES: &[&str] = &["chief", "director", "officer", "staff"];
+
 impl From<User> for UserProfile {
     fn from(u: User) -> Self {
         UserProfile {

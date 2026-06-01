@@ -1,4 +1,4 @@
-use crate::{app_middleware::auth::AuthUser, errors::AppError};
+use crate::{app_middleware::auth::AuthUser, errors::AppError, models::user};
 use actix_web::{web, HttpResponse};
 use chrono::{DateTime, Utc};
 use serde::Serialize;
@@ -30,9 +30,9 @@ pub async fn list_audit_logs(
     pool: web::Data<PgPool>,
     user: AuthUser,
 ) -> Result<HttpResponse, AppError> {
-    let is_admin = user.role == "admin";
+    let can_see_all = user::can_govern(&user.role); // officer+ see all logs
 
-    let entries: Vec<AuditLogEntry> = if is_admin {
+    let entries: Vec<AuditLogEntry> = if can_see_all {
         sqlx::query_as::<_, AuditLogEntry>(
             "SELECT id, user_id, action, target_resource, ip_address, created_at
              FROM audit_logs

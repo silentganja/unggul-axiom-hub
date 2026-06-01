@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash VARCHAR(512) NOT NULL,
     full_name     VARCHAR(255) NOT NULL,
     role          VARCHAR(16)  NOT NULL DEFAULT 'staff'
-                               CHECK (role IN ('admin', 'staff')),
+                               CHECK (role IN ('chief', 'director', 'officer', 'staff')),
     created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
 
@@ -47,11 +47,15 @@ CREATE TABLE IF NOT EXISTS files (
     classification VARCHAR(16)  NOT NULL DEFAULT 'TERBUKA'
                                 CHECK (classification IN ('RAHSIA', 'SULIT', 'TERHAD', 'TERBUKA')),
     created_at     TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-    updated_at     TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+    updated_at     TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    deleted_at     TIMESTAMPTZ,
+    locked_by      UUID         REFERENCES users (id),
+    locked_at      TIMESTAMPTZ
 );
 
-CREATE INDEX IF NOT EXISTS idx_files_parent_id ON files (parent_id);
-CREATE INDEX IF NOT EXISTS idx_files_owner_id  ON files (owner_id);
+CREATE INDEX IF NOT EXISTS idx_files_parent_id  ON files (parent_id);
+CREATE INDEX IF NOT EXISTS idx_files_owner_id   ON files (owner_id);
+CREATE INDEX IF NOT EXISTS idx_files_deleted_at ON files (deleted_at);
 
 -- Auto-update updated_at on modification
 CREATE OR REPLACE FUNCTION touch_updated_at()
@@ -81,9 +85,51 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id    ON audit_logs (user_id);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs (created_at DESC);
 
+-- ── Governance Requests ───────────────────────────────────────
+CREATE TABLE IF NOT EXISTS governance_requests (
+    id              UUID         PRIMARY KEY DEFAULT uuid_generate_v4(),
+    type            VARCHAR(32)  NOT NULL CHECK (type IN (
+                        'FILE_LOCK', 'FILE_UNLOCK',
+                        'CLASSIFICATION_UPGRADE', 'CLASSIFICATION_DOWNGRADE'
+                    )),
+    title           VARCHAR(255) NOT NULL,
+    description     TEXT,
+    status          VARCHAR(16)  NOT NULL DEFAULT 'PENDING'
+                                 CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED')),
+    requested_by    UUID         NOT NULL REFERENCES users (id),
+    reviewed_by     UUID         REFERENCES users (id),
+    target_file_id  UUID         REFERENCES files (id) ON DELETE SET NULL,
+    metadata        JSONB,
+    created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_gov_requests_status ON governance_requests (status);
+CREATE INDEX IF NOT EXISTS idx_gov_requests_file   ON governance_requests (target_file_id);
+
+-- ── File Shares ───────────────────────────────────────────────
+-- Tracks which users have been granted access to files owned by
+-- other users. Supports viewer/editor roles.
+CREATE TABLE IF NOT EXISTS file_shares (
+    id          UUID         PRIMARY KEY DEFAULT uuid_generate_v4(),
+    file_id     UUID         NOT NULL REFERENCES files (id) ON DELETE CASCADE,
+    user_id     UUID         NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    role        VARCHAR(16)  NOT NULL DEFAULT 'viewer'
+                             CHECK (role IN ('owner', 'editor', 'viewer')),
+    shared_by   UUID         NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    UNIQUE (file_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_file_shares_file_id ON file_shares (file_id);
+CREATE INDEX IF NOT EXISTS idx_file_shares_user_id ON file_shares (user_id);
+
 -- ── Migration records ─────────────────────────────────────────
 INSERT INTO _migrations (version, description)
 VALUES
     ('0001', 'Phase 1: Initial schema — extensions and migration table'),
-    ('0002', 'Phase 7: Core schema — users, files, audit_logs')
+    ('0002', 'Phase 7: Core schema — users, files, audit_logs'),
+    ('0003', 'Phase 10: File sharing — file_shares table'),
+    ('0004', 'Soft-delete support — deleted_at column on files'),
+    ('0005', 'Governance workflow — approval requests + file locking')
 ON CONFLICT (version) DO NOTHING;

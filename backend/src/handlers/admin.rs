@@ -1,7 +1,7 @@
 use crate::{
     app_middleware::admin::AdminUser,
     errors::AppError,
-    models::user::{User, UserProfile},
+    models::user::{self, User, UserProfile},
     utils::{jwt, password},
 };
 use actix_web::{web, HttpResponse};
@@ -101,9 +101,9 @@ pub async fn create_user(
         ));
     }
 
-    if role != "admin" && role != "staff" {
+    if !user::VALID_ROLES.contains(&role.as_str()) {
         return Err(AppError::BadRequest(
-            "role must be 'admin' or 'staff'".into(),
+            format!("role must be one of: {}", user::VALID_ROLES.join(", ")),
         ));
     }
 
@@ -177,9 +177,9 @@ pub async fn update_user(
         .map(|s| s.trim().to_string())
         .unwrap_or(existing.role);
 
-    if new_role != "admin" && new_role != "staff" {
+    if !user::VALID_ROLES.contains(&new_role.as_str()) {
         return Err(AppError::BadRequest(
-            "role must be 'admin' or 'staff'".into(),
+            format!("role must be one of: {}", user::VALID_ROLES.join(", ")),
         ));
     }
 
@@ -227,24 +227,27 @@ pub async fn delete_user(
 ) -> Result<HttpResponse, AppError> {
     let user_id = path.into_inner();
 
-    // Prevent admin from deleting themselves... well, the admin isn't a DB user,
-    // but prevent deleting the last admin user as a safety guard.
-    let admin_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM users WHERE role = 'admin'")
-        .fetch_one(pool.get_ref())
-        .await
-        .map_err(AppError::Database)?;
-
-    // Check if the target user is an admin and is the last one
+    // Prevent deleting the last chief/director
     let target_role: Option<String> = sqlx::query_scalar("SELECT role FROM users WHERE id = $1")
         .bind(user_id)
         .fetch_optional(pool.get_ref())
         .await
         .map_err(AppError::Database)?;
 
-    if target_role.as_deref() == Some("admin") && admin_count <= 1 {
-        return Err(AppError::Conflict(
-            "Cannot delete the last admin user".into(),
-        ));
+    if let Some(ref role) = target_role {
+        if user::role_level(role) >= 3 {
+            let high_count: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM users WHERE role IN ('chief', 'director')",
+            )
+            .fetch_one(pool.get_ref())
+            .await
+            .map_err(AppError::Database)?;
+            if high_count <= 1 {
+                return Err(AppError::Conflict(
+                    "Cannot delete the last chief/director user".into(),
+                ));
+            }
+        }
     }
 
     let deleted = sqlx::query("DELETE FROM users WHERE id = $1")

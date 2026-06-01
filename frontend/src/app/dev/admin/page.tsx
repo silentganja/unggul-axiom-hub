@@ -11,8 +11,6 @@ import {
   UserPlus,
   Trash2,
   Edit2,
-  ShieldCheck,
-  UserCog,
   Search,
   LogOut,
   Lock,
@@ -317,7 +315,9 @@ function AdminDashboardView() {
       u.role.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const adminCount = users.filter((u) => u.role === "admin").length;
+  const chiefCount = users.filter((u) => u.role === "chief").length;
+  const directorCount = users.filter((u) => u.role === "director").length;
+  const officerCount = users.filter((u) => u.role === "officer").length;
   const staffCount = users.filter((u) => u.role === "staff").length;
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -360,32 +360,28 @@ function AdminDashboardView() {
         </header>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="border border-border/30 rounded-sm bg-background-panel/35 backdrop-blur-sm p-4">
-            <span className="font-mono text-[8px] font-bold uppercase tracking-widest text-foreground-subtle">
-              Total Users
-            </span>
-            <div className="text-2xl font-bold font-mono tracking-tight text-foreground mt-1">
-              {users.length}
-            </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="border border-border/30 rounded-sm bg-background-panel/35 backdrop-blur-sm p-3">
+            <span className="font-mono text-[8px] font-bold uppercase tracking-widest text-foreground-subtle">Total</span>
+            <div className="text-xl font-bold font-mono text-foreground mt-0.5">{users.length}</div>
           </div>
-          <div className="border border-border/30 rounded-sm bg-background-panel/35 backdrop-blur-sm p-4">
-            <span className="font-mono text-[8px] font-bold uppercase tracking-widest text-foreground-subtle">
-              Administrators
-            </span>
-            <div className="text-2xl font-bold font-mono tracking-tight text-accent mt-1 flex items-center gap-2">
-              {adminCount}
-              <ShieldCheck size={16} className="text-accent/60" />
-            </div>
+          <div className="border border-border/30 rounded-sm bg-background-panel/35 backdrop-blur-sm p-3">
+            <span className="font-mono text-[8px] font-bold uppercase tracking-widest text-accent">Chief</span>
+            <div className="text-xl font-bold font-mono text-accent mt-0.5">{chiefCount}</div>
           </div>
-          <div className="border border-border/30 rounded-sm bg-background-panel/35 backdrop-blur-sm p-4">
-            <span className="font-mono text-[8px] font-bold uppercase tracking-widest text-foreground-subtle">
-              Staff Members
-            </span>
-            <div className="text-2xl font-bold font-mono tracking-tight text-info mt-1 flex items-center gap-2">
-              {staffCount}
-              <UserCog size={16} className="text-info/60" />
-            </div>
+          <div className="border border-border/30 rounded-sm bg-background-panel/35 backdrop-blur-sm p-3">
+            <span className="font-mono text-[8px] font-bold uppercase tracking-widest text-accent/80">Directors</span>
+            <div className="text-xl font-bold font-mono text-accent/80 mt-0.5">{directorCount}</div>
+          </div>
+          <div className="border border-border/30 rounded-sm bg-background-panel/35 backdrop-blur-sm p-3">
+            <span className="font-mono text-[8px] font-bold uppercase tracking-widest text-info">Officers</span>
+            <div className="text-xl font-bold font-mono text-info mt-0.5">{officerCount}</div>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-1 gap-3 -mt-2">
+          <div className="border border-border/30 rounded-sm bg-background-panel/35 backdrop-blur-sm p-3 flex items-center justify-between">
+            <span className="font-mono text-[8px] font-bold uppercase tracking-widest text-foreground-subtle">Staff Members</span>
+            <div className="text-lg font-bold font-mono text-foreground-muted">{staffCount}</div>
           </div>
         </div>
 
@@ -478,9 +474,13 @@ function AdminDashboardView() {
                         <span
                           className={cn(
                             "inline-block px-1.5 py-0.5 rounded-sm text-[8px] font-bold tracking-wider uppercase border",
-                            user.role === "admin"
-                              ? "bg-accent/10 text-accent border-accent/20"
-                              : "bg-info/10 text-info border-info/20"
+                            user.role === "chief"
+                              ? "bg-accent/15 text-accent border-accent/30"
+                              : user.role === "director"
+                                ? "bg-accent/10 text-accent border-accent/20"
+                                : user.role === "officer"
+                                  ? "bg-info/10 text-info border-info/20"
+                                  : "bg-background-muted/40 text-foreground-subtle border-border/40"
                           )}
                         >
                           {user.role}
@@ -598,7 +598,9 @@ function AdminDashboardView() {
                   className="h-8 w-full px-2 rounded-sm border border-border bg-background text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent"
                 >
                   <option value="staff">Staff</option>
-                  <option value="admin">Admin</option>
+                  <option value="officer">Officer</option>
+                  <option value="director">Director</option>
+                  <option value="chief">Chief</option>
                 </select>
               </div>
               <div className="flex items-center justify-end gap-2 text-[10px] font-bold font-mono pt-2">
@@ -664,7 +666,9 @@ function AdminDashboardView() {
                   className="h-8 w-full px-2 rounded-sm border border-border bg-background text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent"
                 >
                   <option value="staff">Staff</option>
-                  <option value="admin">Admin</option>
+                  <option value="officer">Officer</option>
+                  <option value="director">Director</option>
+                  <option value="chief">Chief</option>
                 </select>
               </div>
               <div>

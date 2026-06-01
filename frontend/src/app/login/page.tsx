@@ -3,9 +3,10 @@
 import { useState, useId, Suspense, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { Eye, EyeOff, Shield, AlertCircle, Loader2, Fingerprint, Key, Lock } from "lucide-react";
+import { Eye, EyeOff, Shield, AlertCircle, Loader2, Fingerprint, Key, Lock, CheckCircle } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { useAuthStore } from "@/store/useAuthStore";
+import { authApi, webauthnApi } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const VALID_PORTALS = new Set(["foundation", "chief"]);
@@ -24,11 +25,22 @@ function LoginForm() {
   const { login, isLoading: authLoading, error: authError, isAuthenticated } = useAuthStore();
 
   // Block direct /login access — users must select a portal from the landing page first.
+  // Exception: magic links and password resets are allowed without portal
+  const magicLinkUrlToken = searchParams?.get("magic");
+  const resetToken = searchParams?.get("reset");
+
   useEffect(() => {
+    if (magicLinkUrlToken) {
+      authApi.verifyMagicLink(magicLinkUrlToken).then((res) => {
+        localStorage.setItem("auth-token", res.token);
+        router.replace("/dashboard");
+      }).catch(() => {});
+      return;
+    }
     if (!portal || !VALID_PORTALS.has(portal)) {
       router.replace("/");
     }
-  }, [portal, router]);
+  }, [portal, router, magicLinkUrlToken]);
 
   // Redirect to dashboard if already authenticated
   useEffect(() => {
@@ -37,8 +49,15 @@ function LoginForm() {
     }
   }, [isAuthenticated, router]);
 
+  const [localError, setLocalError] = useState<string | null>(null);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLocalError(null);
+    if (!email.trim() || !password) {
+      setLocalError("Email and password are required.");
+      return;
+    }
     try {
       await login(email, password);
       router.push("/dashboard");
@@ -47,7 +66,140 @@ function LoginForm() {
     }
   };
 
+  // ── Forgot password modal ───────────────────────────────────────────────
+  const [showForgot, setShowForgot] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotDone, setForgotDone] = useState(false);
+  const [forgotToken, setForgotToken] = useState("");
+
+  const handleForgot = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setForgotLoading(true);
+    try {
+      const res = await authApi.forgotPassword(forgotEmail);
+      setForgotToken(res.token || "");
+      setForgotDone(true);
+    } catch {
+      setForgotDone(true); // Don't reveal if email exists
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
+  // ── Magic link (SSO Vault) modal ────────────────────────────────────────
+  const [showMagicLink, setShowMagicLink] = useState(false);
+  const [magicEmail, setMagicEmail] = useState("");
+  const [magicLoading, setMagicLoading] = useState(false);
+  const [magicDone, setMagicDone] = useState(false);
+  const [magicToken, setMagicToken] = useState("");
+
+  const handleMagicLink = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setMagicLoading(true);
+    try {
+      const res = await authApi.requestMagicLink(magicEmail);
+      setMagicToken(res.token || "");
+      setMagicDone(true);
+    } catch {
+      setMagicDone(true);
+    } finally {
+      setMagicLoading(false);
+    }
+  };
+
+  // ── Passkey login ───────────────────────────────────────────────────────
+  const [passkeyLoading, setPasskeyLoading] = useState(false);
+
+  // ── Reset password (when ?reset=TOKEN is in the URL) ────────────────────
+  const [resetNewPass, setResetNewPass] = useState("");
+  const [resetConfirm, setResetConfirm] = useState("");
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetDone, setResetDone] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setResetError(null);
+    if (resetNewPass.length < 6) {
+      setResetError("Password must be at least 6 characters.");
+      return;
+    }
+    if (resetNewPass !== resetConfirm) {
+      setResetError("Passwords do not match.");
+      return;
+    }
+    setResetLoading(true);
+    try {
+      await authApi.resetPassword(resetToken!, resetNewPass);
+      setResetDone(true);
+    } catch (err) {
+      setResetError(err instanceof Error ? err.message : "Reset failed");
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
+  const handlePasskeyLogin = async () => {
+    setPasskeyLoading(true);
+    try {
+      const { token } = await webauthnApi.startLogin();
+      localStorage.setItem("auth-token", token);
+      router.push("/dashboard");
+    } catch {
+      // Passkey not registered or user cancelled
+    } finally {
+      setPasskeyLoading(false);
+    }
+  };
+
   const isChiefPortal = portal === "chief" || portal === "foundation";
+
+  // ── Reset password view (when ?reset=TOKEN) ────────────────────────────
+  if (resetToken) {
+    return (
+      <div className="relative min-h-dvh flex items-center justify-center bg-background p-6">
+        <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
+          <div className="absolute -top-[15%] -left-[10%] w-[55%] h-[55%] rounded-full bg-accent/8 blur-[130px]" />
+        </div>
+        <div className="relative z-10 w-full max-w-[360px] space-y-6">
+          <div className="text-center space-y-2">
+            <Shield size={24} className="mx-auto text-accent" />
+            <h1 className="text-lg font-bold tracking-tight text-foreground font-serif">Reset Password</h1>
+            <p className="text-xs text-foreground-subtle font-mono">Enter your new password below.</p>
+          </div>
+          {resetDone ? (
+            <div className="glass-premium rounded-lg p-6 text-center space-y-4">
+              <CheckCircle size={24} className="mx-auto text-success" />
+              <p className="text-xs text-foreground font-mono">Password reset successfully!</p>
+              <Link href="/login?portal=foundation" className="btn-shimmer h-9 px-5 rounded-sm font-mono text-[11px] font-bold uppercase tracking-wider inline-flex items-center gap-2 text-accent-foreground">Sign In</Link>
+            </div>
+          ) : (
+            <div className="glass-premium rounded-lg p-6 space-y-4">
+              {resetError && (
+                <div className="flex items-start gap-2 rounded border border-destructive/30 bg-destructive/5 px-3.5 py-2.5 text-xs text-destructive">
+                  <AlertCircle size={14} className="mt-0.5 shrink-0" /><span>{resetError}</span>
+                </div>
+              )}
+              <form onSubmit={handleResetPassword} className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-[9px] font-semibold text-foreground-subtle font-mono uppercase tracking-wider block">New Password</label>
+                  <input type="password" required placeholder="Min 6 characters" value={resetNewPass} onChange={(e) => setResetNewPass(e.target.value)} className="h-10 w-full rounded border border-input-border bg-input-bg px-3.5 font-sans text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-accent" />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[9px] font-semibold text-foreground-subtle font-mono uppercase tracking-wider block">Confirm Password</label>
+                  <input type="password" required placeholder="••••••••" value={resetConfirm} onChange={(e) => setResetConfirm(e.target.value)} className="h-10 w-full rounded border border-input-border bg-input-bg px-3.5 font-sans text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-accent" />
+                </div>
+                <button type="submit" disabled={resetLoading} className="w-full h-10 rounded bg-accent text-accent-foreground font-mono text-[10px] font-semibold tracking-[0.2em] uppercase transition-all duration-300 hover:bg-accent-hover shadow-sm disabled:opacity-60 flex items-center justify-center gap-2 cursor-pointer">
+                  {resetLoading ? <Loader2 size={13} className="animate-spin" /> : "Reset Password"}
+                </button>
+              </form>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="relative min-h-dvh flex flex-col lg:grid lg:grid-cols-12 bg-background overflow-hidden selection:bg-accent selection:text-accent-foreground">
@@ -182,13 +334,13 @@ function LoginForm() {
               )}
 
               {/* Error display system */}
-              {authError && (
+              {(localError || authError) && (
                 <div
                   role="alert"
                   className="mb-4 flex items-start gap-2 rounded border border-destructive/30 bg-destructive/5 px-3.5 py-2.5 text-xs text-destructive transition-all animate-in fade-in duration-200"
                 >
                   <AlertCircle size={14} className="mt-0.5 shrink-0 text-destructive" />
-                  <span className="leading-relaxed">{authError}</span>
+                  <span className="leading-relaxed">{localError || authError}</span>
                 </div>
               )}
 
@@ -233,12 +385,13 @@ function LoginForm() {
                     >
                       Password
                     </label>
-                    <a
-                      href="#"
-                      className="text-[9px] font-semibold text-foreground-subtle transition-colors hover:text-accent font-mono uppercase tracking-wider"
+                    <button
+                      type="button"
+                      onClick={() => setShowForgot(true)}
+                      className="text-[9px] font-semibold text-foreground-subtle transition-colors hover:text-accent font-mono uppercase tracking-wider cursor-pointer"
                     >
                       Forgot?
-                    </a>
+                    </button>
                   </div>
                   <div className="premium-input-wrapper relative">
                     <input
@@ -318,13 +471,16 @@ function LoginForm() {
             <div className="grid grid-cols-2 gap-3">
               <button
                 type="button"
-                className="flex items-center justify-center gap-2 h-9 rounded border border-border/20 bg-background-panel hover:bg-background-subtle text-[9px] font-semibold font-mono text-foreground-subtle uppercase tracking-wider transition-all duration-150 shadow-sm cursor-pointer"
+                onClick={handlePasskeyLogin}
+                disabled={passkeyLoading}
+                className="flex items-center justify-center gap-2 h-9 rounded border border-border/20 bg-background-panel hover:bg-background-subtle text-[9px] font-semibold font-mono text-foreground-subtle uppercase tracking-wider transition-all duration-150 shadow-sm cursor-pointer disabled:opacity-50"
               >
-                <Fingerprint size={12} className="text-accent" />
+                {passkeyLoading ? <Loader2 size={12} className="animate-spin text-accent" /> : <Fingerprint size={12} className="text-accent" />}
                 <span>Passkey</span>
               </button>
               <button
                 type="button"
+                onClick={() => setShowMagicLink(true)}
                 className="flex items-center justify-center gap-2 h-9 rounded border border-border/20 bg-background-panel hover:bg-background-subtle text-[9px] font-semibold font-mono text-foreground-subtle uppercase tracking-wider transition-all duration-150 shadow-sm cursor-pointer"
               >
                 <Key size={12} className="text-accent" />
@@ -351,6 +507,82 @@ function LoginForm() {
             Usage is subject to system monitoring. Unauthorized attempts are tracked.
           </p>
         </div>
+
+        {/* ── Forgot Password Modal ── */}
+        {showForgot && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/60 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="w-full max-w-sm rounded-sm border border-border/80 bg-background-panel shadow-none p-5 space-y-4">
+              {forgotDone ? (
+                <div className="space-y-4 text-center">
+                  <CheckCircle size={24} className="mx-auto text-success" />
+                  <div className="space-y-1">
+                    <h3 className="text-sm font-semibold text-foreground font-serif">Reset Token Generated</h3>
+                    <p className="text-[10px] text-foreground-subtle font-mono">Use this token to reset your password:</p>
+                    {forgotToken ? (
+                      <p className="text-[10px] font-mono text-accent break-all bg-background/50 p-2 rounded border border-border/20 mt-2 select-all">{forgotToken}</p>
+                    ) : (
+                      <p className="text-[10px] text-foreground-subtle font-mono">If an account with that email exists, a reset link has been generated. Contact your administrator to complete the reset.</p>
+                    )}
+                  </div>
+                  <button onClick={() => { setShowForgot(false); setForgotDone(false); setForgotEmail(""); setForgotToken(""); }} className="h-8 px-4 rounded-sm border border-border bg-background hover:bg-background-subtle/50 text-[10px] font-bold font-mono uppercase transition-colors cursor-pointer">Close</button>
+                </div>
+              ) : (
+                <>
+                  <div className="space-y-1">
+                    <h3 className="text-sm font-semibold text-foreground font-serif">Reset Password</h3>
+                    <p className="text-[10px] text-foreground-subtle font-mono">Enter your email to receive a password reset token.</p>
+                  </div>
+                  <form onSubmit={handleForgot} className="space-y-3">
+                    <input type="email" required placeholder="user@unggul.axiom" value={forgotEmail} onChange={(e) => setForgotEmail(e.target.value)} className="h-9 w-full px-3 rounded-sm border border-input-border bg-input-bg text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-accent" />
+                    <div className="flex items-center justify-end gap-2 text-[10px] font-bold font-mono">
+                      <button type="button" onClick={() => setShowForgot(false)} className="h-8 px-3 rounded-sm border border-transparent bg-transparent text-foreground-subtle hover:text-foreground hover:bg-background-subtle/50 transition-colors">Cancel</button>
+                      <button type="submit" disabled={forgotLoading} className="btn-shimmer h-8 px-4 rounded-sm font-mono text-[11px] font-bold uppercase tracking-wider text-accent-foreground disabled:opacity-50">{forgotLoading ? <Loader2 size={12} className="animate-spin" /> : "Send Token"}</button>
+                    </div>
+                  </form>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── Magic Link (SSO Vault) Modal ── */}
+        {showMagicLink && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/60 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="w-full max-w-sm rounded-sm border border-border/80 bg-background-panel shadow-none p-5 space-y-4">
+              {magicDone ? (
+                <div className="space-y-4 text-center">
+                  <CheckCircle size={24} className="mx-auto text-success" />
+                  <div className="space-y-1">
+                    <h3 className="text-sm font-semibold text-foreground font-serif">Magic Link Generated</h3>
+                    <p className="text-[10px] text-foreground-subtle font-mono">Use this one-time login link:</p>
+                    {magicToken ? (
+                      <p className="text-[10px] font-mono text-accent break-all bg-background/50 p-2 rounded border border-border/20 mt-2 select-all">
+                        {typeof window !== "undefined" ? `${window.location.origin}/login?magic=${magicToken}` : `/login?magic=${magicToken}`}
+                      </p>
+                    ) : (
+                      <p className="text-[10px] text-foreground-subtle font-mono">If an account with that email exists, a login link has been generated.</p>
+                    )}
+                  </div>
+                  <button onClick={() => { setShowMagicLink(false); setMagicDone(false); setMagicEmail(""); setMagicToken(""); }} className="h-8 px-4 rounded-sm border border-border bg-background hover:bg-background-subtle/50 text-[10px] font-bold font-mono uppercase transition-colors cursor-pointer">Close</button>
+                </div>
+              ) : (
+                <>
+                  <div className="space-y-1">
+                    <h3 className="text-sm font-semibold text-foreground font-serif">SSO Vault — Magic Link</h3>
+                    <p className="text-[10px] text-foreground-subtle font-mono">Enter your email to receive a one-time secure login link.</p>
+                  </div>
+                  <form onSubmit={handleMagicLink} className="space-y-3">
+                    <input type="email" required placeholder="user@unggul.axiom" value={magicEmail} onChange={(e) => setMagicEmail(e.target.value)} className="h-9 w-full px-3 rounded-sm border border-input-border bg-input-bg text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-accent" />
+                    <div className="flex items-center justify-end gap-2 text-[10px] font-bold font-mono">
+                      <button type="button" onClick={() => setShowMagicLink(false)} className="h-8 px-3 rounded-sm border border-transparent bg-transparent text-foreground-subtle hover:text-foreground hover:bg-background-subtle/50 transition-colors">Cancel</button>
+                      <button type="submit" disabled={magicLoading} className="btn-shimmer h-8 px-4 rounded-sm font-mono text-[11px] font-bold uppercase tracking-wider text-accent-foreground disabled:opacity-50">{magicLoading ? <Loader2 size={12} className="animate-spin" /> : "Send Link"}</button>
+                    </div>
+                  </form>
+                </>
+              )}
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );

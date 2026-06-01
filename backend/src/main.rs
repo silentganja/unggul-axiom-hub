@@ -165,7 +165,58 @@ async fn main() -> std::io::Result<()> {
             .service(
                 web::scope("/api/auth")
                     .route("/login", web::post().to(handlers::auth::login))
-                    .route("/me", web::get().to(handlers::auth::me)),
+                    .route("/me", web::get().to(handlers::auth::me))
+                    .route("/profile", web::put().to(handlers::auth::update_profile))
+                    .route(
+                        "/forgot-password",
+                        web::post().to(handlers::auth_extras::forgot_password),
+                    )
+                    .route(
+                        "/reset-password",
+                        web::post().to(handlers::auth_extras::reset_password),
+                    )
+                    .route(
+                        "/magic-link",
+                        web::post().to(handlers::auth_extras::request_magic_link),
+                    )
+                    .route(
+                        "/magic-link",
+                        web::get().to(handlers::auth_extras::verify_magic_link),
+                    )
+                    .route(
+                        "/webauthn/register/begin",
+                        web::get().to(handlers::auth_extras::webauthn_register_begin),
+                    )
+                    .route(
+                        "/webauthn/register/complete",
+                        web::post().to(handlers::auth_extras::webauthn_register_complete),
+                    )
+                    .route(
+                        "/webauthn/login/begin",
+                        web::get().to(handlers::auth_extras::webauthn_login_begin),
+                    )
+                    .route(
+                        "/webauthn/login/complete",
+                        web::post().to(handlers::auth_extras::webauthn_login_complete),
+                    ),
+            )
+            // /api/governance  — approval workflow (submit: any user, approve/reject: admin)
+            .service(
+                web::scope("/api/governance")
+                    .route("/requests", web::post().to(handlers::governance::create_request))
+                    .route("/requests", web::get().to(handlers::governance::list_requests))
+                    .route(
+                        "/requests/{id}/approve",
+                        web::post().to(handlers::governance::approve_request),
+                    )
+                    .route(
+                        "/requests/{id}/reject",
+                        web::post().to(handlers::governance::reject_request),
+                    ),
+            )
+            // /api/activity  — activity feed (audit + shares + governance)
+            .service(
+                web::scope("/api/activity").route("", web::get().to(handlers::files::activity_feed)),
             )
             // /api/audit  — all routes require a valid JWT (AuthUser extractor)
             .service(
@@ -176,15 +227,43 @@ async fn main() -> std::io::Result<()> {
                 web::scope("/api/files")
                     // GET  /api/files[?parent_id=uuid]  — list directory contents
                     .route("", web::get().to(handlers::files::list_files))
+                    // GET  /api/files/shared            — list files shared with me
+                    .route("/shared", web::get().to(handlers::shares::list_shared_files))
+                    // GET  /api/files/quota            — storage quota usage
+                    .route("/quota", web::get().to(handlers::files::get_quota))
+                    // GET  /api/files/trash             — list trashed files
+                    .route("/trash", web::get().to(handlers::files::list_trash))
+                    // POST /api/files/move              — bulk move files
+                    .route("/move", web::post().to(handlers::files::move_files))
                     // GET  /api/files/{id}              — get single file detail
                     .route("/{id}", web::get().to(handlers::files::get_file))
                     // POST /api/files/folder             — create a new folder
                     .route("/folder", web::post().to(handlers::files::create_folder))
                     // POST /api/files/upload             — upload a file
                     .route("/upload", web::post().to(handlers::files::upload_file))
+                    // POST /api/files/{id}/share         — share a file with another user
+                    .route("/{id}/share", web::post().to(handlers::shares::share_file))
+                    // GET  /api/files/{id}/shares        — list shares for a file
+                    .route("/{id}/shares", web::get().to(handlers::shares::list_file_shares))
+                    // DELETE /api/files/{id}/share/{uid} — revoke a share
+                    .route(
+                        "/{id}/share/{uid}",
+                        web::delete().to(handlers::shares::remove_share),
+                    )
+                    // GET  /api/files/{id}/content       — raw content for preview
+                    .route("/{id}/content", web::get().to(handlers::files::get_file_content))
+                    // GET  /api/files/{id}/download      — stream download
+                    .route("/{id}/download", web::get().to(handlers::files::download_file))
+                    // POST /api/files/{id}/restore       — restore from trash
+                    .route("/{id}/restore", web::post().to(handlers::files::restore_file))
                     // PUT  /api/files/{id}/rename        — rename a file or folder
                     .route("/{id}/rename", web::put().to(handlers::files::rename_file))
-                    // DELETE /api/files/{id}             — delete a file or folder
+                    // DELETE /api/files/{id}/permanent   — permanently delete trashed file
+                    .route(
+                        "/{id}/permanent",
+                        web::delete().to(handlers::files::permanent_delete),
+                    )
+                    // DELETE /api/files/{id}             — move to trash (soft delete)
                     .route("/{id}", web::delete().to(handlers::files::delete_file)),
             )
     })

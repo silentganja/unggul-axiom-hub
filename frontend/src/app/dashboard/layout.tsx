@@ -22,6 +22,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
+import StorageQuotaWidget from "@/components/features/StorageQuotaWidget";
 import { useFileStore } from "@/store/useFileStore";
 import { useAuthStore } from "@/store/useAuthStore";
 import { cn } from "@/lib/utils";
@@ -63,10 +64,15 @@ export default function DashboardLayout({
 
   // ── Auth guard ────────────────────────────────────────────────────────────
   const { isAuthenticated, isLoading: authLoading, user, hydrate, logout } = useAuthStore();
+  const fetchQuota = useFileStore((state) => state.fetchQuota);
 
   useEffect(() => {
     hydrate();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (isAuthenticated) fetchQuota();
+  }, [isAuthenticated, fetchQuota]);
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -252,25 +258,7 @@ export default function DashboardLayout({
         </div>
 
         {/* ── Storage Quota Widget ── */}
-        <div className="space-y-3 pt-4 border-t border-border/20">
-          <div className="space-y-1">
-            <div className="flex items-center justify-between text-[10px] font-mono text-foreground-subtle">
-              <span>Storage Quota</span>
-              <span className="font-bold text-foreground-muted">45.2 GB / 100 GB</span>
-            </div>
-            <div className="h-1.5 w-full bg-background-subtle rounded-full overflow-hidden border border-border/10">
-              <div
-                className="h-full bg-gradient-to-r from-accent to-accent-hover transition-all duration-500"
-                style={{ width: "45.2%" }}
-              />
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between pt-1 text-[9px] font-mono text-foreground-subtle">
-            <span>Corporate Tier III</span>
-            <span className="text-success">Optimal</span>
-          </div>
-        </div>
+        <StorageQuotaWidget />
       </aside>
 
       {/* ── Right Content Panel (Dynamic Viewport) ── */}
@@ -394,6 +382,7 @@ export default function DashboardLayout({
                     <button
                       onClick={() => {
                         setProfileDropdownOpen(false);
+                        router.push("/dashboard/settings");
                       }}
                       className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-foreground-muted hover:text-foreground hover:bg-background-subtle/50 rounded text-left transition-colors font-mono"
                     >

@@ -1,7 +1,11 @@
 import { create } from "zustand";
 import {
   filesApi,
+  sharesApi,
   BackendFileNode,
+  FileListResponse,
+  SharedFileNode,
+  FileShareEntry,
   formatFileSize,
   formatTimestamp,
 } from "@/lib/api";
@@ -32,6 +36,26 @@ export interface FileNode {
   mimeType?: string | null;
 }
 
+// ── Favorite persistence ─────────────────────────────────────────────────────
+
+const FAVORITES_KEY = "unggul-favorites";
+
+function loadFavorites(): Set<string> {
+  if (typeof window === "undefined") return new Set();
+  try {
+    const raw = localStorage.getItem(FAVORITES_KEY);
+    return raw ? new Set(JSON.parse(raw)) : new Set();
+  } catch {
+    return new Set();
+  }
+}
+
+function saveFavorites(ids: Set<string>): void {
+  localStorage.setItem(FAVORITES_KEY, JSON.stringify([...ids]));
+}
+
+const favoriteIds = loadFavorites();
+
 // ── Transform backend → frontend ─────────────────────────────────────────────
 
 function transformFile(bf: BackendFileNode): FileNode {
@@ -43,11 +67,53 @@ function transformFile(bf: BackendFileNode): FileNode {
     sizeBytes: bf.sizeBytes,
     modifiedAt: formatTimestamp(bf.updatedAt),
     classification: bf.classification,
-    accessRole: "owner", // Backend enforces ownership — all owned files default to owner
-    isFavorite: false,
+    accessRole: "owner",
+    isFavorite: favoriteIds.has(bf.id),
     collaborators: [],
     parentId: bf.parentId,
     mimeType: bf.mimeType,
+    lockedBy: bf.lockedBy ? "Governance Lock" : null,
+    lockReason: bf.lockedBy ? "Approved governance lock" : null,
+  };
+}
+
+function transformTrashFile(bf: BackendFileNode): FileNode {
+  const f = transformFile(bf);
+  f.lockedBy = "Trashed"; // Visual indicator in the table
+  f.lockReason = "In trash";
+  return f;
+}
+
+// ── Transform shared file → frontend ─────────────────────────────────────────
+
+function transformSharedFile(sf: SharedFileNode): FileNode {
+  return {
+    id: sf.id,
+    name: sf.name,
+    type: sf.isFolder ? "folder" : "file",
+    size: sf.isFolder ? "--" : formatFileSize(sf.sizeBytes),
+    sizeBytes: sf.sizeBytes,
+    modifiedAt: formatTimestamp(sf.updatedAt),
+    classification: sf.classification,
+    accessRole: sf.shareRole as "owner" | "editor" | "viewer",
+    isFavorite: false,
+    collaborators: [],
+    parentId: sf.parentId,
+    mimeType: sf.mimeType,
+    // Store share metadata in lockedBy/lockReason fields for display (reuse existing UI)
+    lockedBy: sf.sharedBy.fullName,
+    lockReason: `Shared as ${sf.shareRole}`,
+  };
+}
+
+// ── Transform FileShareEntry → Collaborator ──────────────────────────────────
+
+function transformShareEntry(entry: FileShareEntry): Collaborator {
+  return {
+    id: entry.user.id,
+    name: entry.user.fullName,
+    email: entry.user.email,
+    role: entry.role as "owner" | "editor" | "viewer",
   };
 }
 
@@ -55,6 +121,9 @@ function transformFile(bf: BackendFileNode): FileNode {
 
 interface FileState {
   files: FileNode[];
+  sharedFiles: FileNode[]; // Files shared WITH the current user
+  trashFiles: FileNode[]; // Files in trash
+  fileShares: Collaborator[]; // Shares for the currently active file
   selectedIds: string[];
   searchQuery: string;
   currentFolderId: string | null;
@@ -63,11 +132,40 @@ interface FileState {
   activeView: "overview" | "files" | "shared" | "recent" | "favorites" | "trash" | "governance";
   previewFileId: string | null;
   isLoading: boolean;
+  isLoadingShared: boolean;
+  isLoadingTrash: boolean;
   error: string | null;
+  errorShared: string | null;
+  errorTrash: string | null;
+
+  // ── Pagination & sorting ──────────────────────────────────────────────────
+  page: number;
+  perPage: number;
+  total: number;
+  totalPages: number;
+  sort: string;
+  order: string;
+  setPage: (page: number) => void;
+  setSort: (sort: string) => void;
+  setPerPage: (perPage: number) => void;
+
+  // ── Upload progress ───────────────────────────────────────────────────────
+  uploadProgress: number | null;
+  uploadFileName: string | null;
+
+  // ── Quota ─────────────────────────────────────────────────────────────────
+  quotaUsed: number;
+  quotaTotal: number;
+  quotaFileCount: number;
+  quotaFolderCount: number;
+  fetchQuota: () => Promise<void>;
 
   // ── Data fetching ─────────────────────────────────────────────────────────
   fetchFiles: () => Promise<void>;
+  fetchSharedFiles: () => Promise<void>;
+  fetchTrash: () => Promise<void>;
   fetchFileDetail: (id: string) => Promise<FileNode | null>;
+  fetchFileShares: (fileId: string) => Promise<void>;
 
   // ── UI state ──────────────────────────────────────────────────────────────
   setSearchQuery: (query: string) => void;
@@ -87,6 +185,20 @@ interface FileState {
   renameFile: (id: string, newName: string) => Promise<void>;
   deleteFile: (id: string) => Promise<void>;
   deleteSelected: () => Promise<void>;
+
+  // ── Trash ─────────────────────────────────────────────────────────────────
+  restoreFile: (id: string) => Promise<void>;
+  permanentDelete: (id: string) => Promise<void>;
+
+  // ── Download ──────────────────────────────────────────────────────────────
+  downloadFile: (id: string) => void;
+
+  // ── Bulk move ────────────────────────────────────────────────────────────
+  moveFiles: (fileIds: string[], targetFolderId: string | null) => Promise<void>;
+
+  // ── Sharing ───────────────────────────────────────────────────────────────
+  shareFile: (fileId: string, email: string, role: string) => Promise<void>;
+  removeShare: (fileId: string, userId: string) => Promise<void>;
 
   // ── Client-side extras (backend support pending) ───────────────────────────
   toggleFavorite: (id: string) => void;
@@ -111,6 +223,9 @@ interface FileState {
 
 export const useFileStore = create<FileState>((set, get) => ({
   files: [],
+  sharedFiles: [],
+  trashFiles: [],
+  fileShares: [],
   selectedIds: [],
   searchQuery: "",
   currentFolderId: null,
@@ -119,17 +234,64 @@ export const useFileStore = create<FileState>((set, get) => ({
   activeView: "overview",
   previewFileId: null,
   isLoading: false,
+  isLoadingShared: false,
+  isLoadingTrash: false,
   error: null,
+  errorShared: null,
+  errorTrash: null,
+  page: 1,
+  perPage: 50,
+  total: 0,
+  totalPages: 0,
+  sort: "name",
+  order: "asc",
+  uploadProgress: null,
+  uploadFileName: null,
+  quotaUsed: 0,
+  quotaTotal: 107374182400, // 100 GB default
+  quotaFileCount: 0,
+  quotaFolderCount: 0,
+
+  // ── Pagination / sorting setters ──────────────────────────────────────────
+
+  setPage: (page: number) => {
+    set({ page });
+    get().fetchFiles();
+  },
+
+  setSort: (sort: string) => {
+    const { sort: currentSort, order } = get();
+    const newOrder = sort === currentSort && order === "asc" ? "desc" : "asc";
+    set({ sort, order: newOrder, page: 1 });
+    get().fetchFiles();
+  },
+
+  setPerPage: (perPage: number) => {
+    set({ perPage, page: 1 });
+    get().fetchFiles();
+  },
 
   // ── Data fetching ─────────────────────────────────────────────────────────
 
   fetchFiles: async () => {
-    const { currentFolderId } = get();
+    const { currentFolderId, searchQuery, page, perPage, sort, order } = get();
     set({ isLoading: true, error: null });
     try {
-      const backendFiles = await filesApi.list(currentFolderId);
-      const transformed = backendFiles.map(transformFile);
-      set({ files: transformed, isLoading: false });
+      const res: FileListResponse = await filesApi.list({
+        parentId: currentFolderId,
+        q: searchQuery || undefined,
+        page,
+        perPage,
+        sort,
+        order,
+      });
+      set({
+        files: res.files.map(transformFile),
+        total: res.total,
+        totalPages: res.totalPages,
+        page: res.page,
+        isLoading: false,
+      });
     } catch (err) {
       set({
         isLoading: false,
@@ -142,7 +304,6 @@ export const useFileStore = create<FileState>((set, get) => ({
     try {
       const bf = await filesApi.get(id);
       const tf = transformFile(bf);
-      // Update the file in the local cache if present
       const { files } = get();
       const idx = files.findIndex((f) => f.id === id);
       if (idx >= 0) {
@@ -154,6 +315,72 @@ export const useFileStore = create<FileState>((set, get) => ({
     } catch {
       return null;
     }
+  },
+
+  fetchSharedFiles: async () => {
+    set({ isLoadingShared: true, errorShared: null });
+    try {
+      const shared = await sharesApi.listShared();
+      set({
+        sharedFiles: shared.map(transformSharedFile),
+        isLoadingShared: false,
+      });
+    } catch (err) {
+      set({
+        isLoadingShared: false,
+        errorShared: err instanceof Error ? err.message : "Failed to fetch shared files",
+      });
+    }
+  },
+
+  fetchTrash: async () => {
+    set({ isLoadingTrash: true, errorTrash: null });
+    try {
+      const trashed = await filesApi.listTrash();
+      set({
+        trashFiles: trashed.map(transformTrashFile),
+        isLoadingTrash: false,
+      });
+    } catch (err) {
+      set({
+        isLoadingTrash: false,
+        errorTrash: err instanceof Error ? err.message : "Failed to fetch trash",
+      });
+    }
+  },
+
+  restoreFile: async (id: string) => {
+    await filesApi.restore(id);
+    const { trashFiles } = get();
+    set({ trashFiles: trashFiles.filter((f) => f.id !== id) });
+  },
+
+  permanentDelete: async (id: string) => {
+    await filesApi.permanentDelete(id);
+    const { trashFiles } = get();
+    set({ trashFiles: trashFiles.filter((f) => f.id !== id) });
+  },
+
+  fetchFileShares: async (fileId: string) => {
+    try {
+      const entries = await sharesApi.listFileShares(fileId);
+      set({ fileShares: entries.map(transformShareEntry) });
+    } catch {
+      set({ error: "Failed to load share list" });
+    }
+  },
+
+  shareFile: async (fileId: string, email: string, role: string) => {
+    await sharesApi.shareFile(fileId, { email, role });
+    // Refresh the file's share list
+    const { fetchFileShares } = get();
+    await fetchFileShares(fileId);
+  },
+
+  removeShare: async (fileId: string, userId: string) => {
+    await sharesApi.removeShare(fileId, userId);
+    const { fileShares } = get();
+    set({ fileShares: fileShares.filter((s) => s.id !== userId) });
   },
 
   // ── UI state setters ──────────────────────────────────────────────────────
@@ -209,6 +436,7 @@ export const useFileStore = create<FileState>((set, get) => ({
 
   createFolder: async (name, classification) => {
     const { currentFolderId, fetchFiles } = get();
+    set({ error: null });
     try {
       await filesApi.createFolder({
         name: name.trim(),
@@ -230,11 +458,87 @@ export const useFileStore = create<FileState>((set, get) => ({
     formData.append("classification", classification || "TERBUKA");
     formData.append("file", file);
 
+    set({ uploadProgress: 0, uploadFileName: file.name, error: null });
+
+    await new Promise<void>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+      xhr.open("POST", `${apiBase}/api/files/upload`);
+      xhr.setRequestHeader("Authorization", `Bearer ${localStorage.getItem("auth-token")}`);
+
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) {
+          set({ uploadProgress: Math.round((e.loaded / e.total) * 100) });
+        }
+      };
+
+      xhr.onload = async () => {
+        set({ uploadProgress: null, uploadFileName: null });
+        if (xhr.status >= 200 && xhr.status < 300) {
+          await fetchFiles();
+          resolve();
+        } else {
+          try {
+            const body = JSON.parse(xhr.responseText);
+            reject(new Error(body.error || "Upload failed"));
+          } catch {
+            reject(new Error("Upload failed"));
+          }
+        }
+      };
+
+      xhr.onerror = () => {
+        set({ uploadProgress: null, uploadFileName: null });
+        reject(new Error("Network error during upload"));
+      };
+
+      xhr.send(formData);
+    }).catch((err) => {
+      set({ error: err instanceof Error ? err.message : "Failed to upload file" });
+    });
+  },
+
+  downloadFile: async (id: string) => {
     try {
-      await filesApi.upload(formData);
+      const file = get().files.find((f) => f.id === id);
+      const filename = file?.name || "download";
+      const { data, mimeType } = await filesApi.getContent(id);
+      const blob = new Blob([data], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      set({ error: err instanceof Error ? err.message : "Download failed" });
+    }
+  },
+
+  fetchQuota: async () => {
+    try {
+      const q = await filesApi.getQuota();
+      set({
+        quotaUsed: q.usedBytes,
+        quotaTotal: q.quotaBytes,
+        quotaFileCount: q.fileCount,
+        quotaFolderCount: q.folderCount,
+      });
+    } catch {
+      // Quota is non-critical — silently ignore errors
+    }
+  },
+
+  moveFiles: async (fileIds: string[], targetFolderId: string | null) => {
+    try {
+      await filesApi.moveFiles(fileIds, targetFolderId);
+      const { fetchFiles, clearSelection } = get();
+      clearSelection();
       await fetchFiles();
     } catch (err) {
-      set({ error: err instanceof Error ? err.message : "Failed to upload file" });
+      set({ error: err instanceof Error ? err.message : "Failed to move files" });
     }
   },
 
@@ -284,15 +588,29 @@ export const useFileStore = create<FileState>((set, get) => ({
   // ── Client-side extras (no backend support yet) ───────────────────────────
 
   toggleFavorite: (id) =>
-    set((state) => ({
-      files: state.files.map((f) =>
-        f.id === id ? { ...f, isFavorite: !f.isFavorite } : f
-      ),
-      activeFile:
-        state.activeFile?.id === id
-          ? { ...state.activeFile, isFavorite: !state.activeFile.isFavorite }
-          : state.activeFile,
-    })),
+    set((state) => {
+      const file = state.files.find((f) => f.id === id);
+      const newValue = !file?.isFavorite;
+      // Persist to localStorage
+      if (newValue) {
+        favoriteIds.add(id);
+      } else {
+        favoriteIds.delete(id);
+      }
+      saveFavorites(favoriteIds);
+      return {
+        files: state.files.map((f) =>
+          f.id === id ? { ...f, isFavorite: newValue } : f
+        ),
+        sharedFiles: state.sharedFiles.map((f) =>
+          f.id === id ? { ...f, isFavorite: newValue } : f
+        ),
+        activeFile:
+          state.activeFile?.id === id
+            ? { ...state.activeFile, isFavorite: newValue }
+            : state.activeFile,
+      };
+    }),
 
   updateFileClassification: (id, classification) =>
     set((state) => ({
