@@ -437,7 +437,8 @@ pub async fn toggle_user_active(
 
     // If deactivating, revoke all refresh tokens for this user
     if currently_active {
-        let _ = crate::utils::redis::revoke_user_tokens_async(&redis_client, &user_id.to_string()).await;
+        let _ = crate::utils::redis::revoke_user_tokens_async(&redis_client, &user_id.to_string())
+            .await;
         tracing::info!(user_id = %user_id, "User deactivated — tokens revoked");
     }
 
