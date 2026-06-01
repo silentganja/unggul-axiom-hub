@@ -53,7 +53,7 @@ async fn block_redis<T, F>(
     f: F,
 ) -> Result<T, crate::errors::AppError>
 where
-    T: Send + 'static,
+    T: Send + redis::FromRedisValue + 'static,
     F: FnOnce(&mut redis::Connection) -> redis::RedisResult<T> + Send + 'static,
 {
     let client = client.clone();
