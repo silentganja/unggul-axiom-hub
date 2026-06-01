@@ -371,7 +371,7 @@ pub async fn user_files(
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct AdminResetPasswordRequest {
+pub(crate) struct AdminResetPasswordRequest {
     new_password: String,
 }
 
@@ -480,7 +480,7 @@ pub async fn get_config(
 }
 
 #[derive(Deserialize)]
-struct UpdateConfigRequest {
+pub(crate) struct UpdateConfigRequest {
     key: String,
     value: String,
 }
@@ -528,7 +528,7 @@ pub async fn admin_governance_list(
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct ForceApproveRequest {
+pub(crate) struct ForceApproveRequest {
     reviewer_id: Uuid,
 }
 
@@ -621,7 +621,7 @@ pub async fn storage_breakdown(
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct BulkCreateUser {
+pub(crate) struct BulkCreateUser {
     email: String,
     password: String,
     full_name: String,
@@ -630,7 +630,7 @@ struct BulkCreateUser {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct BulkUsersRequest {
+pub(crate) struct BulkUsersRequest {
     users: Vec<BulkCreateUser>,
 }
 
@@ -670,7 +670,7 @@ pub async fn bulk_create_users(
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct BulkRoleUpdate {
+pub(crate) struct BulkRoleUpdate {
     user_ids: Vec<Uuid>,
     new_role: String,
 }
