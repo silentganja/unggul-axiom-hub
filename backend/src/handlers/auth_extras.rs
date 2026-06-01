@@ -426,8 +426,9 @@ pub async fn webauthn_login_complete(
             .and_then(|v| v["challenge"].as_str().map(|s| s.to_string()));
 
         if let Some(ref chal) = client_challenge {
-            let stored: Option<String> =
-                redis::redis_get_async(&redis_client, &key).await.unwrap_or(None);
+            let stored: Option<String> = redis::redis_get_async(&redis_client, &key)
+                .await
+                .unwrap_or(None);
 
             if stored.as_ref() != Some(chal) {
                 tracing::warn!("WebAuthn login challenge mismatch");
