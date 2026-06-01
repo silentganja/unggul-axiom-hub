@@ -1,8 +1,4 @@
-use crate::{
-    app_middleware::auth::AuthUser,
-    errors::AppError,
-    models::file_version::FileVersion,
-};
+use crate::{app_middleware::auth::AuthUser, errors::AppError, models::file_version::FileVersion};
 use actix_web::{web, HttpResponse};
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -17,14 +13,13 @@ pub async fn list_versions(
     let file_id = path.into_inner();
 
     // Verify user owns the file or has access
-    let owner: Option<Uuid> = sqlx::query_scalar(
-        "SELECT owner_id FROM files WHERE id = $1 AND deleted_at IS NULL",
-    )
-    .bind(file_id)
-    .fetch_optional(pool.get_ref())
-    .await
-    .map_err(AppError::Database)?
-    .ok_or(AppError::NotFound)?;
+    let owner: Option<Uuid> =
+        sqlx::query_scalar("SELECT owner_id FROM files WHERE id = $1 AND deleted_at IS NULL")
+            .bind(file_id)
+            .fetch_optional(pool.get_ref())
+            .await
+            .map_err(AppError::Database)?
+            .ok_or(AppError::NotFound)?;
 
     // Also check shared access
     let has_access = owner == user.id
@@ -67,14 +62,13 @@ pub async fn restore_version(
     let (file_id, version_id) = path.into_inner();
 
     // Verify ownership
-    let owner: Option<Uuid> = sqlx::query_scalar(
-        "SELECT owner_id FROM files WHERE id = $1 AND deleted_at IS NULL",
-    )
-    .bind(file_id)
-    .fetch_optional(pool.get_ref())
-    .await
-    .map_err(AppError::Database)?
-    .ok_or(AppError::NotFound)?;
+    let owner: Option<Uuid> =
+        sqlx::query_scalar("SELECT owner_id FROM files WHERE id = $1 AND deleted_at IS NULL")
+            .bind(file_id)
+            .fetch_optional(pool.get_ref())
+            .await
+            .map_err(AppError::Database)?
+            .ok_or(AppError::NotFound)?;
 
     if owner != user.id {
         return Err(AppError::Unauthorized);
@@ -94,14 +88,13 @@ pub async fn restore_version(
     let version = version.ok_or(AppError::NotFound)?;
 
     // Get current file info
-    let (file_name, current_storage_path): (String, String) = sqlx::query_as(
-        "SELECT name, COALESCE($2 || '/' || id::text, '') FROM files WHERE id = $1",
-    )
-    .bind(file_id)
-    .bind(&config.storage_path)
-    .fetch_one(pool.get_ref())
-    .await
-    .map_err(AppError::Database)?;
+    let (file_name, current_storage_path): (String, String) =
+        sqlx::query_as("SELECT name, COALESCE($2 || '/' || id::text, '') FROM files WHERE id = $1")
+            .bind(file_id)
+            .bind(&config.storage_path)
+            .fetch_one(pool.get_ref())
+            .await
+            .map_err(AppError::Database)?;
 
     // Get next version number
     let next_version: i32 = sqlx::query_scalar(

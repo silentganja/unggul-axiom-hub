@@ -22,13 +22,7 @@ pub enum NotificationEvent {
         locked_by: String,
     },
     #[serde(rename = "file_unlocked")]
-    FileUnlocked {
-        file_id: String,
-        file_name: String,
-    },
+    FileUnlocked { file_id: String, file_name: String },
     #[serde(rename = "file_uploaded")]
-    FileUploaded {
-        file_name: String,
-        size_bytes: i64,
-    },
+    FileUploaded { file_name: String, size_bytes: i64 },
 }

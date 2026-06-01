@@ -80,7 +80,9 @@ where
             .unwrap_or_else(|| "unknown".to_string());
 
         // Get Redis connection from app data
-        let redis_data = req.app_data::<actix_web::web::Data<ConnectionManager>>().cloned();
+        let redis_data = req
+            .app_data::<actix_web::web::Data<ConnectionManager>>()
+            .cloned();
 
         let fut = self.service.call(req);
 
@@ -125,15 +127,9 @@ pub async fn check_login_rate_limit(
     conn: &mut ConnectionManager,
     ip: &str,
 ) -> Result<(), AppError> {
-    let allowed = redis::check_rate_limit(
-        conn,
-        "login",
-        ip,
-        LOGIN_MAX_REQUESTS,
-        LOGIN_WINDOW_SECS,
-    )
-    .await
-    .unwrap_or(true);
+    let allowed = redis::check_rate_limit(conn, "login", ip, LOGIN_MAX_REQUESTS, LOGIN_WINDOW_SECS)
+        .await
+        .unwrap_or(true);
 
     if !allowed {
         tracing::warn!(ip = %ip, "Login rate limit exceeded");

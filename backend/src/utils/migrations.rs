@@ -218,13 +218,12 @@ pub async fn run_migrations(pool: &PgPool) {
 
     for (version, description, statements) in &migrations {
         // Check if this migration was already applied
-        let already_applied: bool = sqlx::query_scalar(
-            "SELECT EXISTS(SELECT 1 FROM _migrations WHERE version = $1)",
-        )
-        .bind(version)
-        .fetch_one(pool)
-        .await
-        .unwrap_or(false);
+        let already_applied: bool =
+            sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM _migrations WHERE version = $1)")
+                .bind(version)
+                .fetch_one(pool)
+                .await
+                .unwrap_or(false);
 
         if already_applied {
             continue;

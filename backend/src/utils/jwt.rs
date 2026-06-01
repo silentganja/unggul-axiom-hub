@@ -81,8 +81,7 @@ pub fn decode_token(token: &str) -> Result<Claims, AppError> {
 pub fn generate_admin_token(username: &str) -> Result<String, AppError> {
     let secret = jwt_secret();
 
-    let exp =
-        (Utc::now() + chrono::Duration::hours(ADMIN_TOKEN_EXPIRY_HOURS)).timestamp() as usize;
+    let exp = (Utc::now() + chrono::Duration::hours(ADMIN_TOKEN_EXPIRY_HOURS)).timestamp() as usize;
 
     let claims = Claims {
         sub: username.to_string(),

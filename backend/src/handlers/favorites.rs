@@ -1,8 +1,4 @@
-use crate::{
-    app_middleware::auth::AuthUser,
-    errors::AppError,
-    models::favorite::FavoriteFile,
-};
+use crate::{app_middleware::auth::AuthUser, errors::AppError, models::favorite::FavoriteFile};
 use actix_web::{web, HttpResponse};
 use serde::Deserialize;
 use sqlx::PgPool;
@@ -68,14 +64,12 @@ pub async fn add_favorite(
         return Err(AppError::NotFound);
     }
 
-    sqlx::query(
-        "INSERT INTO favorites (user_id, file_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
-    )
-    .bind(user.id)
-    .bind(body.file_id)
-    .execute(pool.get_ref())
-    .await
-    .map_err(AppError::Database)?;
+    sqlx::query("INSERT INTO favorites (user_id, file_id) VALUES ($1, $2) ON CONFLICT DO NOTHING")
+        .bind(user.id)
+        .bind(body.file_id)
+        .execute(pool.get_ref())
+        .await
+        .map_err(AppError::Database)?;
 
     Ok(HttpResponse::Ok().json(serde_json::json!({ "status": "favorited" })))
 }

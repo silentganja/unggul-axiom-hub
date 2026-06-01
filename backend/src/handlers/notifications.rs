@@ -1,7 +1,5 @@
 use crate::{
-    app_middleware::auth::AuthUser,
-    errors::AppError,
-    models::notification::NotificationEvent,
+    app_middleware::auth::AuthUser, errors::AppError, models::notification::NotificationEvent,
 };
 use actix_web::{web, HttpResponse};
 use futures_util::StreamExt;
@@ -15,11 +13,10 @@ use tokio_stream::wrappers::BroadcastStream;
 const CHANNEL_CAPACITY: usize = 256;
 
 /// Global broadcast sender — used by handlers to push events.
-static NOTIFICATION_TX: LazyLock<broadcast::Sender<NotificationEvent>> =
-    LazyLock::new(|| {
-        let (tx, _) = broadcast::channel(CHANNEL_CAPACITY);
-        tx
-    });
+static NOTIFICATION_TX: LazyLock<broadcast::Sender<NotificationEvent>> = LazyLock::new(|| {
+    let (tx, _) = broadcast::channel(CHANNEL_CAPACITY);
+    tx
+});
 
 /// Get a sender handle for broadcasting events from handler code.
 pub fn notification_sender() -> broadcast::Sender<NotificationEvent> {
@@ -37,17 +34,13 @@ pub fn emit_notification(event: NotificationEvent) {
 ///
 /// Opens a Server-Sent Events stream. The client receives real-time notifications
 /// for governance updates, share events, file locks/unlocks, and uploads.
-pub async fn stream(
-    _user: AuthUser,
-) -> Result<HttpResponse, AppError> {
+pub async fn stream(_user: AuthUser) -> Result<HttpResponse, AppError> {
     let rx = NOTIFICATION_TX.subscribe();
     let stream = BroadcastStream::new(rx)
         .filter_map(|result| async move { result.ok() })
         .map(|event| {
             let data = serde_json::to_string(&event).unwrap_or_default();
-            Ok::<_, actix_web::Error>(
-                actix_web::web::Bytes::from(format!("data: {}\n\n", data))
-            )
+            Ok::<_, actix_web::Error>(actix_web::web::Bytes::from(format!("data: {}\n\n", data)))
         });
 
     Ok(HttpResponse::Ok()

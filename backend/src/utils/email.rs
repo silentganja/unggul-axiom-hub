@@ -30,8 +30,7 @@ fn smtp_config() -> SmtpConfig {
             .unwrap_or(587),
         username: env::var("SMTP_USERNAME").unwrap_or_default(),
         password: env::var("SMTP_PASSWORD").unwrap_or_default(),
-        from_name: env::var("SMTP_FROM_NAME")
-            .unwrap_or_else(|_| "Unggul Axiom Hub".to_string()),
+        from_name: env::var("SMTP_FROM_NAME").unwrap_or_else(|_| "Unggul Axiom Hub".to_string()),
         from_email: env::var("SMTP_FROM_EMAIL")
             .unwrap_or_else(|_| "noreply@unggulaxiom.com".to_string()),
         enabled: env::var("SMTP_ENABLED")

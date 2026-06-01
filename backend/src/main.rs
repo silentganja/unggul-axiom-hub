@@ -229,14 +229,8 @@ async fn main() -> std::io::Result<()> {
                     .route("/login", web::post().to(handlers::auth::login))
                     .route("/me", web::get().to(handlers::auth::me))
                     .route("/profile", web::put().to(handlers::auth::update_profile))
-                    .route(
-                        "/refresh",
-                        web::post().to(handlers::auth_extras::refresh),
-                    )
-                    .route(
-                        "/logout",
-                        web::post().to(handlers::auth_extras::logout),
-                    )
+                    .route("/refresh", web::post().to(handlers::auth_extras::refresh))
+                    .route("/logout", web::post().to(handlers::auth_extras::logout))
                     .route(
                         "/forgot-password",
                         web::post().to(handlers::auth_extras::forgot_password),
@@ -297,8 +291,7 @@ async fn main() -> std::io::Result<()> {
             )
             // /api/audit  — all routes require a valid JWT (AuthUser extractor)
             .service(
-                web::scope("/api/audit")
-                    .route("", web::get().to(handlers::audit::list_audit_logs)),
+                web::scope("/api/audit").route("", web::get().to(handlers::audit::list_audit_logs)),
             )
             // /api/notifications — SSE stream
             .service(

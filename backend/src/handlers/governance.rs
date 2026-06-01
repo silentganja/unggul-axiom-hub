@@ -247,14 +247,13 @@ pub async fn approve_request(
     .map_err(AppError::Database)?;
 
     // ── Emit notification ──────────────────────────────────────────────────
-    let req_title: Option<String> = sqlx::query_scalar(
-        "SELECT title FROM governance_requests WHERE id = $1",
-    )
-    .bind(request_id)
-    .fetch_optional(pool.get_ref())
-    .await
-    .map_err(AppError::Database)?
-    .flatten();
+    let req_title: Option<String> =
+        sqlx::query_scalar("SELECT title FROM governance_requests WHERE id = $1")
+            .bind(request_id)
+            .fetch_optional(pool.get_ref())
+            .await
+            .map_err(AppError::Database)?
+            .flatten();
 
     if let Some(ref title) = req_title {
         crate::handlers::notifications::emit_notification(
@@ -302,14 +301,13 @@ pub async fn reject_request(
     }
 
     // ── Emit notification ──────────────────────────────────────────────────
-    let req_title: Option<String> = sqlx::query_scalar(
-        "SELECT title FROM governance_requests WHERE id = $1",
-    )
-    .bind(request_id)
-    .fetch_optional(pool.get_ref())
-    .await
-    .map_err(AppError::Database)?
-    .flatten();
+    let req_title: Option<String> =
+        sqlx::query_scalar("SELECT title FROM governance_requests WHERE id = $1")
+            .bind(request_id)
+            .fetch_optional(pool.get_ref())
+            .await
+            .map_err(AppError::Database)?
+            .flatten();
 
     if let Some(ref title) = req_title {
         crate::handlers::notifications::emit_notification(

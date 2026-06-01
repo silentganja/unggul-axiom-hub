@@ -52,10 +52,7 @@ pub async fn take_refresh_token(
     let key = format!("refresh:{}", token);
 
     // GET the token payload
-    let raw: Option<String> = redis::cmd("GET")
-        .arg(&key)
-        .query_async(conn)
-        .await?;
+    let raw: Option<String> = redis::cmd("GET").arg(&key).query_async(conn).await?;
 
     let Some(raw) = raw else {
         return Ok(None);
@@ -64,8 +61,7 @@ pub async fn take_refresh_token(
     // DELETE it so it cannot be reused (token rotation)
     redis::cmd("DEL").arg(&key).query_async(conn).await?;
 
-    let parsed: serde_json::Value =
-        serde_json::from_str(&raw).unwrap_or(serde_json::Value::Null);
+    let parsed: serde_json::Value = serde_json::from_str(&raw).unwrap_or(serde_json::Value::Null);
     let user_id = parsed["user_id"].as_str().unwrap_or("").to_string();
     let role = parsed["role"].as_str().unwrap_or("").to_string();
 
@@ -77,26 +73,17 @@ pub async fn take_refresh_token(
 }
 
 /// Revoke all refresh tokens for a user (used on password change / admin deactivation).
-pub async fn revoke_user_tokens(
-    conn: &mut ConnectionManager,
-    user_id: &str,
-) -> RedisResult<()> {
+pub async fn revoke_user_tokens(conn: &mut ConnectionManager, user_id: &str) -> RedisResult<()> {
     // We can't efficiently find all tokens for a user without scanning.
     // Instead, store a "token generation" counter per user and invalidate
     // all tokens older than the current generation.
     let key = format!("user_token_gen:{}", user_id);
-    redis::cmd("INCR")
-        .arg(&key)
-        .query_async(conn)
-        .await?;
+    redis::cmd("INCR").arg(&key).query_async(conn).await?;
     Ok(())
 }
 
 /// Get the current token generation for a user.
-pub async fn get_token_generation(
-    conn: &mut ConnectionManager,
-    user_id: &str,
-) -> RedisResult<u64> {
+pub async fn get_token_generation(conn: &mut ConnectionManager, user_id: &str) -> RedisResult<u64> {
     let key = format!("user_token_gen:{}", user_id);
     let gen: Option<u64> = redis::cmd("GET").arg(&key).query_async(conn).await?;
     Ok(gen.unwrap_or(0))

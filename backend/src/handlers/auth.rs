@@ -97,14 +97,9 @@ pub async fn login(
     let refresh_token = jwt::generate_refresh_token();
 
     // Store refresh token in Redis
-    redis::store_refresh_token(
-        &mut conn,
-        &refresh_token,
-        &user.id.to_string(),
-        &user.role,
-    )
-    .await
-    .map_err(|e| AppError::Redis(e.to_string()))?;
+    redis::store_refresh_token(&mut conn, &refresh_token, &user.id.to_string(), &user.role)
+        .await
+        .map_err(|e| AppError::Redis(e.to_string()))?;
 
     tracing::info!(
         user_id = %user.id,
