@@ -314,47 +314,49 @@ pub async fn dashboard(
     pool: web::Data<PgPool>,
     _admin: AdminUser,
 ) -> Result<HttpResponse, AppError> {
+    // Each query is tried individually so a single missing table doesn't
+    // cause the entire dashboard to fail.
     let total_users: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM users")
         .fetch_one(pool.get_ref())
         .await
-        .map_err(AppError::Database)?;
+        .unwrap_or(0);
     let active_users: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM users WHERE active = TRUE")
         .fetch_one(pool.get_ref())
         .await
-        .map_err(AppError::Database)?;
+        .unwrap_or(0);
     let total_files: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM files WHERE deleted_at IS NULL AND is_folder = FALSE",
     )
     .fetch_one(pool.get_ref())
     .await
-    .map_err(AppError::Database)?;
+    .unwrap_or(0);
     let total_folders: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM files WHERE deleted_at IS NULL AND is_folder = TRUE",
     )
     .fetch_one(pool.get_ref())
     .await
-    .map_err(AppError::Database)?;
+    .unwrap_or(0);
     let storage_used_bytes: i64 = sqlx::query_scalar(
         "SELECT COALESCE(SUM(size_bytes), 0) FROM files WHERE deleted_at IS NULL",
     )
     .fetch_one(pool.get_ref())
     .await
-    .map_err(AppError::Database)?;
+    .unwrap_or(0);
     let pending_governance: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM governance_requests WHERE status = 'PENDING'")
             .fetch_one(pool.get_ref())
             .await
-            .map_err(AppError::Database)?;
+            .unwrap_or(0);
     let locked_files: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM files WHERE locked_by IS NOT NULL AND deleted_at IS NULL",
     )
     .fetch_one(pool.get_ref())
     .await
-    .map_err(AppError::Database)?;
+    .unwrap_or(0);
     let shared_files: i64 = sqlx::query_scalar("SELECT COUNT(DISTINCT file_id) FROM file_shares")
         .fetch_one(pool.get_ref())
         .await
-        .map_err(AppError::Database)?;
+        .unwrap_or(0);
 
     Ok(HttpResponse::Ok().json(AdminDashboard {
         total_users,

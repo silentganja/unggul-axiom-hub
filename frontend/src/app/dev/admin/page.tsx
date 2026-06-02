@@ -137,6 +137,7 @@ function AdminDashboardView() {
   const [searchQuery, setSearchQuery] = useState("");
   const [dashboard, setDashboard] = useState<AdminDashboard | null>(null);
   const [dashboardLoaded, setDashboardLoaded] = useState(false);
+  const [dashboardError, setDashboardError] = useState<string | null>(null);
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
   const [userFiles, setUserFiles] = useState<BackendFileNode[]>([]);
   const [userFilesLoading, setUserFilesLoading] = useState(false);
@@ -182,8 +183,11 @@ function AdminDashboardView() {
   }, []);
 
   const fetchDashboard = useCallback(async () => {
+    setDashboardError(null);
     try { setDashboard(await adminApi.getDashboard()); } catch (e) {
-      setSseToast({ message: `Dashboard: ${e instanceof Error ? e.message : "Fetch failed"}`, type: "error" });
+      const msg = e instanceof Error ? e.message : "Fetch failed";
+      setDashboardError(msg);
+      setSseToast({ message: `Dashboard: ${msg}`, type: "error" });
       setTimeout(() => setSseToast(null), 5000);
     } finally {
       setDashboardLoaded(true);
@@ -363,8 +367,13 @@ function AdminDashboardView() {
           ) : !dashboard ? (
             <div className="flex flex-col items-center justify-center py-16 gap-3">
               <AlertCircle size={24} className="text-destructive/60" />
-              <p className="font-mono text-xs text-destructive">Failed to load dashboard metrics.</p>
-              <button onClick={fetchDashboard} className="h-8 px-4 rounded-sm border border-accent/30 text-accent bg-accent/5 hover:bg-accent/15 text-[10px] font-bold font-mono uppercase tracking-wider transition-colors cursor-pointer">
+              <p className="font-mono text-xs text-destructive">Failed to load dashboard metrics</p>
+              {dashboardError && (
+                <code className="font-mono text-[10px] text-destructive/80 bg-destructive/5 px-3 py-1.5 rounded border border-destructive/20 max-w-lg break-all">
+                  {dashboardError}
+                </code>
+              )}
+              <button onClick={() => { setDashboardLoaded(false); fetchDashboard(); }} className="h-8 px-4 rounded-sm border border-accent/30 text-accent bg-accent/5 hover:bg-accent/15 text-[10px] font-bold font-mono uppercase tracking-wider transition-colors cursor-pointer">
                 Retry
               </button>
             </div>
