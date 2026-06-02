@@ -24,7 +24,7 @@ export default function GovernanceGuidePage() {
           Governance &amp; Approvals Flow
         </h2>
         <p className="text-xs text-foreground-muted leading-relaxed font-sans max-w-2xl">
-          To protect sensitive records, the portal uses an approval system. This ensures major actions—like editing locked documents or lowering file security ratings—are reviewed by supervisors.
+          To protect sensitive records, the portal uses an approval system. This ensures major actions - like editing locked documents or lowering file security ratings - are reviewed by supervisors.
         </p>
       </div>
 

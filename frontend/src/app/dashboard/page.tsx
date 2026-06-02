@@ -232,11 +232,21 @@ export default function FileExplorerPage() {
   }, [activeView, setOnGovernanceUpdate, fetchTasks]);
 
   // ── Role-based landing page ────────────────────────────────────────────────
-  // Module-level flag — survives page remounts when navigating between
-  // /dashboard/audit and /dashboard. Only fires once per app session.
   const user = useAuthStore((state) => state.user);
 
   useEffect(() => {
+    // 1. If navigating from another page (e.g. /dashboard/audit), restore the
+    //    view the user explicitly clicked in the sidebar.
+    const navView = typeof window !== "undefined" ? sessionStorage.getItem("unggul-nav-view") : null;
+    if (navView) {
+      sessionStorage.removeItem("unggul-nav-view");
+      if (navView !== activeView) {
+        setActiveView(navView as "overview" | "files" | "shared" | "recent" | "favorites" | "trash" | "governance");
+      }
+      return;
+    }
+
+    // 2. On first app load, set the role-based default view (once).
     if (!user?.role) return;
     if (roleLandingDone) return;
     roleLandingDone = true;
@@ -247,7 +257,9 @@ export default function FileExplorerPage() {
       staff: "files",
     };
     const targetView = roleViewMap[user.role.toLowerCase()] || "files";
-    setActiveView(targetView as "overview" | "files" | "shared" | "recent" | "favorites" | "trash" | "governance");
+    if (targetView !== activeView) {
+      setActiveView(targetView as "overview" | "files" | "shared" | "recent" | "favorites" | "trash" | "governance");
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

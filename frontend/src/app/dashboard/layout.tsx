@@ -112,6 +112,7 @@ export default function DashboardLayout({
     setActiveView(view);
     setSidebarOpen(false);
     if (pathname !== "/dashboard") {
+      sessionStorage.setItem("unggul-nav-view", view);
       router.push("/dashboard");
     }
   };
