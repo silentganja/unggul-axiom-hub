@@ -531,7 +531,7 @@ pub async fn revoke_share(
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct TransferOwnershipRequest {
+pub(crate) struct TransferOwnershipRequest {
     new_owner_id: Uuid,
 }
 
@@ -842,7 +842,7 @@ pub async fn force_approve(
             }
             "CLASSIFICATION_UPGRADE" | "CLASSIFICATION_DOWNGRADE" => {
                 let meta = metadata.as_ref();
-                if let Some(ref meta) = meta {
+                if let Some(meta) = meta {
                     if let Some(new_class) = meta.get("newClassification").and_then(|v| v.as_str())
                     {
                         if crate::models::file::VALID_CLASSIFICATIONS.contains(&new_class) {

@@ -89,7 +89,6 @@ pub async fn list_audit_logs(
 
     if query.date_to.is_some() {
         conditions.push(format!("created_at <= ${}::timestamp", param_idx));
-        param_idx += 1;
     }
 
     let where_clause = if conditions.is_empty() {

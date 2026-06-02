@@ -73,7 +73,7 @@ pub async fn refresh(
     .bind(&new_prefix)
     .bind(&user_agent)
     .bind(&ip)
-    .bind(&user_uuid)
+    .bind(user_uuid)
     .bind(old_prefix)
     .execute(pool.get_ref())
     .await;

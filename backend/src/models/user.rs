@@ -19,6 +19,7 @@ pub struct User {
     #[sqlx(default)]
     pub department: Option<String>,
     #[sqlx(default)]
+    #[allow(dead_code)]
     pub supervisor_id: Option<Uuid>,
     #[sqlx(default)]
     pub notification_prefs: Option<serde_json::Value>,

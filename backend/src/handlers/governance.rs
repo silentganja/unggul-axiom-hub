@@ -278,7 +278,7 @@ pub async fn list_requests(
 
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct ReviewRequest {
+pub(crate) struct ReviewRequest {
     /// Optional note explaining the reason for approval or rejection.
     reason: Option<String>,
 }
@@ -563,7 +563,7 @@ pub async fn reject_request(
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct BatchReviewRequest {
+pub(crate) struct BatchReviewRequest {
     ids: Vec<Uuid>,
     reason: Option<String>,
 }
