@@ -156,12 +156,12 @@ export default function InfoLayout({ children }: { children: React.ReactNode }) 
 
         {/* Reading Viewport */}
         <main className="flex-1 overflow-y-auto px-4 py-6 sm:p-8 flex flex-col justify-between min-w-0">
-          <div className="max-w-4xl w-full">
+          <div className="max-w-7xl w-full">
             {children}
           </div>
 
           {/* Footer ticker */}
-          <footer className="w-full max-w-4xl border-t border-border/10 pt-6 mt-12 flex flex-col sm:flex-row items-center justify-between gap-2 font-mono text-[8px] uppercase tracking-[0.18em] text-foreground-subtle select-none">
+          <footer className="w-full max-w-7xl border-t border-border/10 pt-6 mt-12 flex flex-col sm:flex-row items-center justify-between gap-2 font-mono text-[10px] uppercase tracking-[0.18em] text-foreground-subtle select-none">
             <div className="flex items-center gap-2">
               <span className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
               <span>PORTFOLIO TECHNICAL REVIEW</span>
@@ -172,7 +172,7 @@ export default function InfoLayout({ children }: { children: React.ReactNode }) 
               <span className="hidden sm:inline">DEVELOPER CONTEXT</span>
             </div>
             <span className="flex items-center gap-1">
-              <Code size={9} className="text-accent" /> FULL-STACK IMPLEMENTATION
+              <Code size={11} className="text-accent" /> FULL-STACK IMPLEMENTATION
             </span>
           </footer>
         </main>

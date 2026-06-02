@@ -4,26 +4,26 @@ import { Database } from "lucide-react";
 
 export default function InfoDatabasePage() {
   return (
-    <div className="space-y-6 animate-in fade-in duration-300">
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       {/* Page Header */}
-      <div className="space-y-2">
-        <div className="inline-flex items-center gap-1.5 px-3 py-1 font-mono text-[9px] font-semibold text-accent tracking-wider uppercase border border-accent/20 bg-accent-subtle/30 rounded">
-          <Database size={10} /> SECTION 5.0 : DATABASE SCHEMA
+      <div className="space-y-3">
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 font-mono text-[10px] font-semibold text-accent tracking-wider uppercase border border-accent/20 bg-accent-subtle/30 rounded shadow-sm">
+          <Database size={12} /> SECTION 5.0 : DATABASE SCHEMA
         </div>
-        <h2 className="text-xl font-bold tracking-tight text-foreground font-serif">
+        <h2 className="text-3xl font-bold tracking-tight text-foreground font-serif">
           PostgreSQL Database Models
         </h2>
-        <p className="text-xs text-foreground-muted leading-relaxed font-sans max-w-2xl">
+        <p className="text-sm sm:text-base text-foreground-muted leading-relaxed font-sans max-w-4xl">
           The persistence structure maps folders recursively, checks clearance levels natively via checks, and logs audit events securely. Review the core relational DDL schema below.
         </p>
       </div>
 
       {/* Database Schema Code Blocks */}
-      <div className="space-y-4 font-mono text-[9px]">
+      <div className="space-y-6 font-mono text-xs sm:text-sm">
         {/* Users & Files */}
-        <div className="border border-border/30 rounded bg-background-panel/40 p-4 space-y-2">
-          <span className="block font-bold text-foreground">1. Users &amp; Files Tables DDL</span>
-          <pre className="p-3 rounded border border-border/20 bg-background/80 leading-relaxed overflow-x-auto whitespace-pre select-all">
+        <div className="border border-border/30 rounded-lg bg-background-panel/40 p-5 space-y-3 shadow-sm hover:border-border/60 transition-all duration-300">
+          <span className="block font-bold text-foreground text-sm sm:text-base font-sans border-b border-border/20 pb-1.5">1. Users &amp; Files Tables DDL</span>
+          <pre className="p-4 rounded border border-border/20 bg-background/80 leading-relaxed overflow-x-auto whitespace-pre select-all shadow-inner text-[10px] sm:text-xs">
 {`CREATE TABLE users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     email VARCHAR(255) UNIQUE NOT NULL,
@@ -53,9 +53,9 @@ CREATE TABLE files (
         </div>
 
         {/* Shares & Governance Requests */}
-        <div className="border border-border/30 rounded bg-background-panel/40 p-4 space-y-2">
-          <span className="block font-bold text-foreground">2. Shares &amp; Governance Queue DDL</span>
-          <pre className="p-3 rounded border border-border/20 bg-background/80 leading-relaxed overflow-x-auto whitespace-pre select-all">
+        <div className="border border-border/30 rounded-lg bg-background-panel/40 p-5 space-y-3 shadow-sm hover:border-border/60 transition-all duration-300">
+          <span className="block font-bold text-foreground text-sm sm:text-base font-sans border-b border-border/20 pb-1.5">2. Shares &amp; Governance Queue DDL</span>
+          <pre className="p-4 rounded border border-border/20 bg-background/80 leading-relaxed overflow-x-auto whitespace-pre select-all shadow-inner text-[10px] sm:text-xs">
 {`CREATE TABLE shares (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     file_id UUID NOT NULL REFERENCES files(id) ON DELETE CASCADE,
@@ -87,9 +87,9 @@ CREATE TABLE governance_requests (
         </div>
 
         {/* Audit Logs */}
-        <div className="border border-border/30 rounded bg-background-panel/40 p-4 space-y-2">
-          <span className="block font-bold text-foreground">3. Compliance Audit Ledger DDL</span>
-          <pre className="p-3 rounded border border-border/20 bg-background/80 leading-relaxed overflow-x-auto whitespace-pre select-all">
+        <div className="border border-border/30 rounded-lg bg-background-panel/40 p-5 space-y-3 shadow-sm hover:border-border/60 transition-all duration-300">
+          <span className="block font-bold text-foreground text-sm sm:text-base font-sans border-b border-border/20 pb-1.5">3. Compliance Audit Ledger DDL</span>
+          <pre className="p-4 rounded border border-border/20 bg-background/80 leading-relaxed overflow-x-auto whitespace-pre select-all shadow-inner text-[10px] sm:text-xs">
 {`CREATE TABLE audit_logs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     actor_id UUID REFERENCES users(id) ON DELETE SET NULL,
