@@ -31,7 +31,7 @@ export default function InfoArchitecturePage() {
       {/* Page Header */}
       <div className="space-y-2">
         <div className="inline-flex items-center gap-1.5 px-3 py-1 font-mono text-[9px] font-semibold text-accent tracking-wider uppercase border border-accent/20 bg-accent-subtle/30 rounded">
-          <Cpu size={10} /> SECTION 2.0 — SYSTEM ARCHITECTURE
+          <Cpu size={10} /> SECTION 2.0 : SYSTEM ARCHITECTURE
         </div>
         <h2 className="text-xl font-bold tracking-tight text-foreground font-serif">
           Tech Stack &amp; Infrastructure
@@ -49,7 +49,7 @@ export default function InfoArchitecturePage() {
         <pre className="p-4 rounded border border-border/25 bg-background/80 font-mono text-[8px] sm:text-[9px] leading-relaxed text-foreground-subtle overflow-x-auto whitespace-pre select-all">
 {`  +-----------------------------------------------------------+
   |                   1. PRESENTATION LAYER                   |
-  |  Next.js 15 Client  <--->  Zustand State  <--->  Tailwind  |
+  |  Next.js 15 Client  <===>  Zustand State  <===>  Tailwind  |
   +-----------------------------+-----------------------------+
                                 |
                    Secure HTTP REST APIs / WebAuthn
@@ -57,7 +57,7 @@ export default function InfoArchitecturePage() {
                                 v
   +-----------------------------------------------------------+
   |                 2. SERVICE ROUTING LAYER                  |
-  |  Actix-Web (Rust)  <--->  App Middleware  <--->  Argon2id  |
+  |  Actix-Web (Rust)  <===>  App Middleware  <===>  Argon2id  |
   +----------------------+----------------------+-------------+
                          |                      |
                  Asynchronous SQLx          Redis API
@@ -68,6 +68,32 @@ export default function InfoArchitecturePage() {
   |  PostgreSQL Database Engine  |     |  Redis Cache / JWT   |
   +------------------------------+     +----------------------+`}
         </pre>
+      </div>
+
+      {/* Request Path Explanation */}
+      <div className="border border-border/30 rounded bg-background-panel/40 p-5 space-y-4">
+        <h3 className="font-mono text-[9px] font-bold text-accent uppercase tracking-widest">
+          Request Lifecycle and Execution
+        </h3>
+        <div className="space-y-3 text-xs font-sans text-foreground-subtle leading-relaxed">
+          <p>
+            When a user logs in, uploads a document, or approves a file movement request, the operation follows a strict transactional pathway:
+          </p>
+          <ul className="list-decimal pl-4 space-y-2 text-[11px]">
+            <li>
+              <strong>Client Dispatch:</strong> The Next.js client dispatches an asynchronous fetch payload. Zustand stores maintain user context, loading animations, and file tree updates reactively.
+            </li>
+            <li>
+              <strong>Route Verification:</strong> The Actix-Web backend parses the HTTP Request. Middleware queries the Redis cache to check if the incoming authorization token is blacklisted, verifying caller identity.
+            </li>
+            <li>
+              <strong>Query Execution:</strong> The backend acquires a database handle from the SQLx PostgreSQL connection pool. It executes parameterized queries, protecting the platform from SQL injection vectors.
+            </li>
+            <li>
+              <strong>Audit and Feedback:</strong> Upon database execution, a separate audit log task is written asynchronously. The backend server returns a standardized JSON structure, updating the client workspace store.
+            </li>
+          </ul>
+        </div>
       </div>
 
       {/* Layer Description List */}

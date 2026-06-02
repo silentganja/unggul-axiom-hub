@@ -21,7 +21,7 @@ export default function InfoSecurityPage() {
       {/* Page Header */}
       <div className="space-y-2">
         <div className="inline-flex items-center gap-1.5 px-3 py-1 font-mono text-[9px] font-semibold text-accent tracking-wider uppercase border border-accent/20 bg-accent-subtle/30 rounded">
-          <Lock size={10} /> SECTION 4.0 — ACCESS &amp; GOVERNANCE
+          <Lock size={10} /> SECTION 4.0 : ACCESS AND GOVERNANCE
         </div>
         <h2 className="text-xl font-bold tracking-tight text-foreground font-serif">
           Access Control &amp; Security Tiers
@@ -62,9 +62,38 @@ export default function InfoSecurityPage() {
         </div>
       </div>
 
+      {/* Core Security Mechanics */}
+      <div className="border border-border/30 rounded bg-background-panel/40 p-5 space-y-4">
+        <h3 className="font-mono text-[9px] font-bold text-accent uppercase tracking-widest">
+          Intranet Security Implementations
+        </h3>
+        <div className="space-y-4 text-xs font-sans text-foreground-subtle leading-relaxed">
+          <div>
+            <h4 className="font-bold text-foreground font-serif mb-1">1. Classification Transition Verification</h4>
+            <p>
+              When a user requests to change a file classification rating, the backend performs array index lookup validation. It verifies that upgrade requests choose a target clearance strictly higher than the current state (e.g. from Terhad to Sulit). Downgrade requests are flagged as high risk and require senior Director authorization before database execution.
+            </p>
+          </div>
+
+          <div>
+            <h4 className="font-bold text-foreground font-serif mb-1">2. Soft Deletions and Lifecycle Recovery</h4>
+            <p>
+              When files or folders are deleted, they are not initially purged. The system executes soft deletions by writing a timestamp to the `deleted_at` column. Trashed files remain in the DB and are hidden from active file viewports. File owners can restore their items, preserving sharing relationships. Permanent hard deletions require Chief Administrator authentication.
+            </p>
+          </div>
+
+          <div>
+            <h4 className="font-bold text-foreground font-serif mb-1">3. Locking Rules and Folder Relocations</h4>
+            <p>
+              To maintain document integrity during drafting, files can be locked. Once locked, other collaborators cannot rename, move, edit, or delete the file. When relocating folders, the system executes recursive parent checks to prevent circular directory structures (e.g. attempting to move a parent directory into one of its subfolders).
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* Locking & Override Logic */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 font-sans text-xs">
-        <div className="border border-border/30 rounded bg-background-panel/40 p-4 space-y-2">
+        <div className="border border-border/30 rounded bg-background-panel/30 p-4 space-y-2">
           <div className="flex items-center gap-2">
             <ShieldCheck size={14} className="text-accent" />
             <h4 className="font-bold text-foreground font-serif">File Locking Rules</h4>
@@ -74,7 +103,7 @@ export default function InfoSecurityPage() {
           </p>
         </div>
 
-        <div className="border border-border/30 rounded bg-background-panel/40 p-4 space-y-2">
+        <div className="border border-border/30 rounded bg-background-panel/30 p-4 space-y-2">
           <div className="flex items-center gap-2">
             <Shield size={14} className="text-accent" />
             <h4 className="font-bold text-foreground font-serif">Immutable Activity Trails</h4>

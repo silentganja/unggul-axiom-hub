@@ -7,12 +7,12 @@ export default function InfoOverviewPage() {
   const portalObjectives = [
     {
       title: "Asynchronous Rust Core",
-      desc: "An high-performance server built with Actix-Web, asynchronous SQLx connections to Postgres, and Redis caching for low-latency request-response cycles.",
+      desc: "A high-performance server built with Actix-Web, asynchronous SQLx connections to Postgres, and Redis caching for low-latency request-response cycles.",
       badge: "High Performance Backend",
     },
     {
       title: "Cryptographic Access Clearance",
-      desc: "Four data classification levels (Terbuka, Terhad, Sulit, Rahsia) coupled with passwordless WebAuthn (Passkeys) for bulletproof user authentication.",
+      desc: "Four data classification levels (Terbuka, Terhad, Sulit, Rahsia) coupled with passwordless WebAuthn (Passkeys) for secure user authentication.",
       badge: "State-of-the-Art Security",
     },
     {
@@ -32,17 +32,17 @@ export default function InfoOverviewPage() {
       {/* Intro Hero Section */}
       <div className="space-y-3">
         <div className="inline-flex items-center gap-1.5 px-3 py-1 font-mono text-[9px] font-semibold text-accent tracking-wider uppercase border border-accent/20 bg-accent-subtle/30 rounded">
-          <Layers size={10} /> SECTION 1.0 — OVERVIEW &amp; CONTEXT
+          <Layers size={10} /> SECTION 1.0 : OVERVIEW AND CONTEXT
         </div>
         <h2 className="text-2xl font-bold tracking-tight text-foreground font-serif">
           The Strategic Hub Project
         </h2>
         <p className="text-xs text-foreground-muted leading-relaxed font-sans max-w-2xl">
-          The **Strategic Hub** is an enterprise-grade document containment system and workspace coordination portal. Built as a mock intranet for a high-security corporate entity, the project represents a showcase of secure API design, transactional SQL, and glassmorphic micro-animations. 
+          The Strategic Hub is a secure corporate document containment system and workspace coordination portal. Built as a mock intranet for a high-security corporate entity, the project represents a showcase of secure API design, transactional SQL, and glassmorphic micro-animations.
         </p>
       </div>
 
-      {/* Compliance / Resume Value Banner */}
+      {/* Portfolio Value Banner */}
       <div className="p-4 rounded border border-accent/30 bg-accent-subtle/10 flex items-start gap-3">
         <Terminal size={18} className="text-accent shrink-0 mt-0.5" />
         <div className="space-y-1 text-xs">
@@ -53,6 +53,36 @@ export default function InfoOverviewPage() {
         </div>
       </div>
 
+      {/* Practical Platform Usage Section */}
+      <div className="border border-border/30 rounded bg-background-panel/40 p-5 space-y-4">
+        <h3 className="font-mono text-[9px] font-bold text-accent uppercase tracking-widest">
+          Platform Operations and Usage
+        </h3>
+        
+        <div className="space-y-4 text-xs font-sans text-foreground-subtle leading-relaxed">
+          <div>
+            <h4 className="font-bold text-foreground font-serif mb-1">1. File Explorer Navigation</h4>
+            <p>
+              Users navigate files using a recursive directory tree. The workspace displays folders and files in a clean, paginated data table. Users search, sort by file attributes, and toggle a details drawer. This drawer reveals file ownership, shared collaborators, storage size, current security clearance label, and active editing lock statuses.
+            </p>
+          </div>
+
+          <div>
+            <h4 className="font-bold text-foreground font-serif mb-1">2. Collaborator Access Control</h4>
+            <p>
+              File owners invite teammates by email and assign fine-grained roles. Viewers are restricted to file previewing and downloading. Editors can add new file versions, modify details, and request edit locks. Owners retain administrative rights over file deletions, metadata modifications, and collaborator shares.
+            </p>
+          </div>
+
+          <div>
+            <h4 className="font-bold text-foreground font-serif mb-1">3. Governance Request Pipeline</h4>
+            <p>
+              High-impact actions require supervisor review. To change security ratings, lock a document for drafting, move a file, or permanently trash an item, users submit a request containing a business justification. Officers and Directors access a central pending inbox where they approve or reject requests, instantly updating the underlying database records.
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* Grid of Core Objectives */}
       <div className="space-y-3">
         <h3 className="font-mono text-[9px] font-bold text-accent uppercase tracking-widest">
@@ -60,7 +90,7 @@ export default function InfoOverviewPage() {
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {portalObjectives.map((obj) => (
-            <div key={obj.title} className="border border-border/30 rounded bg-background-panel/40 p-4 space-y-2 flex flex-col justify-between">
+            <div key={obj.title} className="border border-border/30 rounded bg-background-panel/30 p-4 space-y-2 flex flex-col justify-between">
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
                   <Sparkles size={13} className="text-accent" />

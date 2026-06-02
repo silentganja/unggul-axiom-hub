@@ -21,6 +21,22 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+
+  // Redirect /v1/info to /v/info
+  async redirects() {
+    return [
+      {
+        source: "/v1/info",
+        destination: "/v/info",
+        permanent: true,
+      },
+      {
+        source: "/v1/info/:path*",
+        destination: "/v/info/:path*",
+        permanent: true,
+      },
+    ];
+  },
 };
 
 export default nextConfig;

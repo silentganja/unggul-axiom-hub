@@ -8,7 +8,7 @@ export default function InfoFeaturesPage() {
       {/* Page Header */}
       <div className="space-y-2">
         <div className="inline-flex items-center gap-1.5 px-3 py-1 font-mono text-[9px] font-semibold text-accent tracking-wider uppercase border border-accent/20 bg-accent-subtle/30 rounded">
-          <Code size={10} /> SECTION 3.0 — CORE FEATURES &amp; CODE
+          <Code size={10} /> SECTION 3.0 : CORE FEATURES AND CODE
         </div>
         <h2 className="text-xl font-bold tracking-tight text-foreground font-serif">
           Technical Implementations &amp; Features
@@ -96,17 +96,30 @@ tx.commit().await?;`}
         </div>
       </div>
 
-      {/* Feature 3: Zustand State Management */}
+      {/* Feature 3: File Explorer Architecture */}
       <div className="border border-border/30 rounded bg-background-panel/40 p-5 space-y-4">
         <div className="flex items-center gap-2">
           <Sparkles size={16} className="text-accent" />
           <h3 className="font-mono text-[9px] font-bold text-accent uppercase tracking-widest">
-            3. Optimized Client State (Zustand)
+            3. File Explorer &amp; Directory Tree Navigation
           </h3>
         </div>
-        <p className="text-xs text-foreground-subtle leading-relaxed font-sans">
-          Instead of heavy React Context layouts triggering global re-renders, the web client uses Zustand stores to coordinate dynamic file sorting, navigation pathways, search queries, and notification updates, keeping interface response times under **15ms**.
-        </p>
+        <div className="space-y-3 text-xs font-sans text-foreground-subtle leading-relaxed">
+          <p>
+            To prevent performance degradation on accounts with thousands of assets, the File Explorer utilizes single-level queries instead of recursive tree traversals:
+          </p>
+          <ul className="list-disc pl-4 space-y-2 text-[11px]">
+            <li>
+              <strong>Virtual Folder Queries:</strong> When a user navigates to a folder, the client dispatches a request specifying the parent folder ID. The backend queries PostgreSQL matching the `parent_id` column, returning child folders and files in a flat array list.
+            </li>
+            <li>
+              <strong>Reactive Tree State:</strong> Zustand stores handle sorting (by name, date, size) and filtering dynamically in the client-side cache. This eliminates latency caused by triggering repeated database queries during sorting.
+            </li>
+            <li>
+              <strong>Governance Side-Effects:</strong> Once a supervisor approves a request, the backend updates the matching metadata fields. Moving a file updates its `parent_id` reference, locking a file sets the `locked_by` user UUID constraint, and soft-deletes mark `deleted_at` to send the document to the Trash view.
+            </li>
+          </ul>
+        </div>
       </div>
     </div>
   );

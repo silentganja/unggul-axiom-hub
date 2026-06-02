@@ -8,7 +8,7 @@ export default function InfoDatabasePage() {
       {/* Page Header */}
       <div className="space-y-2">
         <div className="inline-flex items-center gap-1.5 px-3 py-1 font-mono text-[9px] font-semibold text-accent tracking-wider uppercase border border-accent/20 bg-accent-subtle/30 rounded">
-          <Database size={10} /> SECTION 5.0 — DATABASE SCHEMA
+          <Database size={10} /> SECTION 5.0 : DATABASE SCHEMA
         </div>
         <h2 className="text-xl font-bold tracking-tight text-foreground font-serif">
           PostgreSQL Database Models
@@ -99,7 +99,7 @@ CREATE TABLE governance_requests (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Optimize audit search retrieval by indexing frequently filtered fields
+/* Optimize audit search retrieval by indexing frequently filtered fields */
 CREATE INDEX idx_audit_logs_actor ON audit_logs(actor_id);
 CREATE INDEX idx_audit_logs_action ON audit_logs(action);`}
           </pre>
