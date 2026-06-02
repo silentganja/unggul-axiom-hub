@@ -228,6 +228,8 @@ export default function FileExplorerPage() {
   }, [activeView, setOnGovernanceUpdate, fetchTasks]);
 
   // ── Role-based landing page ────────────────────────────────────────────────
+  // Only sets the initial view once when the user first loads. Does NOT
+  // interfere with subsequent tab switches.
   const user = useAuthStore((state) => state.user);
   const initialViewSet = useRef(false);
 
@@ -241,10 +243,9 @@ export default function FileExplorerPage() {
       staff: "files",
     };
     const targetView = roleViewMap[user.role.toLowerCase()] || "files";
-    if (targetView !== activeView) {
-      setActiveView(targetView as "overview" | "files" | "shared" | "recent" | "favorites" | "trash" | "governance");
-    }
-  }, [user, activeView, setActiveView]);
+    setActiveView(targetView as "overview" | "files" | "shared" | "recent" | "favorites" | "trash" | "governance");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Component state ────────────────────────────────────────────────────────
   const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
