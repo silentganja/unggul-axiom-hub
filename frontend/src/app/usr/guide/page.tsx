@@ -17,25 +17,25 @@ export default function GuideIntroPage() {
     {
       title: "File Explorer",
       desc: "Upload, download, set security levels, and share files with your team.",
-      href: "/dev/guide/explorer",
+      href: "/usr/guide/explorer",
       icon: <Folder size={18} className="text-accent" />,
     },
     {
       title: "Governance & Approvals",
       desc: "Request permission to lock files or change their security levels through simple supervisor approvals.",
-      href: "/dev/guide/governance",
+      href: "/usr/guide/governance",
       icon: <Shield size={18} className="text-accent" />,
     },
     {
       title: "Security & Roles",
       desc: "Learn about your account permissions and set up easy face or fingerprint sign-in.",
-      href: "/dev/guide/roles",
+      href: "/usr/guide/roles",
       icon: <Users size={18} className="text-accent" />,
     },
     {
       title: "Step-by-Step Examples",
       desc: "Follow simple interactive walk-throughs of common daily tasks in the portal.",
-      href: "/dev/guide/scenarios",
+      href: "/usr/guide/scenarios",
       icon: <Play size={18} className="text-accent" />,
     },
   ];
@@ -129,13 +129,13 @@ export default function GuideIntroPage() {
           <div className="flex gap-3">
             <span className="font-bold text-accent shrink-0">STEP 01</span>
             <p className="font-sans text-[11px] leading-relaxed">
-              <strong>Log In:</strong> Sign in using your corporate email. You can also register a passkey to sign in quickly using your device fingerprint or face recognition (see <Link href="/dev/guide/roles" className="text-accent hover:underline">Section 4</Link>).
+              <strong>Log In:</strong> Sign in using your corporate email. You can also register a passkey to sign in quickly using your device fingerprint or face recognition (see <Link href="/usr/guide/roles" className="text-accent hover:underline">Section 4</Link>).
             </p>
           </div>
           <div className="flex gap-3">
             <span className="font-bold text-accent shrink-0">STEP 02</span>
             <p className="font-sans text-[11px] leading-relaxed">
-              <strong>Explore Files:</strong> Open the <Link href="/dev/guide/explorer" className="text-accent hover:underline">File Explorer</Link> to browse documents. Files marked Confidential or Secret are protected and visible to shared team members and management.
+              <strong>Explore Files:</strong> Open the <Link href="/usr/guide/explorer" className="text-accent hover:underline">File Explorer</Link> to browse documents. Files marked Confidential or Secret are protected and visible to shared team members and management.
             </p>
           </div>
           <div className="flex gap-3">

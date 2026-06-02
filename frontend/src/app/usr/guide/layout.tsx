@@ -13,7 +13,6 @@ import {
   Lock,
   Menu,
   X,
-  ChevronRight,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { cn } from "@/lib/utils";
@@ -24,11 +23,11 @@ export default function GuideLayout({ children }: { children: React.ReactNode })
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const navItems = [
-    { href: "/dev/guide", label: "1. Introduction", icon: <BookOpen size={14} /> },
-    { href: "/dev/guide/explorer", label: "2. File Explorer", icon: <Folder size={14} /> },
-    { href: "/dev/guide/governance", label: "3. Governance Flow", icon: <Shield size={14} /> },
-    { href: "/dev/guide/roles", label: "4. Security & Roles", icon: <Users size={14} /> },
-    { href: "/dev/guide/scenarios", label: "5. Operational Scenarios", icon: <Play size={14} /> },
+    { href: "/usr/guide", label: "1. Introduction", icon: <BookOpen size={14} /> },
+    { href: "/usr/guide/explorer", label: "2. File Explorer", icon: <Folder size={14} /> },
+    { href: "/usr/guide/governance", label: "3. Governance Flow", icon: <Shield size={14} /> },
+    { href: "/usr/guide/roles", label: "4. Security & Roles", icon: <Users size={14} /> },
+    { href: "/usr/guide/scenarios", label: "5. Operational Scenarios", icon: <Play size={14} /> },
   ];
 
   return (

@@ -388,8 +388,9 @@ pub async fn approve_request(
                     let has_target = meta.get("targetFolderId").and_then(|v| v.as_str()).is_some();
                     if !has_target {
                         return Err(AppError::BadRequest(
-                        "FILE_MOVE requires targetFolderId in metadata".into(),
-                    ));
+                            "FILE_MOVE requires targetFolderId in metadata".into(),
+                        ));
+                    }
                     if let Some(target_folder_id) = meta
                         .get("targetFolderId")
                         .and_then(|v| v.as_str())
