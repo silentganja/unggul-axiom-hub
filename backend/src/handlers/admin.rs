@@ -716,22 +716,20 @@ pub async fn force_approve(
                     if let Some(new_class) = meta.get("newClassification").and_then(|v| v.as_str())
                     {
                         if crate::models::file::VALID_CLASSIFICATIONS.contains(&new_class) {
-                            let _ = sqlx::query(
-                                "UPDATE files SET classification = $1 WHERE id = $2",
-                            )
-                            .bind(new_class)
-                                .bind(fid)
-                                .execute(pool.get_ref())
-                                .await;
+                            let _ =
+                                sqlx::query("UPDATE files SET classification = $1 WHERE id = $2")
+                                    .bind(new_class)
+                                    .bind(fid)
+                                    .execute(pool.get_ref())
+                                    .await;
                         }
                     }
                 }
             }
             "FILE_MOVE" => {
                 if let Some(ref meta) = metadata {
-                    if let Some(target_folder_id) = meta
-                        .get("targetFolderId")
-                        .and_then(|v| v.as_str())
+                    if let Some(target_folder_id) =
+                        meta.get("targetFolderId").and_then(|v| v.as_str())
                     {
                         if let Ok(folder_uuid) = uuid::Uuid::parse_str(target_folder_id) {
                             let _ = sqlx::query("UPDATE files SET parent_id = $1 WHERE id = $2")

@@ -345,10 +345,10 @@ pub async fn approve_request(
                         let current_class: Option<String> =
                             sqlx::query_scalar("SELECT classification FROM files WHERE id = $1")
                                 .bind(file_id)
-                        .fetch_optional(pool.get_ref())
-                        .await
-                        .map_err(AppError::Database)?
-                        .flatten();
+                                .fetch_optional(pool.get_ref())
+                                .await
+                                .map_err(AppError::Database)?
+                                .flatten();
 
                         if let Some(ref cur) = current_class {
                             let cur_idx = crate::models::file::VALID_CLASSIFICATIONS
@@ -358,7 +358,8 @@ pub async fn approve_request(
                                 .iter()
                                 .position(|&c| c == new_class);
                             if let (Some(ci), Some(ni)) = (cur_idx, new_idx) {
-                                let is_upgrade = req_type.as_deref() == Some("CLASSIFICATION_UPGRADE");
+                                let is_upgrade =
+                                    req_type.as_deref() == Some("CLASSIFICATION_UPGRADE");
                                 if is_upgrade && ci <= ni {
                                     return Err(AppError::BadRequest(format!(
                                         "Cannot upgrade: {} is not higher than {}",
@@ -385,15 +386,17 @@ pub async fn approve_request(
             }
             Some("FILE_MOVE") => {
                 if let Some(ref meta) = metadata {
-                    let has_target = meta.get("targetFolderId").and_then(|v| v.as_str()).is_some();
+                    let has_target = meta
+                        .get("targetFolderId")
+                        .and_then(|v| v.as_str())
+                        .is_some();
                     if !has_target {
                         return Err(AppError::BadRequest(
                             "FILE_MOVE requires targetFolderId in metadata".into(),
                         ));
                     }
-                    if let Some(target_folder_id) = meta
-                        .get("targetFolderId")
-                        .and_then(|v| v.as_str())
+                    if let Some(target_folder_id) =
+                        meta.get("targetFolderId").and_then(|v| v.as_str())
                     {
                         if let Ok(folder_uuid) = uuid::Uuid::parse_str(target_folder_id) {
                             sqlx::query("UPDATE files SET parent_id = $1 WHERE id = $2")
@@ -624,27 +627,25 @@ pub async fn batch_approve(
         };
 
         if let Some(file_id) = target_file_id {
-            let metadata: Option<serde_json::Value> = match sqlx::query_scalar(
-                "SELECT metadata FROM governance_requests WHERE id = $1",
-            )
-            .bind(request_id)
-            .fetch_optional(pool.get_ref())
-            .await
-            {
-                Ok(v) => v.flatten(),
-                Err(_) => None,
-            };
+            let metadata: Option<serde_json::Value> =
+                match sqlx::query_scalar("SELECT metadata FROM governance_requests WHERE id = $1")
+                    .bind(request_id)
+                    .fetch_optional(pool.get_ref())
+                    .await
+                {
+                    Ok(v) => v.flatten(),
+                    Err(_) => None,
+                };
 
-            let title: Option<String> = match sqlx::query_scalar(
-                "SELECT title FROM governance_requests WHERE id = $1",
-            )
-            .bind(request_id)
-            .fetch_optional(pool.get_ref())
-            .await
-            {
-                Ok(v) => v.flatten(),
-                Err(_) => None,
-            };
+            let title: Option<String> =
+                match sqlx::query_scalar("SELECT title FROM governance_requests WHERE id = $1")
+                    .bind(request_id)
+                    .fetch_optional(pool.get_ref())
+                    .await
+                {
+                    Ok(v) => v.flatten(),
+                    Err(_) => None,
+                };
 
             match rt.as_str() {
                 "FILE_LOCK" => {
@@ -779,16 +780,15 @@ pub async fn batch_approve(
         .await;
 
         // Notification
-        let req_title: Option<String> = match sqlx::query_scalar(
-            "SELECT title FROM governance_requests WHERE id = $1",
-        )
-        .bind(request_id)
-        .fetch_optional(pool.get_ref())
-        .await
-        {
-            Ok(v) => v.flatten(),
-            Err(_) => None,
-        };
+        let req_title: Option<String> =
+            match sqlx::query_scalar("SELECT title FROM governance_requests WHERE id = $1")
+                .bind(request_id)
+                .fetch_optional(pool.get_ref())
+                .await
+            {
+                Ok(v) => v.flatten(),
+                Err(_) => None,
+            };
         if let Some(ref title) = req_title {
             crate::handlers::notifications::emit_notification(
                 crate::models::notification::NotificationEvent::GovernanceUpdate {
@@ -876,16 +876,15 @@ pub async fn batch_reject(
         .await;
 
         // Notification
-        let req_title: Option<String> = match sqlx::query_scalar(
-            "SELECT title FROM governance_requests WHERE id = $1",
-        )
-        .bind(request_id)
-        .fetch_optional(pool.get_ref())
-        .await
-        {
-            Ok(v) => v.flatten(),
-            Err(_) => None,
-        };
+        let req_title: Option<String> =
+            match sqlx::query_scalar("SELECT title FROM governance_requests WHERE id = $1")
+                .bind(request_id)
+                .fetch_optional(pool.get_ref())
+                .await
+            {
+                Ok(v) => v.flatten(),
+                Err(_) => None,
+            };
         if let Some(ref title) = req_title {
             crate::handlers::notifications::emit_notification(
                 crate::models::notification::NotificationEvent::GovernanceUpdate {
@@ -935,8 +934,9 @@ pub async fn undo_request(
     let request_id = path.into_inner();
 
     // Fetch the existing request
-    let existing: Option<GovernanceRequestResponse> = sqlx::query_as::<_, GovernanceRequestResponse>(
-        "SELECT
+    let existing: Option<GovernanceRequestResponse> =
+        sqlx::query_as::<_, GovernanceRequestResponse>(
+            "SELECT
             gr.id, gr.type, gr.title, gr.description, gr.status,
             gr.requested_by,
             u1.full_name AS requested_by_name,
@@ -951,11 +951,11 @@ pub async fn undo_request(
          LEFT JOIN users u2 ON u2.id = gr.reviewed_by
          LEFT JOIN files f ON f.id = gr.target_file_id
          WHERE gr.id = $1",
-    )
-    .bind(request_id)
-    .fetch_optional(pool.get_ref())
-    .await
-    .map_err(AppError::Database)?;
+        )
+        .bind(request_id)
+        .fetch_optional(pool.get_ref())
+        .await
+        .map_err(AppError::Database)?;
 
     let existing = existing.ok_or(AppError::NotFound)?;
 
@@ -1056,19 +1056,18 @@ pub async fn undo_request(
                     }
                     "CLASSIFICATION_UPGRADE" | "CLASSIFICATION_DOWNGRADE" => {
                         if let Some(ref meta) = inverse_metadata {
-                            if let Some(new_class) = meta
-                                .get("newClassification")
-                                .and_then(|v| v.as_str())
+                            if let Some(new_class) =
+                                meta.get("newClassification").and_then(|v| v.as_str())
                             {
                                 if crate::models::file::VALID_CLASSIFICATIONS.contains(&new_class) {
                                     sqlx::query(
                                         "UPDATE files SET classification = $1 WHERE id = $2",
                                     )
                                     .bind(new_class)
-                                        .bind(file_id)
-                                        .execute(pool.get_ref())
-                                        .await
-                                        .map_err(AppError::Database)?;
+                                    .bind(file_id)
+                                    .execute(pool.get_ref())
+                                    .await
+                                    .map_err(AppError::Database)?;
                                 }
                             }
                         }

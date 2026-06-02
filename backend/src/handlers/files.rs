@@ -1115,22 +1115,21 @@ pub async fn upload_file(
                     }
 
                     // Encrypt bytes before writing to disk (if encryption key is configured)
-                    let bytes_to_write: Vec<u8> =
-                        if let Some(ref enc_key) = config.encryption_key {
-                            crate::utils::crypto::encrypt(enc_key, &all_bytes)?
-                        } else {
-                            all_bytes
-                        };
+                    let bytes_to_write: Vec<u8> = if let Some(ref enc_key) = config.encryption_key {
+                        crate::utils::crypto::encrypt(enc_key, &all_bytes)?
+                    } else {
+                        all_bytes
+                    };
 
                     // Write (possibly encrypted) bytes to disk
-                    tokio::fs::write(&temp_filepath, &bytes_to_write).await.map_err(
-                        |e| {
+                    tokio::fs::write(&temp_filepath, &bytes_to_write)
+                        .await
+                        .map_err(|e| {
                             AppError::Internal(anyhow::anyhow!(
                                 "Failed to write file to disk: {}",
                                 e
                             ))
-                        },
-                    )?;
+                        })?;
                 }
                 _ => {
                     // Ignore unknown fields
