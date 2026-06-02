@@ -238,6 +238,48 @@ pub async fn run_migrations(pool: &PgPool) {
                 "ALTER TABLE files ADD COLUMN IF NOT EXISTS lock_reason TEXT",
             ],
         ),
+        // 9018 — Avatar data column
+        (
+            "9018",
+            "Auto: Avatar — avatar_data TEXT on users",
+            vec![
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_data TEXT",
+            ],
+        ),
+        // 9019 — Department and supervisor
+        (
+            "9019",
+            "Auto: Department and supervisor columns on users",
+            vec![
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS department VARCHAR(255)",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS supervisor_id UUID REFERENCES users(id)",
+            ],
+        ),
+        // 9020 — Notification preferences
+        (
+            "9020",
+            "Auto: Notification preferences — notification_prefs JSONB on users",
+            vec![
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS notification_prefs JSONB DEFAULT '{}'",
+            ],
+        ),
+        // 9021 — User sessions table
+        (
+            "9021",
+            "Auto: User sessions table for active session tracking",
+            vec![
+                "CREATE TABLE IF NOT EXISTS user_sessions (
+                    id              UUID         PRIMARY KEY DEFAULT uuid_generate_v4(),
+                    user_id         UUID         NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+                    token_prefix    VARCHAR(16)  NOT NULL,
+                    device          VARCHAR(255) NOT NULL DEFAULT '',
+                    ip              VARCHAR(45)  NOT NULL DEFAULT '',
+                    created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+                    last_seen_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+                )",
+                "CREATE INDEX IF NOT EXISTS idx_user_sessions_user_id ON user_sessions (user_id)",
+            ],
+        ),
         // 9012 — Audit logs table
         (
             "9012",

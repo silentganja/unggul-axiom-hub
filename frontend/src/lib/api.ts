@@ -201,6 +201,10 @@ export interface UserProfile {
   role: string;
   active: boolean;
   createdAt: string;
+  avatarData?: string | null;
+  department?: string | null;
+  supervisorName?: string | null;
+  notificationPrefs?: Record<string, boolean> | null;
 }
 
 export interface LoginResponse {
@@ -213,6 +217,16 @@ export interface UpdateProfilePayload {
   fullName?: string;
   currentPassword?: string;
   newPassword?: string;
+}
+
+export interface SessionInfo {
+  id: string;
+  device: string;
+  browser: string;
+  location: string;
+  ip: string;
+  isCurrent: boolean;
+  lastActive: string;
 }
 
 export const authApi = {
@@ -271,6 +285,36 @@ export const authApi = {
 
   verifyMagicLink(token: string): Promise<{ token: string; refreshToken: string }> {
     return apiFetch(`/api/auth/magic-link?token=${encodeURIComponent(token)}`);
+  },
+
+  uploadAvatar(avatarData: string): Promise<UserProfile> {
+    return apiFetch("/api/auth/avatar", {
+      method: "POST",
+      body: JSON.stringify({ avatarData }),
+    });
+  },
+
+  deleteAvatar(): Promise<UserProfile> {
+    return apiFetch("/api/auth/avatar", { method: "DELETE" });
+  },
+
+  getNotificationPrefs(): Promise<Record<string, boolean>> {
+    return apiFetch("/api/auth/notification-prefs");
+  },
+
+  updateNotificationPrefs(prefs: Record<string, boolean>): Promise<Record<string, boolean>> {
+    return apiFetch("/api/auth/notification-prefs", {
+      method: "PUT",
+      body: JSON.stringify(prefs),
+    });
+  },
+
+  getSessions(): Promise<SessionInfo[]> {
+    return apiFetch("/api/auth/sessions");
+  },
+
+  revokeSession(id: string): Promise<void> {
+    return apiFetch(`/api/auth/sessions/${id}`, { method: "DELETE" });
   },
 };
 

@@ -293,6 +293,24 @@ async fn main() -> std::io::Result<()> {
                     .route("/login", web::post().to(handlers::auth::login))
                     .route("/me", web::get().to(handlers::auth::me))
                     .route("/profile", web::put().to(handlers::auth::update_profile))
+                    .route("/avatar", web::post().to(handlers::auth::upload_avatar))
+                    .route("/avatar", web::delete().to(handlers::auth::delete_avatar))
+                    .route(
+                        "/notification-prefs",
+                        web::get().to(handlers::auth::get_notification_prefs),
+                    )
+                    .route(
+                        "/notification-prefs",
+                        web::put().to(handlers::auth::update_notification_prefs),
+                    )
+                    .route(
+                        "/sessions",
+                        web::get().to(handlers::auth::list_sessions),
+                    )
+                    .route(
+                        "/sessions/{id}",
+                        web::delete().to(handlers::auth::delete_session),
+                    )
                     .route("/refresh", web::post().to(handlers::auth_extras::refresh))
                     .route("/logout", web::post().to(handlers::auth_extras::logout))
                     .route(

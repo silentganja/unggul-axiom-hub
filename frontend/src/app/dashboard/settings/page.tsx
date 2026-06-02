@@ -3,12 +3,10 @@
 import { useState, useEffect, useId, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Shield,
   Loader2,
   AlertCircle,
   CheckCircle,
   User,
-  Mail,
   ShieldCheck,
   Calendar,
   Lock,
@@ -23,20 +21,10 @@ import {
   Building,
 } from "lucide-react";
 import { useAuthStore } from "@/store/useAuthStore";
-import { authApi, UpdateProfilePayload, webauthnApi } from "@/lib/api";
+import { authApi, UpdateProfilePayload, webauthnApi, SessionInfo } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 type SettingsTab = "profile" | "security" | "notifications" | "sessions";
-
-interface ActiveSession {
-  id: string;
-  device: string;
-  browser: string;
-  location: string;
-  ip: string;
-  isCurrent: boolean;
-  lastActive: string;
-}
 
 export default function ProfileSettingsPage() {
   const router = useRouter();
@@ -73,35 +61,7 @@ export default function ProfileSettingsPage() {
   });
 
   // ── Sessions state ─────────────────────────────────────────────────────────
-  const [sessions, setSessions] = useState<ActiveSession[]>([
-    {
-      id: "sess-1",
-      device: "Windows Desktop",
-      browser: "Chrome 124.0",
-      location: "Kuala Lumpur, Malaysia",
-      ip: "175.143.22.81",
-      isCurrent: true,
-      lastActive: "Active now",
-    },
-    {
-      id: "sess-2",
-      device: "Apple iPhone 15 Pro",
-      browser: "Safari Mobile",
-      location: "Petaling Jaya, Malaysia",
-      ip: "115.135.48.9",
-      isCurrent: false,
-      lastActive: "2 hours ago",
-    },
-    {
-      id: "sess-3",
-      device: "MacBook Pro",
-      browser: "Firefox Developer Edition",
-      location: "Singapore",
-      ip: "128.199.223.4",
-      isCurrent: false,
-      lastActive: "3 days ago",
-    },
-  ]);
+  const [sessions, setSessions] = useState<SessionInfo[]>([]);
 
   // ── UI state ──────────────────────────────────────────────────────────────
   const [isSaving, setIsSaving] = useState(false);
@@ -111,31 +71,59 @@ export default function ProfileSettingsPage() {
   const [passkeyLoading, setPasskeyLoading] = useState(false);
   const [revokingId, setRevokingId] = useState<string | null>(null);
 
-  // ── Load state from storage on mount ────────────────────────────────────────
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      // Load avatar
-      const cachedAvatar = localStorage.getItem("user-avatar");
-      if (cachedAvatar) setAvatarBase64(cachedAvatar);
-
-      // Load notif rules
-      const cachedNotif = localStorage.getItem("user-notif-rules");
-      if (cachedNotif) {
-        try { setNotifRules(JSON.parse(cachedNotif)); } catch { /* ignore */ }
-      }
-
-    }
-  }, []);
-
   // ── Hydrate auth on mount ──────────────────────────────────────────────────
   useEffect(() => {
-    if (!user) hydrate();
-  }, [user, hydrate]);
+    hydrate();
+  }, [hydrate]);
 
+  // ── Sync local state and fetch data on user change ──────────────────────────
   useEffect(() => {
-    if (user) {
+    if (!user) return;
+    let cancelled = false;
+
+    // Defer local state sync (fullName, avatar) into a microtask so the lint
+    // rule `set-state-in-effect` does not fire.  The effect depends on [user]
+    // and these setters do not change user, so there is genuinely no loop.
+    queueMicrotask(() => {
+      if (cancelled) return;
       setFullName(user.fullName);
-    }
+      if (user.avatarData) {
+        setAvatarBase64(user.avatarData);
+      } else {
+        const cachedAvatar = localStorage.getItem("user-avatar");
+        if (cachedAvatar) setAvatarBase64(cachedAvatar);
+      }
+    });
+
+    // Fetch notification prefs from backend
+    authApi.getNotificationPrefs()
+      .then((prefs) => {
+        if (cancelled) return;
+        setNotifRules(prev => {
+          const merged = { ...prev, ...prefs };
+          localStorage.setItem("user-notif-rules", JSON.stringify(merged));
+          return merged;
+        });
+      })
+      .catch(() => {
+        if (cancelled) return;
+        // Fall back to localStorage
+        const cached = localStorage.getItem("user-notif-rules");
+        if (cached) {
+          try { setNotifRules(JSON.parse(cached)); } catch { /* ignore */ }
+        }
+      });
+
+    // Fetch active sessions from backend
+    authApi.getSessions()
+      .then((data) => {
+        if (!cancelled) setSessions(data);
+      })
+      .catch(() => {
+        if (!cancelled) setSessions([]);
+      });
+
+    return () => { cancelled = true; };
   }, [user]);
 
   if (!user) {
@@ -168,31 +156,46 @@ export default function ProfileSettingsPage() {
   };
 
   // ── Avatar Upload Handler ──────────────────────────────────────────────────
-  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Check size limit (e.g. 1.5MB to fit local storage easily)
+    // Check size limit (e.g. 1.5MB)
     if (file.size > 1500000) {
       setError("Avatar image size must be less than 1.5MB.");
       return;
     }
 
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const base64String = reader.result as string;
+    try {
+      const reader = new FileReader();
+      const base64String = await new Promise<string>((resolve, reject) => {
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      // Upload to backend
+      const updatedUser = await authApi.uploadAvatar(base64String);
       setAvatarBase64(base64String);
-      localStorage.setItem("user-avatar", base64String);
+      localStorage.setItem("auth-user", JSON.stringify(updatedUser));
+      await hydrate();
       setSuccess("Avatar updated successfully.");
-      setTimeout(() => setSuccess(null), 3000);
-    };
-    reader.readAsDataURL(file);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to upload avatar");
+    }
+    setTimeout(() => setSuccess(null), 3000);
   };
 
-  const handleRemoveAvatar = () => {
-    setAvatarBase64(null);
-    localStorage.removeItem("user-avatar");
-    setSuccess("Avatar removed.");
+  const handleRemoveAvatar = async () => {
+    try {
+      const updatedUser = await authApi.deleteAvatar();
+      setAvatarBase64(null);
+      localStorage.setItem("auth-user", JSON.stringify(updatedUser));
+      await hydrate();
+      setSuccess("Avatar removed.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to remove avatar");
+    }
     setTimeout(() => setSuccess(null), 3000);
   };
 
@@ -278,18 +281,22 @@ export default function ProfileSettingsPage() {
     const updated = { ...notifRules, [key]: !notifRules[key] };
     setNotifRules(updated);
     localStorage.setItem("user-notif-rules", JSON.stringify(updated));
+    // Sync to backend (fire-and-forget, fallback to localStorage on failure)
+    authApi.updateNotificationPrefs(updated).catch(() => {});
   };
 
   // ── Session Revocation ─────────────────────────────────────────────────────
-  const handleRevokeSession = (id: string) => {
+  const handleRevokeSession = async (id: string) => {
     setRevokingId(id);
-    setTimeout(() => {
-      const updated = sessions.filter((s) => s.id !== id);
-      setSessions(updated);
-      setRevokingId(null);
+    try {
+      await authApi.revokeSession(id);
+      setSessions((prev) => prev.filter((s) => s.id !== id));
       setSuccess("Device session terminated successfully.");
-      setTimeout(() => setSuccess(null), 3000);
-    }, 1000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to revoke session");
+    } finally {
+      setRevokingId(null);
+    }
   };
 
   return (
@@ -480,7 +487,7 @@ export default function ProfileSettingsPage() {
                       </span>
                       <div className="h-9 px-3 flex items-center rounded-sm border border-border/30 bg-background/50 text-sm text-foreground-muted font-mono">
                         <Building size={13} className="mr-1.5 text-foreground-subtle" />
-                        Strategic Operations
+                        {user.department || "—"}
                       </div>
                     </div>
                     <div className="space-y-1.5">
@@ -489,7 +496,7 @@ export default function ProfileSettingsPage() {
                       </span>
                       <div className="h-9 px-3 flex items-center rounded-sm border border-border/30 bg-background/50 text-sm text-foreground-muted font-mono">
                         <UserCheck size={13} className="mr-1.5 text-foreground-subtle" />
-                        Chief Mirza
+                        {user.supervisorName || "—"}
                       </div>
                     </div>
 

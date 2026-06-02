@@ -32,9 +32,12 @@ struct RefreshResponse {
 }
 
 pub async fn refresh(
+    pool: web::Data<PgPool>,
     redis_client: web::Data<RedisClient>,
+    req: actix_web::HttpRequest,
     body: web::Json<RefreshRequest>,
 ) -> Result<HttpResponse, AppError> {
+    let old_token = body.refresh_token.clone();
     let result = redis::take_refresh_token_async(&redis_client, &body.refresh_token).await?;
 
     let Some((user_id, role)) = result else {
@@ -47,6 +50,33 @@ pub async fn refresh(
     let new_refresh_token = jwt::generate_refresh_token();
 
     redis::store_refresh_token_async(&redis_client, &new_refresh_token, &user_id, &role).await?;
+
+    // Update session: rotate token prefix, update device / ip / last_seen_at
+    let new_prefix = new_refresh_token[..16].to_string();
+    let old_prefix = &old_token[..old_token.len().min(16)];
+    let user_agent = req
+        .headers()
+        .get("User-Agent")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("Unknown")
+        .to_string();
+    let ip = req
+        .peer_addr()
+        .map(|a| a.ip().to_string())
+        .unwrap_or_else(|| "unknown".to_string());
+
+    let _ = sqlx::query(
+        "UPDATE user_sessions \
+         SET token_prefix = $1, device = $2, ip = $3, last_seen_at = NOW() \
+         WHERE user_id = $4 AND token_prefix = $5",
+    )
+    .bind(&new_prefix)
+    .bind(&user_agent)
+    .bind(&ip)
+    .bind(&user_uuid)
+    .bind(old_prefix)
+    .execute(pool.get_ref())
+    .await;
 
     tracing::info!(user_id = %user_id, "Token refreshed");
 
@@ -63,6 +93,7 @@ pub(crate) struct LogoutRequest {
 }
 
 pub async fn logout(
+    pool: web::Data<PgPool>,
     redis_client: web::Data<RedisClient>,
     user: AuthUser,
     body: web::Json<LogoutRequest>,
@@ -70,6 +101,12 @@ pub async fn logout(
     if let Some(ref rt) = body.refresh_token {
         let _ = redis::take_refresh_token_async(&redis_client, rt).await;
     }
+
+    // Delete all sessions for this user
+    let _ = sqlx::query("DELETE FROM user_sessions WHERE user_id = $1")
+        .bind(user.id)
+        .execute(pool.get_ref())
+        .await;
 
     let _ = redis::revoke_user_tokens_async(&redis_client, &user.id.to_string()).await;
 
