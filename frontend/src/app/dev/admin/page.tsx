@@ -136,6 +136,7 @@ function AdminDashboardView() {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [dashboard, setDashboard] = useState<AdminDashboard | null>(null);
+  const [dashboardLoaded, setDashboardLoaded] = useState(false);
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
   const [userFiles, setUserFiles] = useState<BackendFileNode[]>([]);
   const [userFilesLoading, setUserFilesLoading] = useState(false);
@@ -184,6 +185,8 @@ function AdminDashboardView() {
     try { setDashboard(await adminApi.getDashboard()); } catch (e) {
       setSseToast({ message: `Dashboard: ${e instanceof Error ? e.message : "Fetch failed"}`, type: "error" });
       setTimeout(() => setSseToast(null), 5000);
+    } finally {
+      setDashboardLoaded(true);
     }
   }, []);
 
@@ -351,16 +354,35 @@ function AdminDashboardView() {
         </div>
 
         {/* Tab: Dashboard */}
-        {adminTab === "dashboard" && dashboard && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {statCards.map(({ label, value, tab, filter }) => (
-              <button key={label} onClick={() => switchTab(tab || "files", filter)}
-                className="border border-border/30 rounded-sm bg-background-panel/35 backdrop-blur-sm p-3 text-left hover:border-accent/50 transition-colors cursor-pointer">
-                <span className="font-mono text-[8px] font-bold uppercase tracking-widest text-foreground-subtle">{label}</span>
-                <div className="text-lg font-bold font-mono text-foreground mt-0.5">{typeof value === "number" ? value.toLocaleString() : value}</div>
+        {adminTab === "dashboard" && (
+          !dashboardLoaded ? (
+            <div className="flex items-center justify-center py-16 font-mono text-xs text-foreground-subtle">
+              <Loader2 size={18} className="animate-spin text-accent mr-2" />
+              LOADING DASHBOARD DATA...
+            </div>
+          ) : !dashboard ? (
+            <div className="flex flex-col items-center justify-center py-16 gap-3">
+              <AlertCircle size={24} className="text-destructive/60" />
+              <p className="font-mono text-xs text-destructive">Failed to load dashboard metrics.</p>
+              <button onClick={fetchDashboard} className="h-8 px-4 rounded-sm border border-accent/30 text-accent bg-accent/5 hover:bg-accent/15 text-[10px] font-bold font-mono uppercase tracking-wider transition-colors cursor-pointer">
+                Retry
               </button>
-            ))}
-          </div>
+            </div>
+          ) : statCards.length === 0 ? (
+            <div className="flex items-center justify-center py-16 font-mono text-xs text-foreground-subtle">
+              No metrics available.
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {statCards.map(({ label, value, tab, filter }) => (
+                <button key={label} onClick={() => switchTab(tab || "files", filter)}
+                  className="border border-border/30 rounded-sm bg-background-panel/35 backdrop-blur-sm p-3 text-left hover:border-accent/50 transition-colors cursor-pointer">
+                  <span className="font-mono text-[8px] font-bold uppercase tracking-widest text-foreground-subtle">{label}</span>
+                  <div className="text-lg font-bold font-mono text-foreground mt-0.5">{typeof value === "number" ? value.toLocaleString() : value}</div>
+                </button>
+              ))}
+            </div>
+          )
         )}
 
         {/* Tab: Users */}

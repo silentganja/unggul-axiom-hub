@@ -129,18 +129,43 @@ pub async fn login(
 // ── GET /api/auth/me ─────────────────────────────────────────────────────────
 
 pub async fn me(pool: web::Data<PgPool>, user: AuthUser) -> Result<HttpResponse, AppError> {
+    // Try the extended query (with optional profile columns from migrations 9018-9021).
+    // If those columns don't exist yet, fall back to the basic query.
     let profile: Option<UserProfile> = sqlx::query_as::<_, UserProfile>(
         "SELECT u.id, u.email, u.full_name, u.role, u.active, u.storage_quota_bytes, \
-                u.avatar_data, u.department, u.notification_prefs, u.created_at, \
+                COALESCE(u.avatar_data, '') AS avatar_data, \
+                COALESCE(u.department, '') AS department, \
+                COALESCE(u.notification_prefs, '{}'::jsonb) AS notification_prefs, \
+                u.created_at, \
                 (SELECT su.full_name FROM users su WHERE su.id = u.supervisor_id) AS supervisor_name \
          FROM users u WHERE u.id = $1 LIMIT 1",
     )
     .bind(user.id)
     .fetch_optional(pool.get_ref())
-    .await
-    .map_err(AppError::Database)?;
+    .await;
 
-    let profile = profile.ok_or(AppError::NotFound)?;
+    // If the extended query fails (columns may not exist yet), fall back
+    let profile = match profile {
+        Ok(Some(p)) => p,
+        Ok(None) => return Err(AppError::NotFound),
+        Err(_) => {
+            // Extended columns don't exist - use basic query
+            let basic: Option<UserProfile> = sqlx::query_as::<_, UserProfile>(
+                "SELECT u.id, u.email, u.full_name, u.role, u.active, \
+                        u.storage_quota_bytes, u.created_at, \
+                        ''::text AS avatar_data, ''::text AS department, \
+                        '{}'::jsonb AS notification_prefs, \
+                        NULL::text AS supervisor_name \
+                 FROM users u WHERE u.id = $1 LIMIT 1",
+            )
+            .bind(user.id)
+            .fetch_optional(pool.get_ref())
+            .await
+            .map_err(AppError::Database)?;
+
+            basic.ok_or(AppError::NotFound)?
+        }
+    };
 
     Ok(HttpResponse::Ok().json(profile))
 }
@@ -212,6 +237,8 @@ pub async fn update_profile(
         existing.password_hash
     };
 
+    // Try extended UPDATE (with department + extended RETURNING).
+    // If columns don't exist yet, fall back to basic UPDATE.
     let updated: User = sqlx::query_as::<_, User>(
         "UPDATE users SET full_name = $1, password_hash = $2, department = $3 WHERE id = $4
          RETURNING id, email, password_hash, full_name, role, active, \
@@ -223,6 +250,18 @@ pub async fn update_profile(
     .bind(user.id)
     .fetch_one(pool.get_ref())
     .await
+    .or_else(|_| {
+        // Fallback: basic columns only
+        sqlx::query_as::<_, User>(
+            "UPDATE users SET full_name = $1, password_hash = $2 WHERE id = $3
+             RETURNING id, email, password_hash, full_name, role, active, \
+                      storage_quota_bytes, created_at",
+        )
+        .bind(&new_full_name)
+        .bind(&new_password_hash)
+        .bind(user.id)
+        .fetch_one(pool.get_ref())
+    })
     .map_err(AppError::Database)?;
 
     if password_changed {
