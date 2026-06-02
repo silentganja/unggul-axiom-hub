@@ -611,9 +611,9 @@ pub async fn force_delete_file(
     // Read the file record first to verify it exists
     let file_exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM files WHERE id = $1)")
         .bind(file_id)
-    .fetch_one(pool.get_ref())
-    .await
-    .map_err(AppError::Database)?;
+        .fetch_one(pool.get_ref())
+        .await
+        .map_err(AppError::Database)?;
 
     if !file_exists {
         return Err(AppError::NotFound);

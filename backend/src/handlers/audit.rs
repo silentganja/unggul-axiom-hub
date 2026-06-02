@@ -193,10 +193,10 @@ pub async fn list_audit_logs(
 fn escape_csv(s: &str) -> String {
     let escaped =
         if s.starts_with('=') || s.starts_with('+') || s.starts_with('-') || s.starts_with('@') {
-        format!("'{}", s)
-    } else {
-        s.to_string()
-    };
+            format!("'{}", s)
+        } else {
+            s.to_string()
+        };
     if escaped.contains(',') || escaped.contains('"') || escaped.contains('\n') {
         format!("\"{}\"", escaped.replace('"', "\"\""))
     } else {
