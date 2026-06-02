@@ -20,6 +20,8 @@ import {
   Flame,
   BookOpen,
   ShieldCheck,
+  Boxes,
+  Network,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { cn } from "@/lib/utils";
@@ -42,6 +44,8 @@ export default function InfoLayout({ children }: { children: React.ReactNode }) 
     { href: "/v/info/benchmarks", label: "10. Performance Benchmarks", icon: <Flame size={14} /> },
     { href: "/v/info/api-reference", label: "11. API Specification", icon: <BookOpen size={14} /> },
     { href: "/v/info/hardening", label: "12. Production Hardening", icon: <ShieldCheck size={14} /> },
+    { href: "/v/info/tech-stack", label: "13. Tech Stack & Tools", icon: <Boxes size={14} /> },
+    { href: "/v/info/erd", label: "14. Relational ERD", icon: <Network size={14} /> },
   ];
 
   return (
