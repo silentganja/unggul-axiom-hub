@@ -70,6 +70,7 @@ impl From<User> for UserProfile {
             full_name: u.full_name,
             role: u.role,
             active: u.active,
+            storage_quota_bytes: u.storage_quota_bytes,
             created_at: u.created_at,
         }
     }
