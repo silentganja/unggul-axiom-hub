@@ -821,9 +821,7 @@ pub async fn move_files(
         if let Some((locker, locker_role)) = lock_info {
             match locker_role {
                 Some(role) => {
-                    if locker != user.id
-                        && user::role_level(&user.role) < user::role_level(&role)
-                    {
+                    if locker != user.id && user::role_level(&user.role) < user::role_level(&role) {
                         return Err(AppError::Conflict(
                             "This file is locked by a higher authority and cannot be moved".into(),
                         ));
