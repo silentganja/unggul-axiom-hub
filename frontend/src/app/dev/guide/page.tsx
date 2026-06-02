@@ -16,25 +16,25 @@ export default function GuideIntroPage() {
   const portalFeatures = [
     {
       title: "File Explorer",
-      desc: "Upload, download, classify, and share strategic assets with full security control.",
+      desc: "Upload, download, set security levels, and share files with your team.",
       href: "/dev/guide/explorer",
       icon: <Folder size={18} className="text-accent" />,
     },
     {
-      title: "Governance Engine",
-      desc: "Request and manage file locks or classification updates via formal supervisor approvals.",
+      title: "Governance & Approvals",
+      desc: "Request permission to lock files or change their security levels through simple supervisor approvals.",
       href: "/dev/guide/governance",
       icon: <Shield size={18} className="text-accent" />,
     },
     {
-      title: "Security & Credentials",
-      desc: "Directory roles, access scopes, and multi-factor biometric passkey configurations.",
+      title: "Security & Roles",
+      desc: "Learn about your account permissions and set up easy face or fingerprint sign-in.",
       href: "/dev/guide/roles",
       icon: <Users size={18} className="text-accent" />,
     },
     {
-      title: "Interactive Scenarios",
-      desc: "Step-by-step simulations of real-world operational workflows and governance gates.",
+      title: "Step-by-Step Examples",
+      desc: "Follow simple interactive walk-throughs of common daily tasks in the portal.",
       href: "/dev/guide/scenarios",
       icon: <Play size={18} className="text-accent" />,
     },
@@ -45,13 +45,13 @@ export default function GuideIntroPage() {
       {/* Intro Hero Section */}
       <div className="space-y-3">
         <div className="inline-flex items-center gap-1.5 px-3 py-1 font-mono text-[9px] font-semibold text-accent tracking-wider uppercase border border-accent/20 bg-accent-subtle/30 rounded">
-          <BookOpen size={10} /> Platforms Manual
+          <BookOpen size={10} /> User Guide
         </div>
         <h2 className="text-2xl font-bold tracking-tight text-foreground font-serif">
           Welcome to the Strategic Portal
         </h2>
         <p className="text-xs text-foreground-muted leading-relaxed font-sans max-w-2xl">
-          This manual serves as the official operational guide and playbook for all Unggul Axiom staff. The Strategic Portal provides a secured environment for storing critical files, organizing corporate resources, and conducting workflows governed by strict, audited policy constraints.
+          The Strategic Portal is a secure space for storing corporate files, sharing work with team members, and collaborating safely. To keep company files secure, some actions (like changing file security ratings or editing locked files) follow a simple approval process.
         </p>
       </div>
 
@@ -59,9 +59,9 @@ export default function GuideIntroPage() {
       <div className="p-4 rounded border border-warning/30 bg-warning/5 flex items-start gap-3">
         <ShieldAlert size={18} className="text-warning shrink-0 mt-0.5" />
         <div className="space-y-1 text-xs">
-          <span className="font-bold text-foreground font-sans">Mandatory Regulatory Notice</span>
+          <span className="font-bold text-foreground font-sans">Important Compliance Notice</span>
           <p className="text-foreground-muted leading-relaxed font-sans">
-            Under Unggul Axiom compliance guidelines, all actions taken inside the Strategic Portal—including file creation, download logs, and sharing configurations—are logged to immutable system database tables. Unauthorized access to files classified above your current clearance level (such as SULIT, TERHAD or RAHSIA) is strictly prohibited.
+            To ensure data safety, the portal automatically logs file uploads, downloads, and sharing activities. Accessing sensitive documents beyond your clearance level without permission is strictly monitored. Please handle all documents according to company policy.
           </p>
         </div>
       </div>
@@ -71,20 +71,20 @@ export default function GuideIntroPage() {
         <div className="border border-border/30 rounded bg-background-panel/40 p-4 space-y-2">
           <div className="flex items-center gap-2">
             <Sparkles size={14} className="text-accent" />
-            <h3 className="text-xs font-bold font-serif text-foreground">Secure Knowledge Management</h3>
+            <h3 className="text-xs font-bold font-serif text-foreground">Safe File Storage</h3>
           </div>
           <p className="text-[11px] text-foreground-subtle leading-relaxed font-sans">
-            Centralized document libraries represent the core of our corporate intellect. The portal ensures documents are structured, version-protected, and mapped to specific data classifications to protect organizational IP.
+            Store documents securely, categorize them under clear security labels, and keep track of files easily. This helps protect valuable company plans and resources.
           </p>
         </div>
         
         <div className="border border-border/30 rounded bg-background-panel/40 p-4 space-y-2">
           <div className="flex items-center gap-2">
             <Shield size={14} className="text-accent" />
-            <h3 className="text-xs font-bold font-serif text-foreground">Administrative Governance</h3>
+            <h3 className="text-xs font-bold font-serif text-foreground">Guided Approvals</h3>
           </div>
           <p className="text-[11px] text-foreground-subtle leading-relaxed font-sans">
-            Modifying critical files or security states requires formal justification. The portal automates this path, placing requests in a supervisor review queue before executing operations.
+            Major changes to sensitive files follow a guided review path. You can submit requests directly in the portal, and your supervisor can review and approve them in a few clicks.
           </p>
         </div>
       </div>
@@ -92,7 +92,7 @@ export default function GuideIntroPage() {
       {/* Quick Navigation Cards */}
       <div className="space-y-3">
         <h3 className="font-mono text-[9px] font-bold text-accent uppercase tracking-widest">
-          Explore System Guidelines
+          Find Help Topics
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {portalFeatures.map((feat) => (
@@ -123,25 +123,25 @@ export default function GuideIntroPage() {
       {/* Quick-Start Pathway */}
       <div className="border border-border/20 rounded-lg p-5 bg-background/20 space-y-3">
         <h3 className="font-mono text-[9px] font-bold text-accent uppercase tracking-widest">
-          Quick-Start Operations Check
+          Quick Start Guide for New Users
         </h3>
         <div className="space-y-3 font-mono text-[10px] text-foreground-subtle">
           <div className="flex gap-3">
             <span className="font-bold text-accent shrink-0">STEP 01</span>
             <p className="font-sans text-[11px] leading-relaxed">
-              <strong>Access the portal:</strong> Login using your company email credentials or set up a biometric passkey on your device for passwordless access (see <Link href="/dev/guide/roles" className="text-accent hover:underline">Section 4</Link>).
+              <strong>Log In:</strong> Sign in using your corporate email. You can also register a passkey to sign in quickly using your device fingerprint or face recognition (see <Link href="/dev/guide/roles" className="text-accent hover:underline">Section 4</Link>).
             </p>
           </div>
           <div className="flex gap-3">
             <span className="font-bold text-accent shrink-0">STEP 02</span>
             <p className="font-sans text-[11px] leading-relaxed">
-              <strong>Check folder permissions:</strong> Access the <Link href="/dev/guide/explorer" className="text-accent hover:underline">File Explorer</Link> and browse folders. Files marked with SULIT, TERHAD or RAHSIA require designated collaborator access or specific operational roles.
+              <strong>Explore Files:</strong> Open the <Link href="/dev/guide/explorer" className="text-accent hover:underline">File Explorer</Link> to browse documents. Files marked Confidential or Secret are protected and visible to shared team members and management.
             </p>
           </div>
           <div className="flex gap-3">
             <span className="font-bold text-accent shrink-0">STEP 03</span>
             <p className="font-sans text-[11px] leading-relaxed">
-              <strong>Initiate locking:</strong> Prevent overwrites by submitting a locking request via the Actions menu for any files you wish to edit in shared project workspace zones.
+              <strong>Lock files while editing:</strong> If you are editing a file in a shared team folder, lock it first so colleagues know you are working on it and don&apos;t accidentally overwrite your edits.
             </p>
           </div>
         </div>

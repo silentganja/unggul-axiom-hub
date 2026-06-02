@@ -2,28 +2,25 @@
 
 import {
   Users,
-  Shield,
   Fingerprint,
   Check,
   X,
-  AlertCircle,
-  HelpCircle,
 } from "lucide-react";
 
 export default function SecurityRolesGuidePage() {
   const permissions = [
-    { action: "Browse Open/Terhad Files", staff: true, officer: true, director: true, chief: true },
-    { action: "Upload/Edit Files (Owned/Shared)", staff: true, officer: true, director: true, chief: true },
+    { action: "Browse Open/Restricted Files", staff: true, officer: true, director: true, chief: true },
+    { action: "Upload/Edit Files (Own & Shared)", staff: true, officer: true, director: true, chief: true },
     { action: "Lock/Unlock Own Files", staff: true, officer: true, director: true, chief: true },
     { action: "Access Shared Folders", staff: true, officer: true, director: true, chief: true },
-    { action: "Access SULIT Files", staff: "Shared Only", officer: "Shared Only", director: true, chief: true },
-    { action: "Access RAHSIA Files", staff: false, officer: false, director: true, chief: true },
-    { action: "Submit Governance Request", staff: true, officer: true, director: true, chief: true },
-    { action: "Approve standard locks/moves/deletes", staff: false, officer: true, director: true, chief: true },
-    { action: "Approve classification changes", staff: false, officer: false, director: true, chief: true },
-    { action: "User Creation & Deactivation", staff: false, officer: false, director: true, chief: true },
-    { action: "Force Delete Files Globally", staff: false, officer: false, director: false, chief: true },
-    { action: "System Config Override", staff: false, officer: false, director: false, chief: true },
+    { action: "Access Confidential Files", staff: "Shared Only", officer: "Shared Only", director: true, chief: true },
+    { action: "Access Secret Board Files", staff: false, officer: false, director: true, chief: true },
+    { action: "Submit Lock/Upgrade Request", staff: true, officer: true, director: true, chief: true },
+    { action: "Approve Locks, Unlocks & Deletes", staff: false, officer: true, director: true, chief: true },
+    { action: "Approve Security Label Changes", staff: false, officer: false, director: true, chief: true },
+    { action: "Add/Remove User Accounts", staff: false, officer: false, director: true, chief: true },
+    { action: "Erase Files Globally", staff: false, officer: false, director: false, chief: true },
+    { action: "Change Global Settings", staff: false, officer: false, director: false, chief: true },
   ];
 
   return (
@@ -34,26 +31,26 @@ export default function SecurityRolesGuidePage() {
           <Users size={10} /> SECTION 4.0
         </div>
         <h2 className="text-xl font-bold tracking-tight text-foreground font-serif">
-          Security Roles &amp; Credentials
+          User Roles &amp; Security Levels
         </h2>
         <p className="text-xs text-foreground-muted leading-relaxed font-sans max-w-2xl">
-          The Strategic Portal operates on a structured Role-Based Access Control (RBAC) mechanism. User accounts are classified into four main tiers.
+          The portal matches your account to one of four user roles, depending on your job duties. Your role determines what files you can see and what approvals you can issue.
         </p>
       </div>
 
       {/* Roster Guide */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 font-sans">
         {/* Staff & Officer */}
         <div className="space-y-4">
           <div className="border border-border/30 rounded bg-background-panel/40 p-4 space-y-2">
             <div className="flex items-center justify-between">
               <span className="font-bold text-foreground font-serif text-xs">Staff Account</span>
               <span className="font-mono text-[8px] font-bold border border-border/40 bg-background-muted/20 text-foreground-subtle px-1.5 py-0.5 rounded uppercase">
-                Tier 1 (level 1)
+                Tier 1
               </span>
             </div>
-            <p className="text-[11px] text-foreground-subtle leading-relaxed font-sans">
-              Basic operational accounts. Staff can upload documents, create folders, share resources with other team members, and request locks or security overrides. Cannot bypass governance policies or approve requests.
+            <p className="text-[11px] text-foreground-subtle leading-relaxed">
+              Standard team member account. You can upload and edit documents, share items, and request file locks or classification overrides. You cannot approve requests or modify other users.
             </p>
           </div>
 
@@ -61,11 +58,11 @@ export default function SecurityRolesGuidePage() {
             <div className="flex items-center justify-between">
               <span className="font-bold text-info font-serif text-xs">Officer Account</span>
               <span className="font-mono text-[8px] font-bold border border-info/30 bg-info/10 text-info px-1.5 py-0.5 rounded uppercase">
-                Tier 2 (level 2)
+                Tier 2
               </span>
             </div>
-            <p className="text-[11px] text-foreground-subtle leading-relaxed font-sans">
-              Operational supervisors. Officers possess standard governance access (<code className="font-mono text-[10px]">can_govern</code>) allowing them to approve standard locks, unlocks, moves, and soft deletes. Cannot approve classification overrides.
+            <p className="text-[11px] text-foreground-subtle leading-relaxed">
+              Department supervisors. Officers manage team document folders and are authorized to review and approve standard file lock, unlock, move, and trash requests.
             </p>
           </div>
         </div>
@@ -76,11 +73,11 @@ export default function SecurityRolesGuidePage() {
             <div className="flex items-center justify-between">
               <span className="font-bold text-accent/80 font-serif text-xs">Director Account</span>
               <span className="font-mono text-[8px] font-bold border border-accent/20 bg-accent/10 text-accent px-1.5 py-0.5 rounded uppercase">
-                Tier 3 (level 3)
+                Tier 3
               </span>
             </div>
-            <p className="text-[11px] text-foreground-subtle leading-relaxed font-sans">
-              Executive business unit leaders. Directors have access to files rated up to RAHSIA within their scope. They possess <code className="font-mono text-[10px]">can_govern_classified</code> and <code className="font-mono text-[10px]">can_manage_users</code>, allowing them to approve classification updates and edit standard user accounts.
+            <p className="text-[11px] text-foreground-subtle leading-relaxed">
+              Department heads and directors. Directors have broad access to folders within their business unit, including Confidential and Secret Board documents. They can approve security label changes and manage staff accounts.
             </p>
           </div>
 
@@ -88,11 +85,11 @@ export default function SecurityRolesGuidePage() {
             <div className="flex items-center justify-between">
               <span className="font-bold text-accent font-serif text-xs">Chief Account</span>
               <span className="font-mono text-[8px] font-bold border border-accent/30 bg-accent/15 text-accent px-1.5 py-0.5 rounded uppercase">
-                Tier 4 (level 4)
+                Tier 4
               </span>
             </div>
-            <p className="text-[11px] text-foreground-subtle leading-relaxed font-sans">
-              Global system administrators. Chiefs possess full operational privileges, including force-approving administrative governance requests, overriding global config variables, managing storage metrics, and deleting files globally.
+            <p className="text-[11px] text-foreground-subtle leading-relaxed">
+              Global system administrators. Chiefs have full access to override governance locks, change global system configurations, adjust storage space limits, and delete files permanently.
             </p>
           </div>
         </div>
@@ -101,13 +98,13 @@ export default function SecurityRolesGuidePage() {
       {/* Permissions Matrix */}
       <div className="space-y-3">
         <h3 className="font-mono text-[9px] font-bold text-accent uppercase tracking-widest">
-          Permissions Matrix
+          Who Can Do What?
         </h3>
         <div className="border border-border/25 rounded overflow-hidden">
           <table className="w-full text-left font-mono text-[10px] border-collapse">
             <thead>
               <tr className="bg-background-panel/60 border-b border-border/20 text-foreground-subtle select-none text-[9px] uppercase tracking-wider">
-                <th className="p-2.5">Platform Action</th>
+                <th className="p-2.5">Portal Action</th>
                 <th className="p-2.5 text-center">Staff</th>
                 <th className="p-2.5 text-center">Officer</th>
                 <th className="p-2.5 text-center">Director</th>
@@ -133,22 +130,22 @@ export default function SecurityRolesGuidePage() {
       <div className="border border-border/30 rounded bg-background-panel/40 p-5 space-y-4">
         <div className="flex items-center gap-2">
           <Fingerprint size={16} className="text-accent" />
-          <h3 className="font-mono text-[9px] font-bold text-accent uppercase tracking-widest">
-            FIDO2 / WebAuthn Biometric Passkeys
+          <h3 className="font-mono text-[9px] font-bold text-accent uppercase tracking-widest font-sans">
+            Biometric Sign-In (Fingerprint / Face ID)
           </h3>
         </div>
         <p className="text-xs text-foreground-subtle leading-relaxed font-sans">
-          Strategic Portal implements hardware-backed FIDO2 Passkey authentication to secure logins. Once registered, staff can skip entering passwords and authenticate using their device&apos;s biometrics (fingerprint scanner, face recognition, or hardware pin).
+          The portal supports fingerprint or face sign-ins (Passkeys). Once registered, you can log in securely without entering your password, using your computer or phone&apos;s built-in scanner.
         </p>
 
         <div className="p-4 rounded border border-border/20 bg-background/20 space-y-3 font-sans text-xs">
-          <h4 className="font-bold text-foreground">How to Register a Passkey:</h4>
+          <h4 className="font-bold text-foreground">How to Register for Fingerprint / Face ID:</h4>
           <ol className="list-decimal pl-4 space-y-2 text-foreground-muted">
-            <li>Navigate to **Portal Settings** from the dashboard.</li>
+            <li>Go to **Portal Settings** (click your profile on the dashboard).</li>
             <li>Select the **Passkey** tab.</li>
             <li>Click the **Register Passkey** button.</li>
-            <li>Your browser will trigger the secure system dialog. Follow the instructions to register your biometric lock.</li>
-            <li>On your next login, simply enter your email and click the biometric sign-in button.</li>
+            <li>Your browser will show a popup asking for your fingerprint or face scan. Follow the on-screen steps.</li>
+            <li>Once complete, you can sign in by simply scanning your fingerprint on the login screen.</li>
           </ol>
         </div>
       </div>

@@ -43,35 +43,35 @@ export default function ScenariosGuidePage() {
       overview: "How to upload a strategic document, lock it from edits, and restrict access through classification upgrades.",
       steps: [
         {
-          title: "Upload & Classify",
-          desc: "Upload the document (e.g., 'Q3 Budget.pdf') to your workspace. Select 'SULIT' (Confidential) in the upload panel classification selector.",
+          title: "Upload & Set Security Rating",
+          desc: "Upload the document (for example, 'Q3 Budget.pdf') to your workspace. Select 'SULIT' (Confidential) in the upload panel to restrict general visibility.",
           role: "Staff / Officer",
           badge: "Upload File",
           mockLog: "POST /api/files/upload HTTP/1.1\nHost: hub.unggulaxiom.com\nContent-Type: multipart/form-data\n\n-> payload: { parentId: null, classification: 'SULIT', file: <Q3 Budget.pdf> }\n<- Response: 201 Created { id: 'f-8972', name: 'Q3 Budget.pdf', classification: 'SULIT' }"
         },
         {
-          title: "Submit Lock Request",
-          desc: "Select the file, click 'Governance' in the Action Bar, and submit a 'FILE_LOCK' request stating: 'Prevent modifications during draft review'.",
+          title: "Request a File Lock",
+          desc: "Select the file, click 'Governance' in the actions menu, and submit a lock request stating: 'Prevent modifications during draft review'. This freezes the file.",
           role: "Staff / Officer",
           badge: "Lock Request",
           mockLog: "POST /api/governance/requests HTTP/1.1\n-> payload: { targetFileId: 'f-8972', type: 'FILE_LOCK', title: 'Lock Draft', metadata: { lockReason: 'Prevent modifications' } }\n<- Response: 201 Created { id: 'req-431', status: 'PENDING' }"
         },
         {
-          title: "Request Classification Upgrade",
-          desc: "Submit a second request for 'CLASSIFICATION_UPGRADE' targeting the same file to set its status to 'RAHSIA' (Secret) to restrict views to Board Members only.",
+          title: "Request to Increase Security Level",
+          desc: "Submit a request to change the classification to 'RAHSIA' (Secret). This will restrict access strictly to board members and directors.",
           role: "Staff / Officer",
           badge: "Upgrade Request",
           mockLog: "POST /api/governance/requests HTTP/1.1\n-> payload: { targetFileId: 'f-8972', type: 'CLASSIFICATION_UPGRADE', title: 'Restrict to Board', metadata: { newClassification: 'RAHSIA' } }\n<- Response: 201 Created { id: 'req-432', status: 'PENDING' }"
         },
         {
-          title: "Supervisor Approval",
-          desc: "A Director or Chief accesses the Admin/Governance Console, reviews the audit log, and clicks 'Approve' on both pending items.",
+          title: "Supervisor Approval Gate",
+          desc: "Your director reviews your submitted requests in their inbox, reads your reasons, and clicks 'Approve' to apply the changes.",
           role: "Director / Chief",
-          badge: "Approval Gate",
+          badge: "Approval",
           mockLog: "POST /api/governance/requests/req-431/approve HTTP/1.1\nAuthorization: Bearer USER_JWT\n-> payload: { reason: 'Lock approved for audit compliance' }\n<- Response: 200 OK { status: 'approved' }\n\nPOST /api/governance/requests/req-432/approve HTTP/1.1\nAuthorization: Bearer USER_JWT\n-> payload: { reason: 'Upgrade to RAHSIA approved for board review' }\n<- Response: 200 OK { status: 'approved' }"
         }
       ],
-      outcome: "The file is locked (cannot be renamed, moved, or deleted) and upgraded to RAHSIA classification, securing it against unauthorized internal leakage."
+      outcome: "The file is locked (cannot be renamed, moved, or deleted) and upgraded to Secret classification, securing it against unauthorized internal leakage."
     },
     {
       id: "collaboration",
@@ -81,28 +81,28 @@ export default function ScenariosGuidePage() {
       steps: [
         {
           title: "Create & Share Folder",
-          desc: "Create a folder named 'Marketing Campaigns 2026'. Right-click the folder, choose 'Share', enter team members' emails, and set roles to 'editor'.",
+          desc: "Create a folder named 'Marketing Campaigns 2026'. Right-click the folder, choose 'Share', enter your team members' emails, and set their access to 'Editor'.",
           role: "Folder Owner",
           badge: "Share Settings",
           mockLog: "POST /api/files/folders HTTP/1.1\n-> payload: { name: 'Marketing Campaigns 2026', parentId: null, classification: 'TERBUKA' }\n<- Response: 201 Created { id: 'fold-391', name: 'Marketing Campaigns 2026' }\n\nPOST /api/files/fold-391/shares HTTP/1.1\n-> payload: { email: 'colleague@unggulaxiom.com', role: 'editor' }\n<- Response: 200 OK { status: 'shared' }"
         },
         {
-          title: "Conflict Prevention",
-          desc: "When working on a shared file, click 'Lock File' (Governance Lock) to inform other team members you are editing. This prevents overwrite conflicts.",
+          title: "Locking the File Temporary",
+          desc: "When working on a shared file, lock the file to let your team know you are editing. This stops colleagues from overwriting your work.",
           role: "Collaborator (Editor)",
           badge: "Temporary Lock",
           mockLog: "POST /api/governance/requests HTTP/1.1\n-> payload: { targetFileId: 'f-7128', type: 'FILE_LOCK', title: 'Lock for Editing' }\n<- Response: 201 Created { id: 'req-987', status: 'PENDING' }"
         },
         {
-          title: "Upload Revision",
-          desc: "Once edits are finalized locally, upload the revised file. The explorer maintains classification settings automatically.",
+          title: "Upload the New Version",
+          desc: "Once you finish editing locally, upload the new file version. The portal maintains all original folder sharing rules automatically.",
           role: "Collaborator (Editor)",
           badge: "Upload Revision",
           mockLog: "POST /api/files/upload HTTP/1.1\nContent-Type: multipart/form-data\n-> payload: { parentId: 'fold-391', classification: 'TERBUKA', file: campaigns_draft_v2.docx }\n<- Response: 200 OK"
         },
         {
-          title: "Release Lock",
-          desc: "Unlock the file to allow other editors to work on it, keeping the collaboration stream active and transparent.",
+          title: "Release the File Lock",
+          desc: "Unlock the file to let other editors work on it, keeping the team workflow active and transparent.",
           role: "Collaborator (Editor)",
           badge: "Unlock",
           mockLog: "POST /api/governance/requests HTTP/1.1\n-> payload: { targetFileId: 'f-7128', type: 'FILE_UNLOCK', title: 'Unlock Revision' }\n<- Response: 201 Created { id: 'req-988', status: 'PENDING' }"
@@ -124,15 +124,15 @@ export default function ScenariosGuidePage() {
           mockLog: "DELETE /api/files/f-1049 HTTP/1.1\n<- Response: 200 OK { fileId: 'f-1049', status: 'TRASHED' }"
         },
         {
-          title: "Accidental Deletion Recovery",
-          desc: "Navigate to the 'Trash' tab in the left sidebar. Locate the file, select it, and click 'Restore'. The file is returned to its original parent folder.",
+          title: "Restore a Deleted File",
+          desc: "Open the Trash tab, select the file, and click 'Restore'. The file immediately goes back to its original folder with all sharing permissions intact.",
           role: "File Owner",
           badge: "Restore",
           mockLog: "POST /api/files/f-1049/restore HTTP/1.1\n<- Response: 200 OK { status: 'restored' }"
         },
         {
-          title: "Permanent Destruction",
-          desc: "For permanent removal, go to the 'Trash' tab, select the file, and choose 'Permanently Delete'. This generates a permanent audit trail entry.",
+          title: "Permanent Deletion",
+          desc: "To delete the file forever, go to the Trash tab, select the file, and choose 'Permanently Delete'. This requires administrator review to avoid leaks.",
           role: "Admin Only",
           badge: "Hard Delete",
           mockLog: "DELETE /api/files/f-1049/permanent HTTP/1.1\nAuthorization: Bearer USER_JWT\n<- Response: 200 OK { status: 'deleted' }"
@@ -201,7 +201,7 @@ export default function ScenariosGuidePage() {
                       : "text-foreground-subtle hover:text-foreground hover:bg-background-subtle/50"
                   )}
                 >
-                  <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-current text-[8px] shrink-0">
+                  <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-current text-[8px] shrink-0 font-mono">
                     {idx + 1}
                   </span>
                   <span className="truncate">{step.title}</span>
@@ -209,7 +209,7 @@ export default function ScenariosGuidePage() {
               ))}
             </div>
           </div>
-          <div className="pt-2 border-t border-border/10 font-mono text-[8px] text-foreground-subtle/60">
+          <div className="pt-2 border-t border-border/10 font-mono text-[8px] text-foreground-subtle/60 font-mono">
             <Clock size={11} className="inline mr-1" />
             Interactive logic simulator
           </div>
@@ -227,11 +227,11 @@ export default function ScenariosGuidePage() {
               </span>
             </div>
             
-            <div className="space-y-2">
-              <h4 className="text-sm font-bold text-foreground font-sans">
+            <div className="space-y-2 font-sans">
+              <h4 className="text-sm font-bold text-foreground">
                 {currentScenario.steps[activeScenarioStep].title}
               </h4>
-              <p className="text-xs text-foreground-muted leading-relaxed font-sans">
+              <p className="text-xs text-foreground-muted leading-relaxed">
                 {currentScenario.steps[activeScenarioStep].desc}
               </p>
             </div>
@@ -240,9 +240,9 @@ export default function ScenariosGuidePage() {
             {currentScenario.steps[activeScenarioStep].mockLog && (
               <div className="space-y-1.5">
                 <span className="flex items-center gap-1 font-mono text-[8px] font-bold text-accent uppercase tracking-wider">
-                  <FileCode size={10} /> Request/Response Console
+                  <FileCode size={10} /> System Activity Logs (For IT / Developer Reference)
                 </span>
-                <pre className="p-3 rounded border border-border/30 bg-background/80 font-mono text-[9px] leading-relaxed text-foreground-subtle overflow-x-auto whitespace-pre">
+                <pre className="p-3 rounded border border-border/30 bg-background/80 font-mono text-[9px] leading-relaxed text-foreground-subtle overflow-x-auto whitespace-pre select-all">
                   {currentScenario.steps[activeScenarioStep].mockLog}
                 </pre>
               </div>
@@ -279,7 +279,7 @@ export default function ScenariosGuidePage() {
         <div className="flex items-center gap-1.5 text-accent font-mono text-[9px] font-bold uppercase tracking-wider">
           <Sparkles size={11} /> Expected Outcome
         </div>
-        <p className="text-[11px] text-foreground-muted leading-relaxed font-sans">
+        <p className="text-[11px] text-foreground-muted leading-relaxed font-sans font-sans">
           {currentScenario.outcome}
         </p>
       </div>
