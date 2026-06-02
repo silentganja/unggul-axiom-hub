@@ -30,7 +30,6 @@ import FileAccessSheet from "@/components/features/FileAccessSheet";
 import FloatingActionBar from "@/components/features/FloatingActionBar";
 import ExecutiveOverview from "@/components/features/ExecutiveOverview";
 import FilePreviewOverlay from "@/components/features/FilePreviewOverlay";
-import ContextMenu from "@/components/ui/ContextMenu";
 import { cn } from "@/lib/utils";
 
 export default function FileExplorerPage() {
@@ -144,6 +143,7 @@ export default function FileExplorerPage() {
   const [uploadClassification, setUploadClassification] = useState<"RAHSIA" | "SULIT" | "TERBUKA">("TERBUKA");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
 
   // ── Drag & drop handlers ───────────────────────────────────────────────────
   const handleDragEnter = (e: React.DragEvent) => {
@@ -710,35 +710,40 @@ export default function FileExplorerPage() {
                       )}>{file.classification}</span>
                     </td>
                     <td className="px-4 py-2 font-mono text-[11px] text-foreground-muted">{file.modifiedAt}</td>
-                    <td className="px-4 py-2 text-right">
-                      <ContextMenu
-                        trigger={
-                          <button className="h-7 w-7 rounded flex items-center justify-center border border-transparent hover:border-border hover:bg-background/40 text-foreground-subtle hover:text-foreground transition-colors">
-                            <MoreHorizontal size={14} />
-                          </button>
-                        }
+                    <td className="px-4 py-2 text-right relative">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setMenuOpenId(menuOpenId === file.id ? null : file.id); }}
+                        className="h-7 w-7 rounded flex items-center justify-center border border-transparent hover:border-border hover:bg-background/40 text-foreground-subtle hover:text-foreground transition-colors"
                       >
-                        <button
-                          onClick={() => { if (file.type !== "folder") setPreviewFileId(file.id); else openAccessControl(file); }}
-                          className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[10px] text-foreground-muted hover:text-foreground hover:bg-background-subtle/50 rounded transition-colors"
-                        >
-                          <Eye size={11} className="text-foreground-subtle shrink-0" /> View
-                        </button>
-                        <button onClick={() => openAccessControl(file)} className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[10px] text-foreground-muted hover:text-foreground hover:bg-background-subtle/50 rounded transition-colors">
-                          <Share2 size={11} className="text-foreground-subtle shrink-0" /> Manage Access
-                        </button>
-                        <button onClick={() => toggleFavorite(file.id)} className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[10px] text-foreground-muted hover:text-foreground hover:bg-background-subtle/50 rounded transition-colors">
-                          <Star size={11} className={cn("shrink-0", file.isFavorite ? "text-accent fill-accent" : "text-foreground-subtle")} />
-                          {file.isFavorite ? "Remove Favorite" : "Add Favorite"}
-                        </button>
-                        <button onClick={() => downloadFile(file.id)} className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[10px] text-foreground-muted hover:text-foreground hover:bg-background-subtle/50 rounded transition-colors">
-                          <Download size={11} className="text-foreground-subtle shrink-0" /> Download
-                        </button>
-                        <hr className="border-t border-border/10 my-1" />
-                        <button onClick={() => deleteFile(file.id)} className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[10px] text-destructive hover:bg-destructive/15 rounded transition-colors">
-                          <Trash2 size={11} className="text-destructive shrink-0" /> Move to Trash
-                        </button>
-                      </ContextMenu>
+                        <MoreHorizontal size={14} />
+                      </button>
+                      {menuOpenId === file.id && (
+                        <>
+                          <div className="fixed inset-0 z-50" onClick={() => setMenuOpenId(null)} />
+                          <div className="absolute right-0 top-full mt-1 z-[60] w-44 rounded border border-border/80 bg-background-panel shadow-lg p-1 space-y-0.5 text-left font-mono">
+                            <button
+                              onClick={() => { setMenuOpenId(null); if (file.type !== "folder") setPreviewFileId(file.id); else openAccessControl(file); }}
+                              className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[10px] text-foreground-muted hover:text-foreground hover:bg-background-subtle/50 rounded transition-colors"
+                            >
+                              <Eye size={11} className="text-foreground-subtle shrink-0" /> View
+                            </button>
+                            <button onClick={() => { setMenuOpenId(null); openAccessControl(file); }} className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[10px] text-foreground-muted hover:text-foreground hover:bg-background-subtle/50 rounded transition-colors">
+                              <Share2 size={11} className="text-foreground-subtle shrink-0" /> Manage Access
+                            </button>
+                            <button onClick={() => { setMenuOpenId(null); toggleFavorite(file.id); }} className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[10px] text-foreground-muted hover:text-foreground hover:bg-background-subtle/50 rounded transition-colors">
+                              <Star size={11} className={cn("shrink-0", file.isFavorite ? "text-accent fill-accent" : "text-foreground-subtle")} />
+                              {file.isFavorite ? "Remove Favorite" : "Add Favorite"}
+                            </button>
+                            <button onClick={() => { setMenuOpenId(null); downloadFile(file.id); }} className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[10px] text-foreground-muted hover:text-foreground hover:bg-background-subtle/50 rounded transition-colors">
+                              <Download size={11} className="text-foreground-subtle shrink-0" /> Download
+                            </button>
+                            <hr className="border-t border-border/10 my-1" />
+                            <button onClick={() => { setMenuOpenId(null); deleteFile(file.id); }} className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[10px] text-destructive hover:bg-destructive/15 rounded transition-colors">
+                              <Trash2 size={11} className="text-destructive shrink-0" /> Move to Trash
+                            </button>
+                          </div>
+                        </>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -1033,52 +1038,57 @@ export default function FileExplorerPage() {
                       <td className="px-4 py-2 text-center select-none">
                         <span className="inline-block px-1.5 py-0.5 rounded bg-background/50 border border-border/20 text-[9px] font-mono capitalize text-foreground-subtle">{file.accessRole}</span>
                       </td>
-                      <td className="px-4 py-2 text-right">
-                        <ContextMenu
-                          trigger={
-                            <button className="h-7 w-7 rounded flex items-center justify-center border border-transparent hover:border-border hover:bg-background/40 text-foreground-subtle hover:text-foreground transition-colors">
-                              <MoreHorizontal size={14} />
-                            </button>
-                          }
+                      <td className="px-4 py-2 text-right relative">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setMenuOpenId(menuOpenId === file.id ? null : file.id); }}
+                          className="h-7 w-7 rounded flex items-center justify-center border border-transparent hover:border-border hover:bg-background/40 text-foreground-subtle hover:text-foreground transition-colors"
                         >
-                          <button
-                            onClick={() => { if (file.type !== "folder") setPreviewFileId(file.id); else openAccessControl(file); }}
-                            className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[10px] text-foreground-muted hover:text-foreground hover:bg-background-subtle/50 rounded transition-colors"
-                          >
-                            <Eye size={11} className="text-foreground-subtle shrink-0" /> View Details
-                          </button>
-                          <button onClick={() => openAccessControl(file)} className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[10px] text-foreground-muted hover:text-foreground hover:bg-background-subtle/50 rounded transition-colors">
-                            <Share2 size={11} className="text-foreground-subtle shrink-0" /> Manage Access
-                          </button>
-                          {file.lockedBy ? (
-                            <button disabled title={`LOCKED: ${file.lockReason || 'Pending Corporate Approval'}`} className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[10px] text-foreground-subtle/40 bg-background/5 cursor-not-allowed text-left rounded">
-                              <Edit2 size={11} className="text-foreground-subtle/30 shrink-0" /><span>Rename</span>
-                              <span className="ml-auto text-[8px] font-bold text-accent uppercase">LOCKED</span>
-                            </button>
-                          ) : (
-                            <button onClick={() => initiateRename(file)} className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[10px] text-foreground-muted hover:text-foreground hover:bg-background-subtle/50 rounded transition-colors">
-                              <Edit2 size={11} className="text-foreground-subtle shrink-0" /> Rename
-                            </button>
-                          )}
-                          <button onClick={() => toggleFavorite(file.id)} className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[10px] text-foreground-muted hover:text-foreground hover:bg-background-subtle/50 rounded transition-colors">
-                            <Star size={11} className={cn("shrink-0", file.isFavorite ? "text-accent fill-accent" : "text-foreground-subtle")} />
-                            {file.isFavorite ? "Remove Favorite" : "Add Favorite"}
-                          </button>
-                          <button onClick={() => downloadFile(file.id)} className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[10px] text-foreground-muted hover:text-foreground hover:bg-background-subtle/50 rounded transition-colors">
-                            <Download size={11} className="text-foreground-subtle shrink-0" /> Download
-                          </button>
-                          <hr className="border-t border-border/10 my-1" />
-                          {file.lockedBy ? (
-                            <button disabled className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[10px] text-destructive/40 bg-background/5 cursor-not-allowed text-left rounded">
-                              <Trash2 size={11} className="text-destructive/30 shrink-0" /><span>Delete</span>
-                              <span className="ml-auto text-[8px] font-bold text-accent uppercase">LOCKED</span>
-                            </button>
-                          ) : (
-                            <button onClick={() => deleteFile(file.id)} className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[10px] text-destructive hover:bg-destructive/15 rounded transition-colors">
-                              <Trash2 size={11} className="text-destructive shrink-0" /> Delete
-                            </button>
-                          )}
-                        </ContextMenu>
+                          <MoreHorizontal size={14} />
+                        </button>
+                        {menuOpenId === file.id && (
+                          <>
+                            <div className="fixed inset-0 z-50" onClick={() => setMenuOpenId(null)} />
+                            <div className="absolute right-0 top-full mt-1 z-[60] w-44 rounded border border-border/80 bg-background-panel shadow-lg p-1 space-y-0.5 text-left font-mono">
+                              <button
+                                onClick={() => { setMenuOpenId(null); if (file.type !== "folder") setPreviewFileId(file.id); else openAccessControl(file); }}
+                                className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[10px] text-foreground-muted hover:text-foreground hover:bg-background-subtle/50 rounded transition-colors"
+                              >
+                                <Eye size={11} className="text-foreground-subtle shrink-0" /> View
+                              </button>
+                              <button onClick={() => { setMenuOpenId(null); openAccessControl(file); }} className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[10px] text-foreground-muted hover:text-foreground hover:bg-background-subtle/50 rounded transition-colors">
+                                <Share2 size={11} className="text-foreground-subtle shrink-0" /> Manage Access
+                              </button>
+                              {file.lockedBy ? (
+                                <button disabled title={`LOCKED: ${file.lockReason || 'Pending Corporate Approval'}`} className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[10px] text-foreground-subtle/40 bg-background/5 cursor-not-allowed text-left rounded">
+                                  <Edit2 size={11} className="text-foreground-subtle/30 shrink-0" /><span>Rename</span>
+                                  <span className="ml-auto text-[8px] font-bold text-accent uppercase">LOCKED</span>
+                                </button>
+                              ) : (
+                                <button onClick={() => { setMenuOpenId(null); initiateRename(file); }} className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[10px] text-foreground-muted hover:text-foreground hover:bg-background-subtle/50 rounded transition-colors">
+                                  <Edit2 size={11} className="text-foreground-subtle shrink-0" /> Rename
+                                </button>
+                              )}
+                              <button onClick={() => { setMenuOpenId(null); toggleFavorite(file.id); }} className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[10px] text-foreground-muted hover:text-foreground hover:bg-background-subtle/50 rounded transition-colors">
+                                <Star size={11} className={cn("shrink-0", file.isFavorite ? "text-accent fill-accent" : "text-foreground-subtle")} />
+                                {file.isFavorite ? "Remove Favorite" : "Add Favorite"}
+                              </button>
+                              <button onClick={() => { setMenuOpenId(null); downloadFile(file.id); }} className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[10px] text-foreground-muted hover:text-foreground hover:bg-background-subtle/50 rounded transition-colors">
+                                <Download size={11} className="text-foreground-subtle shrink-0" /> Download
+                              </button>
+                              <hr className="border-t border-border/10 my-1" />
+                              {file.lockedBy ? (
+                                <button disabled className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[10px] text-destructive/40 bg-background/5 cursor-not-allowed text-left rounded">
+                                  <Trash2 size={11} className="text-destructive/30 shrink-0" /><span>Delete</span>
+                                  <span className="ml-auto text-[8px] font-bold text-accent uppercase">LOCKED</span>
+                                </button>
+                              ) : (
+                                <button onClick={() => { setMenuOpenId(null); deleteFile(file.id); }} className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[10px] text-destructive hover:bg-destructive/15 rounded transition-colors">
+                                  <Trash2 size={11} className="text-destructive shrink-0" /> Delete
+                                </button>
+                              )}
+                            </div>
+                          </>
+                        )}
                       </td>
                     </tr>
                   );
