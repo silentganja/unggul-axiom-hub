@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, ShieldAlert, FileText, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, ShieldAlert, FileText } from "lucide-react";
 
 export default function PrivacyPage() {
   return (

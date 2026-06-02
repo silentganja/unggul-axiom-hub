@@ -1,6 +1,6 @@
 "use client";
 
-import { ShieldCheck, Lock, Shield, CheckCircle2, AlertCircle, RefreshCw } from "lucide-react";
+import { ShieldCheck, Shield } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 

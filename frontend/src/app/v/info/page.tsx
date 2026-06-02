@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Layers, Shield, Sparkles, BookOpen, ChevronRight, Terminal, Globe, UserCheck } from "lucide-react";
+import { Layers, Shield, BookOpen, ChevronRight, Terminal, Globe, UserCheck } from "lucide-react";
 
 export default function InfoOverviewPage() {
   const portalObjectives = [

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Cpu, Terminal, Sparkles, HardDrive, ShieldCheck } from "lucide-react";
+import { Cpu, Terminal, HardDrive, ShieldCheck } from "lucide-react";
 
 export default function InfoArchitecturePage() {
   const [activeNode, setActiveNode] = useState<string | null>(null);

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Settings, Database, Terminal, FileCode, ShieldCheck, CheckCircle2, Play } from "lucide-react";
+import { Settings, Terminal, FileCode, ShieldCheck, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface CodeSnippet {

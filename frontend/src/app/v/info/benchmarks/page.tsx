@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Flame, Cpu, Gauge, Zap, BarChart3, TrendingUp, Info } from "lucide-react";
+import { Flame, Cpu, Gauge, Zap, TrendingUp, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface BenchmarkMetric {

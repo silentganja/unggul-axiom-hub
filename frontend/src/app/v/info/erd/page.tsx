@@ -4,7 +4,6 @@ import React, { useState, useMemo, useRef } from "react";
 import {
   Network,
   Database,
-  KeyRound,
   ArrowRightLeft,
   Search,
   Info,
@@ -13,11 +12,9 @@ import {
   Clock,
   Settings,
   FolderOpen,
-  FileCheck,
   Star,
   FileText,
   ShieldCheck,
-  ChevronDown,
 } from "lucide-react";
 
 interface TableField {
@@ -39,14 +36,7 @@ interface TableDefinition {
   fields: TableField[];
 }
 
-export default function ERDPage() {
-  const [selectedTable, setSelectedTable] = useState<string | null>(null);
-  const [hoveredTable, setHoveredTable] = useState<string | null>(null);
-  const [hoveredFk, setHoveredFk] = useState<{ source: string; target: string } | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  const tableRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
-
-  const tables: TableDefinition[] = [
+const tables: TableDefinition[] = [
     {
       name: "users",
       icon: <User size={16} />,
@@ -189,7 +179,13 @@ export default function ERDPage() {
         { name: "updated_at", type: "TIMESTAMPTZ", nullable: false, defaultValue: "NOW()", description: "Last configuration updated timestamp." }
       ]
     }
-  ];
+];
+
+export default function ERDPage() {
+  const [selectedTable, setSelectedTable] = useState<string | null>(null);
+  const [hoveredTable, setHoveredTable] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const tableRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
 
   // Visual connections coordinates map for the 1050x580 canvas
   const connections = useMemo(() => {
@@ -283,7 +279,7 @@ export default function ERDPage() {
         t.name.toLowerCase().includes(query) ||
         t.fields.some((f) => f.name.toLowerCase().includes(query) || f.type.toLowerCase().includes(query))
     );
-  }, [searchQuery, tables]);
+  }, [searchQuery]);
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -446,7 +442,6 @@ export default function ERDPage() {
         <div className="space-y-6">
           {filteredTables.map((table) => {
             const isSelected = selectedTable === table.name;
-            const isHovered = hoveredTable === table.name;
 
             return (
               <div
@@ -497,13 +492,6 @@ export default function ERDPage() {
                       {table.fields.map((field) => (
                         <tr
                           key={field.name}
-                          onMouseEnter={() => {
-                            if (field.isFk && field.fkTarget) {
-                              const targetTable = field.fkTarget.split(".")[0];
-                              setHoveredFk({ source: table.name, target: targetTable });
-                            }
-                          }}
-                          onMouseLeave={() => setHoveredFk(null)}
                           className={`border-b border-border/5 hover:bg-background-panel/40 transition-colors ${
                             field.isPk 
                               ? "bg-amber-500/[0.02]" 

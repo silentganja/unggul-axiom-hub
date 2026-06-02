@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { BookOpen, Globe, Code, Shield, Terminal, ArrowRight, Clipboard } from "lucide-react";
+import { BookOpen, Globe, Shield, Terminal } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface APIEndpoint {

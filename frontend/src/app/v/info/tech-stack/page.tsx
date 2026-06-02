@@ -3,19 +3,14 @@
 import React, { useState } from "react";
 import {
   Layers,
-  Cpu,
   Lock,
   Database,
   Terminal,
   Server,
   Code2,
-  CheckCircle2,
-  AlertCircle,
-  HelpCircle,
   Package,
   Boxes,
   Zap,
-  ArrowRight,
 } from "lucide-react";
 
 type TabId = "overview" | "frontend" | "backend" | "security" | "tradeoffs";
@@ -478,7 +473,7 @@ export default function TechStackPage() {
                   <h4 className="text-base font-bold font-serif text-foreground">Why Actix-Web over Axum?</h4>
                 </div>
                 <p className="text-xs sm:text-sm text-foreground-subtle leading-relaxed">
-                  While Tokio's Axum has gained immense popularity due to its clean integration with Hyper and the Tower middleware ecosystem, **Actix-Web** was chosen for this enterprise showcase due to its class-leading request processing speeds and mature actor-like multi-threading system. 
+                  While Tokio&apos;s Axum has gained immense popularity due to its clean integration with Hyper and the Tower middleware ecosystem, **Actix-Web** was chosen for this enterprise showcase due to its class-leading request processing speeds and mature actor-like multi-threading system. 
                 </p>
                 <div className="bg-background/40 p-3 rounded border border-border/10 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-sans">
                   <div>

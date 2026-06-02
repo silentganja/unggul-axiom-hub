@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { LineChart, Activity, FileText, AlertTriangle, Sparkles, Terminal, CheckCircle2, RefreshCw } from "lucide-react";
+import { LineChart, Activity, AlertTriangle, Terminal, CheckCircle2, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface LogSpan {
