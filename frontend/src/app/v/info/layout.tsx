@@ -14,6 +14,9 @@ import {
   X,
   Code,
   Terminal,
+  Play,
+  LineChart,
+  Settings,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { cn } from "@/lib/utils";
@@ -30,6 +33,9 @@ export default function InfoLayout({ children }: { children: React.ReactNode }) 
     { href: "/v/info/security", label: "4. Access & Governance", icon: <Lock size={14} /> },
     { href: "/v/info/database", label: "5. Database Schema", icon: <Database size={14} /> },
     { href: "/v/info/deployment", label: "6. DevOps & Deployment", icon: <Terminal size={14} /> },
+    { href: "/v/info/simulation", label: "7. System Simulation", icon: <Play size={14} /> },
+    { href: "/v/info/telemetry", label: "8. Observability & Logs", icon: <LineChart size={14} /> },
+    { href: "/v/info/database-ops", label: "9. Database Operations", icon: <Settings size={14} /> },
   ];
 
   return (
