@@ -148,13 +148,13 @@ export default function ScenariosGuidePage() {
     <div className="space-y-6 animate-in fade-in duration-300">
       {/* Page Header */}
       <div className="space-y-2">
-        <div className="inline-flex items-center gap-1.5 px-3 py-1 font-mono text-[9px] font-semibold text-accent tracking-wider uppercase border border-accent/20 bg-accent-subtle/30 rounded">
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 font-mono text-xs font-semibold text-accent tracking-wider uppercase border border-accent/20 bg-accent-subtle/30 rounded">
           <Play size={10} /> SECTION 5.0
         </div>
-        <h2 className="text-xl font-bold tracking-tight text-foreground font-serif">
+        <h2 className="text-3xl font-bold tracking-tight text-foreground font-serif">
           Operational Scenarios
         </h2>
-        <p className="text-xs text-foreground-muted leading-relaxed font-sans max-w-2xl">
+        <p className="text-sm text-foreground-muted leading-relaxed font-sans max-w-2xl">
           Review step-by-step simulations of real-world workflows inside the Strategic Portal. Toggle scenarios below to inspect the logical flow and mock API outputs.
         </p>
       </div>
@@ -169,7 +169,7 @@ export default function ScenariosGuidePage() {
               setActiveScenarioStep(0);
             }}
             className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 rounded border font-mono text-[10px] font-bold uppercase transition-all cursor-pointer",
+              "flex items-center gap-1.5 px-3 py-1.5 rounded border font-mono text-xs font-bold uppercase transition-all cursor-pointer",
               activeScenarioId === scen.id
                 ? "bg-accent/15 border-accent/40 text-accent"
                 : "border-border/30 text-foreground-subtle hover:text-foreground hover:bg-background-panel/40"
@@ -186,7 +186,7 @@ export default function ScenariosGuidePage() {
         {/* Progress Tracker (Sidebar inside panel) */}
         <div className="lg:col-span-4 bg-background-panel/50 border-b lg:border-b-0 lg:border-r border-border/20 p-4 space-y-4 flex flex-col justify-between select-none">
           <div className="space-y-2">
-            <span className="font-mono text-[8px] font-bold tracking-widest text-foreground-subtle uppercase block">
+            <span className="font-mono text-[10px] font-bold tracking-widest text-foreground-subtle uppercase block">
               Workflow Steps
             </span>
             <div className="space-y-1">
@@ -195,13 +195,13 @@ export default function ScenariosGuidePage() {
                   key={step.title}
                   onClick={() => setActiveScenarioStep(idx)}
                   className={cn(
-                    "w-full flex items-center gap-2.5 p-2 rounded text-left font-mono text-[10px] transition-colors cursor-pointer",
+                    "w-full flex items-center gap-2.5 p-2 rounded text-left font-mono text-xs transition-colors cursor-pointer",
                     activeScenarioStep === idx
                       ? "bg-accent text-accent-foreground font-extrabold"
                       : "text-foreground-subtle hover:text-foreground hover:bg-background-subtle/50"
                   )}
                 >
-                  <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-current text-[8px] shrink-0 font-mono">
+                  <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-current text-[10px] shrink-0 font-mono">
                     {idx + 1}
                   </span>
                   <span className="truncate">{step.title}</span>
@@ -209,7 +209,7 @@ export default function ScenariosGuidePage() {
               ))}
             </div>
           </div>
-          <div className="pt-2 border-t border-border/10 font-mono text-[8px] text-foreground-subtle/60 font-mono">
+          <div className="pt-2 border-t border-border/10 font-mono text-[10px] text-foreground-subtle/60">
             <Clock size={11} className="inline mr-1" />
             Interactive logic simulator
           </div>
@@ -219,19 +219,19 @@ export default function ScenariosGuidePage() {
         <div className="lg:col-span-8 p-4 sm:p-6 flex flex-col justify-between gap-6 min-w-0">
           <div className="space-y-4 animate-in fade-in duration-200" key={activeScenarioStep}>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border/10 pb-2">
-              <span className="font-mono text-[9px] font-bold uppercase tracking-wider text-accent">
+              <span className="font-mono text-xs font-bold uppercase tracking-wider text-accent">
                 Step {activeScenarioStep + 1}: {currentScenario.steps[activeScenarioStep].badge}
               </span>
-              <span className="font-mono text-[8px] font-semibold text-foreground-subtle border border-border px-2 py-0.5 rounded uppercase self-start">
+              <span className="font-mono text-[10px] font-semibold text-foreground-subtle border border-border px-2 py-0.5 rounded uppercase self-start">
                 Authorized Role: {currentScenario.steps[activeScenarioStep].role}
               </span>
             </div>
             
             <div className="space-y-2 font-sans">
-              <h4 className="text-sm font-bold text-foreground">
+              <h4 className="text-base font-bold text-foreground">
                 {currentScenario.steps[activeScenarioStep].title}
               </h4>
-              <p className="text-xs text-foreground-muted leading-relaxed">
+              <p className="text-sm text-foreground-muted leading-relaxed">
                 {currentScenario.steps[activeScenarioStep].desc}
               </p>
             </div>
@@ -239,10 +239,10 @@ export default function ScenariosGuidePage() {
             {/* Mock API Log Overlay */}
             {currentScenario.steps[activeScenarioStep].mockLog && (
               <div className="space-y-1.5">
-                <span className="flex items-center gap-1 font-mono text-[8px] font-bold text-accent uppercase tracking-wider">
+                <span className="flex items-center gap-1 font-mono text-[10px] font-bold text-accent uppercase tracking-wider">
                   <FileCode size={10} /> System Activity Logs (For IT / Developer Reference)
                 </span>
-                <pre className="p-3 rounded border border-border/30 bg-background/80 font-mono text-[9px] leading-relaxed text-foreground-subtle overflow-x-auto whitespace-pre select-all">
+                <pre className="p-3 rounded border border-border/30 bg-background/80 font-mono text-xs leading-relaxed text-foreground-subtle overflow-x-auto whitespace-pre select-all">
                   {currentScenario.steps[activeScenarioStep].mockLog}
                 </pre>
               </div>
@@ -254,19 +254,19 @@ export default function ScenariosGuidePage() {
             <button
               onClick={() => setActiveScenarioStep((prev) => Math.max(0, prev - 1))}
               disabled={activeScenarioStep === 0}
-              className="px-3 py-1.5 text-[9px] font-mono font-bold uppercase rounded border border-border text-foreground-subtle hover:text-foreground hover:bg-background-panel/40 disabled:opacity-30 cursor-pointer"
+              className="px-3 py-1.5 text-xs font-mono font-bold uppercase rounded border border-border text-foreground-subtle hover:text-foreground hover:bg-background-panel/40 disabled:opacity-30 cursor-pointer"
             >
               Prev Step
             </button>
             {activeScenarioStep < currentScenario.steps.length - 1 ? (
               <button
                 onClick={() => setActiveScenarioStep((prev) => prev + 1)}
-                className="btn-shimmer px-4 py-1.5 text-[9px] font-mono font-bold uppercase rounded flex items-center gap-1 cursor-pointer"
+                className="btn-shimmer px-4 py-1.5 text-xs font-mono font-bold uppercase rounded flex items-center gap-1 cursor-pointer"
               >
                 Next Step <ChevronRight size={10} />
               </button>
             ) : (
-              <div className="flex items-center gap-1.5 text-success font-mono text-[9px] border border-success/30 bg-success/5 px-3 py-1.5 rounded select-none">
+              <div className="flex items-center gap-1.5 text-success font-mono text-xs border border-success/30 bg-success/5 px-3 py-1.5 rounded select-none">
                 <CheckCircle size={11} /> Workflow Completed
               </div>
             )}
@@ -276,10 +276,10 @@ export default function ScenariosGuidePage() {
 
       {/* Scenario outcome summary */}
       <div className="p-4 rounded border border-border/25 bg-background-panel/30 space-y-1.5">
-        <div className="flex items-center gap-1.5 text-accent font-mono text-[9px] font-bold uppercase tracking-wider">
+        <div className="flex items-center gap-1.5 text-accent font-mono text-xs font-bold uppercase tracking-wider">
           <Sparkles size={11} /> Expected Outcome
         </div>
-        <p className="text-[11px] text-foreground-muted leading-relaxed font-sans font-sans">
+        <p className="text-sm text-foreground-muted leading-relaxed font-sans">
           {currentScenario.outcome}
         </p>
       </div>
