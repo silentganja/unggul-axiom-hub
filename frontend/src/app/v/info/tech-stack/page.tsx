@@ -115,33 +115,215 @@ export default function TechStackPage() {
             </div>
 
             {/* Core Stack Architecture walkthrough */}
-            <div className="border border-border/20 rounded-lg bg-background-panel/20 p-6 space-y-4">
+            <div className="border border-border/20 rounded-lg bg-background-panel/20 p-6 space-y-6">
               <h4 className="text-base font-bold text-foreground font-serif border-b border-border/10 pb-2 flex items-center gap-2">
                 <Server size={16} className="text-accent" /> Full-Stack System Architecture Diagram
               </h4>
-              <div className="font-mono text-xs leading-relaxed space-y-2 p-4 rounded border border-border/10 bg-background/60 overflow-x-auto whitespace-pre">
-{`+-----------------------------------------------------------------------------------+
-|                              CLIENT VIEWPORT (WEB BROWSER)                         |
-|  - Next.js 16 (React 19, TS)    - Tailwind CSS v4 Styling   - Zustand (Store)     |
-|  - WebAuthn Biometrics API      - TanStack React Query      - Lucide Vector Icons |
-+-----------------------------------------------------------------------------------+
-                                         |
-                                         | HTTP / REST (HTTPS)
-                                         v
-+-----------------------------------------------------------------------------------+
-|                           ACTIX-WEB BACKEND SERVICES (RUST)                        |
-|  - Multi-threaded Executor (Tokio)    - AES-256-GCM Storage Encryption engine     |
-|  - WebAuthn Authentication Engine     - JWT Validation & Claims Check             |
-+-----------------------------------------------------------------------------------+
-                     |                                           |
-    SQLQueries (SQLx)|                                           | Redis Cmd (redis-rs)
-                     v                                           v
-+---------------------------------------+   +---------------------------------------+
-|          POSTGRESQL PERSISTENCE       |   |             REDIS CACHE LAYER         |
-|  - Relational Schema & Constraints    |   |  - Active Session Tokens (Blacklist)  |
-|  - Governance Queues & File Trees     |   |  - API Request Rate Limit Caching     |
-|  - Compliance Ledger (Audit Logs)     |   |  - Real-time Session Registry         |
-+---------------------------------------+   +---------------------------------------+`}
+              
+              {/* CSS Keyframes for animated lines */}
+              <style>{`
+                @keyframes flowLine {
+                  to {
+                    stroke-dashoffset: -20;
+                  }
+                }
+                .animate-flow-line {
+                  stroke-dasharray: 6, 4;
+                  animation: flowLine 1.5s linear infinite;
+                }
+              `}</style>
+
+              {/* Desktop Aspect Ratio Canvas */}
+              <div className="relative w-full max-w-[900px] aspect-[900/520] hidden md:block select-none mx-auto bg-radial-grid rounded border border-border/5 p-4">
+                
+                {/* SVG Connections Layer */}
+                <svg className="absolute inset-0 w-full h-full pointer-events-none z-0" viewBox="0 0 1000 520">
+                  <defs>
+                    <filter id="diagram-neon" x="-20%" y="-20%" width="140%" height="140%">
+                      <feGaussianBlur stdDeviation="3" result="blur" />
+                      <feMerge>
+                        <feMergeNode in="blur" />
+                        <feMergeNode in="SourceGraphic" />
+                      </feMerge>
+                    </filter>
+                  </defs>
+
+                  {/* Flow 1: Client -> Backend */}
+                  <line
+                    x1="500"
+                    y1="130"
+                    x2="500"
+                    y2="210"
+                    stroke="var(--color-accent, #e11d48)"
+                    strokeWidth="2"
+                    className="animate-flow-line"
+                    style={{ filter: "url(#diagram-neon)" }}
+                  />
+
+                  {/* Flow 2: Backend -> PostgreSQL */}
+                  <path
+                    d="M 350 320 C 350 370, 300 360, 300 400"
+                    fill="none"
+                    stroke="var(--color-accent, #e11d48)"
+                    strokeWidth="2"
+                    className="animate-flow-line"
+                    style={{ filter: "url(#diagram-neon)" }}
+                  />
+
+                  {/* Flow 3: Backend -> Redis */}
+                  <path
+                    d="M 650 320 C 650 370, 700 360, 700 400"
+                    fill="none"
+                    stroke="var(--color-accent, #e11d48)"
+                    strokeWidth="2"
+                    className="animate-flow-line"
+                    style={{ filter: "url(#diagram-neon)" }}
+                  />
+                </svg>
+
+                {/* Absolute positioned HTML Cards */}
+
+                {/* Card 1: Client Layer */}
+                <div className="absolute left-[20%] top-[3.8%] w-[60%] h-[21.1%] z-10 p-4 rounded-xl border border-border/20 bg-background-panel/40 backdrop-blur-md flex flex-col justify-between">
+                  <div className="flex items-center justify-between border-b border-border/10 pb-1.5">
+                    <span className="font-mono text-xs font-bold text-foreground flex items-center gap-1.5">
+                      <Code2 size={14} className="text-accent" /> CLIENT PRESENTATION LAYER
+                    </span>
+                    <span className="font-mono text-[8px] text-foreground-subtle border border-border/10 px-2 py-0.5 rounded bg-background/55">Web Browser</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 font-mono text-[9px] py-1">
+                    <span className="px-2 py-0.5 rounded border border-border/10 bg-background/30 text-accent font-semibold">Next.js 16 (React 19)</span>
+                    <span className="px-2 py-0.5 rounded border border-border/10 bg-background/30 text-accent font-semibold">Zustand State Store</span>
+                    <span className="px-2 py-0.5 rounded border border-border/10 bg-background/30 text-accent font-semibold">TanStack Query</span>
+                    <span className="px-2 py-0.5 rounded border border-border/10 bg-background/30 text-accent font-semibold">Tailwind CSS v4</span>
+                    <span className="px-2 py-0.5 rounded border border-border/10 bg-background/30 text-accent font-semibold">WebAuthn API</span>
+                  </div>
+                </div>
+
+                {/* Label: HTTPS API */}
+                <div className="absolute left-[50%] top-[32.6%] translate-x-[-50%] translate-y-[-50%] z-20 font-mono text-[9px] bg-background border border-border/20 text-foreground-subtle px-3 py-1 rounded-full shadow-md font-semibold select-none">
+                  HTTP / REST (HTTPS) Secure Protocols
+                </div>
+
+                {/* Card 2: Backend Layer */}
+                <div className="absolute left-[20%] top-[40.4%] w-[60%] h-[21.1%] z-10 p-4 rounded-xl border border-border/20 bg-background-panel/40 backdrop-blur-md flex flex-col justify-between">
+                  <div className="flex items-center justify-between border-b border-border/10 pb-1.5">
+                    <span className="font-mono text-xs font-bold text-foreground flex items-center gap-1.5">
+                      <Server size={14} className="text-accent" /> API ROUTING &amp; SERVICES LAYER
+                    </span>
+                    <span className="font-mono text-[8px] text-foreground-subtle border border-border/10 px-2 py-0.5 rounded bg-background/55">Actix-Web (Rust)</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 font-mono text-[9px] py-1">
+                    <span className="px-2 py-0.5 rounded border border-border/10 bg-background/30 text-accent font-semibold">Tokio Executor Pool</span>
+                    <span className="px-2 py-0.5 rounded border border-border/10 bg-background/30 text-accent font-semibold">AES-256-GCM Crypt Engine</span>
+                    <span className="px-2 py-0.5 rounded border border-border/10 bg-background/30 text-accent font-semibold">JWT Claims Filter</span>
+                    <span className="px-2 py-0.5 rounded border border-border/10 bg-background/30 text-accent font-semibold">WebAuthn Verifier</span>
+                  </div>
+                </div>
+
+                {/* Left Connector label */}
+                <div className="absolute left-[30%] top-[68%] translate-x-[-50%] translate-y-[-50%] z-20 font-mono text-[8px] bg-background-panel border border-border/10 text-foreground-subtle/80 px-2 py-0.5 rounded shadow-sm">
+                  SQLx Connection Pool
+                </div>
+
+                {/* Right Connector label */}
+                <div className="absolute left-[70%] top-[68%] translate-x-[-50%] translate-y-[-50%] z-20 font-mono text-[8px] bg-background-panel border border-border/10 text-foreground-subtle/80 px-2 py-0.5 rounded shadow-sm">
+                  redis-rs Client Protocol
+                </div>
+
+                {/* Card 3: PostgreSQL Database */}
+                <div className="absolute left-[14.5%] top-[77%] w-[31%] h-[23%] z-10 p-4 rounded-xl border border-border/20 bg-background-panel/40 backdrop-blur-md flex flex-col justify-between">
+                  <div className="flex items-center gap-1.5 border-b border-border/10 pb-1.5 mb-1">
+                    <Database size={14} className="text-accent" />
+                    <span className="font-mono text-xs font-bold text-foreground uppercase">Postgres Database</span>
+                  </div>
+                  <p className="font-sans text-[10px] text-foreground-subtle leading-normal">
+                    Manages relational schema, recursive folder nodes, governance workflows, and audit ledgers.
+                  </p>
+                </div>
+
+                {/* Card 4: Redis Cache */}
+                <div className="absolute left-[54.5%] top-[77%] w-[31%] h-[23%] z-10 p-4 rounded-xl border border-border/20 bg-background-panel/40 backdrop-blur-md flex flex-col justify-between">
+                  <div className="flex items-center gap-1.5 border-b border-border/10 pb-1.5 mb-1">
+                    <Zap size={14} className="text-accent" />
+                    <span className="font-mono text-xs font-bold text-foreground uppercase">Redis Cache Layer</span>
+                  </div>
+                  <p className="font-sans text-[10px] text-foreground-subtle leading-normal">
+                    Sub-millisecond memory caching for JWT token blacklists, WebAuthn challenges, and rate limits.
+                  </p>
+                </div>
+              </div>
+
+              {/* Mobile Viewport Flowchart (flex stack) */}
+              <div className="md:hidden space-y-4 font-mono text-xs select-none">
+                
+                {/* Client Node */}
+                <div className="border border-border/20 rounded-lg bg-background-panel/40 p-4 space-y-2">
+                  <div className="flex items-center gap-1.5 border-b border-border/10 pb-1 text-accent">
+                    <Code2 size={14} />
+                    <span className="font-bold text-foreground">1. Client Viewport</span>
+                  </div>
+                  <p className="text-[10px] text-foreground-subtle leading-relaxed">
+                    Next.js 16 • React 19 • Zustand stores • WebAuthn Browser Biometrics API
+                  </p>
+                </div>
+
+                {/* Connection */}
+                <div className="flex flex-col items-center">
+                  <span className="h-4 w-[1px] bg-border/40" />
+                  <span className="text-[8px] bg-background border border-border/10 px-2 py-0.5 rounded text-foreground-subtle">
+                    HTTPS REST / API Requests
+                  </span>
+                  <span className="h-4 w-[1px] bg-border/40" />
+                </div>
+
+                {/* Gateway Node */}
+                <div className="border border-border/20 rounded-lg bg-background-panel/40 p-4 space-y-2">
+                  <div className="flex items-center gap-1.5 border-b border-border/10 pb-1 text-accent">
+                    <Server size={14} />
+                    <span className="font-bold text-foreground">2. API Gateway (Rust)</span>
+                  </div>
+                  <p className="text-[10px] text-foreground-subtle leading-relaxed">
+                    Actix-Web API core • Tokio execution scheduler • AES-256-GCM stream encryption
+                  </p>
+                </div>
+
+                {/* Split indicator */}
+                <div className="flex justify-around items-center px-4">
+                  <div className="flex flex-col items-center w-1/2">
+                    <span className="h-4 w-[1px] bg-border/40" />
+                    <span className="text-[7px] text-foreground-subtle uppercase">SQLx Pool</span>
+                    <span className="h-4 w-[1px] bg-border/40" />
+                  </div>
+                  <div className="flex flex-col items-center w-1/2">
+                    <span className="h-4 w-[1px] bg-border/40" />
+                    <span className="text-[7px] text-foreground-subtle uppercase">redis-rs KV</span>
+                    <span className="h-4 w-[1px] bg-border/40" />
+                  </div>
+                </div>
+
+                {/* Stack Row Postgres / Redis */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="border border-border/20 rounded-lg bg-background-panel/40 p-3">
+                    <div className="flex items-center gap-1 text-accent border-b border-border/10 pb-1 mb-1">
+                      <Database size={12} />
+                      <span className="font-bold text-foreground text-[10px]">3. PostgreSQL</span>
+                    </div>
+                    <p className="text-[9px] text-foreground-subtle leading-normal">
+                      ACID transactions, tree nodes, audit.
+                    </p>
+                  </div>
+
+                  <div className="border border-border/20 rounded-lg bg-background-panel/40 p-3">
+                    <div className="flex items-center gap-1 text-accent border-b border-border/10 pb-1 mb-1">
+                      <Zap size={12} />
+                      <span className="font-bold text-foreground text-[10px]">4. Redis Cache</span>
+                    </div>
+                    <p className="text-[9px] text-foreground-subtle leading-normal">
+                      JWT blacklists, rate limits cache.
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
