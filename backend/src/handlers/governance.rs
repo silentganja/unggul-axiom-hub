@@ -180,7 +180,7 @@ pub async fn list_requests(
         "AND gr.requested_by = $1".to_string()
     };
 
-    let status_clause = if let Some(ref status) = query.status {
+    let status_clause = if query.status.is_some() {
         param_idx += 1;
         format!("AND gr.status = ${}", param_idx)
     } else {
@@ -512,12 +512,6 @@ pub async fn approve_request(
     if updated.rows_affected() == 0 {
         return Err(AppError::NotFound);
     }
-    .bind(user.id)
-    .bind(&body.reason)
-    .bind(request_id)
-    .execute(pool.get_ref())
-    .await
-    .map_err(AppError::Database)?;
 
     // ── Audit log ──────────────────────────────────────────────────────────────
     let ip = req.peer_addr().map(|a| a.to_string()).unwrap_or_default();
@@ -531,15 +525,13 @@ pub async fn approve_request(
     .await;
 
     // ── Emit notification ──────────────────────────────────────────────────
-    if let Some(ref title) = req_title {
-        crate::handlers::notifications::emit_notification(
-            crate::models::notification::NotificationEvent::GovernanceUpdate {
-                request_id: request_id.to_string(),
-                status: "APPROVED".into(),
-                title: title.clone(),
-            },
-        );
-    }
+    crate::handlers::notifications::emit_notification(
+        crate::models::notification::NotificationEvent::GovernanceUpdate {
+            request_id: request_id.to_string(),
+            status: "APPROVED".into(),
+            title: req_title.clone(),
+        },
+    );
 
     tracing::info!(admin = %user.id, request_id = %request_id, "Governance request approved");
 

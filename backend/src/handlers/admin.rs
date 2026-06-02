@@ -733,7 +733,7 @@ pub async fn admin_governance_list(
 
     let mut param_idx = 0u32;
 
-    let status_clause = if let Some(ref status) = query.status {
+    let status_clause = if query.status.is_some() {
         param_idx += 1;
         format!("AND gr.status = ${}", param_idx)
     } else {
