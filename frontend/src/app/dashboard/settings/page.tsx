@@ -19,10 +19,6 @@ import {
   Camera,
   Bell,
   Laptop,
-  Key,
-  Copy,
-  Plus,
-  Trash2,
   UserCheck,
   Building,
 } from "lucide-react";
@@ -30,7 +26,7 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { authApi, UpdateProfilePayload, webauthnApi } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
-type SettingsTab = "profile" | "security" | "notifications" | "sessions" | "developer";
+type SettingsTab = "profile" | "security" | "notifications" | "sessions";
 
 interface ActiveSession {
   id: string;
@@ -42,15 +38,6 @@ interface ActiveSession {
   lastActive: string;
 }
 
-interface DeveloperToken {
-  id: string;
-  name: string;
-  token: string;
-  scopes: string[];
-  expiresAt: string;
-  createdAt: string;
-}
-
 export default function ProfileSettingsPage() {
   const router = useRouter();
   const { user, hydrate } = useAuthStore();
@@ -60,7 +47,6 @@ export default function ProfileSettingsPage() {
   const currentPassId = useId();
   const newPassId = useId();
   const confirmPassId = useId();
-  const tokenNameId = useId();
 
   // ── Tab state ──────────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<SettingsTab>("profile");
@@ -117,13 +103,6 @@ export default function ProfileSettingsPage() {
     },
   ]);
 
-  // ── Developer Tokens state ─────────────────────────────────────────────────
-  const [tokens, setTokens] = useState<DeveloperToken[]>([]);
-  const [newTokenName, setNewTokenName] = useState("");
-  const [newTokenExpiry, setNewTokenExpiry] = useState("30");
-  const [selectedScopes, setSelectedScopes] = useState<string[]>(["read_files"]);
-  const [generatedToken, setGeneratedToken] = useState<string | null>(null);
-
   // ── UI state ──────────────────────────────────────────────────────────────
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -145,11 +124,6 @@ export default function ProfileSettingsPage() {
         try { setNotifRules(JSON.parse(cachedNotif)); } catch { /* ignore */ }
       }
 
-      // Load developer tokens
-      const cachedTokens = localStorage.getItem("user-dev-tokens");
-      if (cachedTokens) {
-        try { setTokens(JSON.parse(cachedTokens)); } catch { /* ignore */ }
-      }
     }
   }, []);
 
@@ -318,46 +292,6 @@ export default function ProfileSettingsPage() {
     }, 1000);
   };
 
-  // ── Developer Token Operations ─────────────────────────────────────────────
-  const handleGenerateToken = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTokenName.trim()) return;
-
-    const rawToken = `ua_pat_${Math.random().toString(36).substring(2)}${Math.random().toString(36).substring(2)}`;
-    const expires = newTokenExpiry === "never" 
-      ? "Never" 
-      : new Date(Date.now() + Number(newTokenExpiry) * 24 * 60 * 60 * 1000).toLocaleDateString("en-GB");
-
-    const created = new Date().toLocaleDateString("en-GB");
-
-    const newToken: DeveloperToken = {
-      id: `tok-${Date.now()}`,
-      name: newTokenName.trim(),
-      token: rawToken,
-      scopes: [...selectedScopes],
-      expiresAt: expires,
-      createdAt: created
-    };
-
-    const updated = [newToken, ...tokens];
-    setTokens(updated);
-    localStorage.setItem("user-dev-tokens", JSON.stringify(updated));
-    setGeneratedToken(rawToken);
-    setNewTokenName("");
-  };
-
-  const handleDeleteToken = (id: string) => {
-    const updated = tokens.filter((t) => t.id !== id);
-    setTokens(updated);
-    localStorage.setItem("user-dev-tokens", JSON.stringify(updated));
-  };
-
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    setSuccess("Token copied to clipboard!");
-    setTimeout(() => setSuccess(null), 3000);
-  };
-
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       {/* Header */}
@@ -374,7 +308,7 @@ export default function ProfileSettingsPage() {
             Portal Settings
           </h1>
           <p className="text-xs text-foreground-subtle font-mono mt-1">
-            Manage your personal profile, credentials, notifications, active devices, and API tokens.
+            Manage your personal profile, credentials, notifications, and active devices.
           </p>
         </div>
       </div>
@@ -394,7 +328,6 @@ export default function ProfileSettingsPage() {
                 { id: "security", label: "Security & Password", icon: <Lock size={13} /> },
                 { id: "notifications", label: "Notifications", icon: <Bell size={13} /> },
                 { id: "sessions", label: "Active Sessions", icon: <Laptop size={13} /> },
-                { id: "developer", label: "Developer API", icon: <Key size={13} /> },
               ] as const
             ).map((tab) => (
               <button
@@ -873,175 +806,6 @@ export default function ProfileSettingsPage() {
                       ) : null}
                     </div>
                   ))}
-                </div>
-              </div>
-            )}
-
-            {/* TAB PANEL: DEVELOPER TOKENS */}
-            {activeTab === "developer" && (
-              <div className="space-y-6 animate-in fade-in duration-200">
-                <div className="space-y-1.5">
-                  <h3 className="text-sm font-semibold text-foreground font-serif">Personal Access Tokens</h3>
-                  <p className="text-[10px] text-foreground-subtle font-mono">
-                    Generate personal tokens scoped to your account permission privileges for scripting and tools.
-                  </p>
-                </div>
-
-                {/* Token Generator Form */}
-                <form onSubmit={handleGenerateToken} className="space-y-4 border border-border/30 rounded bg-background/15 p-4 max-w-xl">
-                  <span className="font-mono text-[9px] font-bold text-accent uppercase tracking-widest block">
-                    Create a Token
-                  </span>
-
-                  <div className="space-y-1.5">
-                    <label
-                      htmlFor={tokenNameId}
-                      className="text-[9px] font-bold font-mono uppercase text-foreground-subtle block"
-                    >
-                      Token Name
-                    </label>
-                    <input
-                      id={tokenNameId}
-                      type="text"
-                      required
-                      placeholder="e.g. CLI upload script"
-                      value={newTokenName}
-                      onChange={(e) => setNewTokenName(e.target.value)}
-                      className="h-8 w-full max-w-md px-3 rounded-sm border border-input-border bg-input-bg text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-md">
-                    {/* Expiration */}
-                    <div className="space-y-1.5">
-                      <span className="text-[9px] font-bold font-mono uppercase text-foreground-subtle block">
-                        Expiration
-                      </span>
-                      <select
-                        value={newTokenExpiry}
-                        onChange={(e) => setNewTokenExpiry(e.target.value)}
-                        className="h-8 w-full px-2 rounded-sm border border-input-border bg-input-bg text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
-                      >
-                        <option value="7">7 Days</option>
-                        <option value="30">30 Days</option>
-                        <option value="90">90 Days</option>
-                        <option value="never">Never Expire</option>
-                      </select>
-                    </div>
-
-                    {/* Scopes Multi-Select */}
-                    <div className="space-y-1.5">
-                      <span className="text-[9px] font-bold font-mono uppercase text-foreground-subtle block">
-                        Token Scopes
-                      </span>
-                      <div className="space-y-1 text-xs">
-                        {[
-                          { id: "read_files", label: "Read Files" },
-                          { id: "write_files", label: "Write Files" },
-                          { id: "manage_shares", label: "Manage Shares" },
-                        ].map((s) => (
-                          <label key={s.id} className="flex items-center gap-1.5 cursor-pointer text-foreground-muted hover:text-foreground">
-                            <input
-                              type="checkbox"
-                              checked={selectedScopes.includes(s.id)}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  setSelectedScopes([...selectedScopes, s.id]);
-                                } else {
-                                  setSelectedScopes(selectedScopes.filter((sc) => sc !== s.id));
-                                }
-                              }}
-                              className="rounded border-border text-accent focus:ring-accent"
-                            />
-                            <span>{s.label}</span>
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="pt-2">
-                    <button
-                      type="submit"
-                      disabled={!newTokenName.trim()}
-                      className="btn-shimmer h-8 px-4 rounded-sm font-mono text-[10px] font-bold uppercase tracking-wider text-accent-foreground disabled:opacity-40 inline-flex items-center gap-1.5 cursor-pointer"
-                    >
-                      <Plus size={12} />
-                      Generate Token
-                    </button>
-                  </div>
-                </form>
-
-                {/* Token Display Callout */}
-                {generatedToken && (
-                  <div className="p-4 border border-accent/30 bg-accent-subtle/10 rounded max-w-xl space-y-2 animate-in slide-in-from-top duration-200">
-                    <div className="flex items-center justify-between">
-                      <span className="font-mono text-[9px] font-bold text-accent uppercase tracking-widest">
-                        Copy Token Key
-                      </span>
-                      <span className="text-[9px] font-sans text-destructive font-bold">
-                        * Make sure to copy this token now. You will not be able to see it again!
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <code className="flex-1 p-2 rounded bg-background border border-border/20 font-mono text-xs text-foreground truncate select-all">
-                        {generatedToken}
-                      </code>
-                      <button
-                        onClick={() => copyToClipboard(generatedToken)}
-                        className="h-8 w-8 flex items-center justify-center rounded border border-border bg-background-panel hover:bg-background-subtle/50 text-foreground-subtle hover:text-foreground cursor-pointer"
-                        title="Copy to clipboard"
-                      >
-                        <Copy size={13} />
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Active Tokens Roster */}
-                <div className="space-y-3 max-w-xl">
-                  <span className="font-mono text-[9px] font-bold text-foreground-subtle uppercase tracking-widest">
-                    Active Access Tokens
-                  </span>
-
-                  {tokens.length === 0 ? (
-                    <p className="text-[11px] text-foreground-subtle font-mono border border-border/20 rounded p-4 text-center">
-                      No active API tokens found. Generate one above.
-                    </p>
-                  ) : (
-                    <div className="border border-border/30 rounded bg-background/10 divide-y divide-border/10 text-xs font-mono">
-                      {tokens.map((tok) => (
-                        <div key={tok.id} className="p-4 flex items-center justify-between gap-4">
-                          <div className="space-y-1 min-w-0">
-                            <span className="font-sans font-bold text-foreground text-[13px] block truncate">{tok.name}</span>
-                            <div className="flex flex-wrap gap-1 items-center font-mono text-[9px] text-foreground-subtle leading-none">
-                              <span>Created: {tok.createdAt}</span>
-                              <span className="text-border-strong">|</span>
-                              <span>Expires: {tok.expiresAt}</span>
-                            </div>
-                            <div className="flex flex-wrap gap-1 pt-1">
-                              {tok.scopes.map((s) => (
-                                <span
-                                  key={s}
-                                  className="bg-accent-subtle/30 border border-accent/20 text-accent text-[8px] font-bold uppercase px-1 py-0.5 rounded leading-none font-mono"
-                                >
-                                  {s.replace("_", " ")}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                          
-                          <button
-                            onClick={() => handleDeleteToken(tok.id)}
-                            className="h-7 w-7 flex items-center justify-center border border-transparent hover:border-destructive/35 hover:bg-destructive/10 text-foreground-subtle hover:text-destructive rounded transition-colors cursor-pointer"
-                            title="Delete token"
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
                 </div>
               </div>
             )}
