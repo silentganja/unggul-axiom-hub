@@ -28,7 +28,7 @@ type SettingsTab = "profile" | "security" | "notifications" | "sessions";
 
 export default function ProfileSettingsPage() {
   const router = useRouter();
-  const { user, hydrate, isAuthenticated, isLoading: authLoading } = useAuthStore();
+  const { user, isAuthenticated, isLoading: authLoading } = useAuthStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fullNameId = useId();
@@ -71,13 +71,8 @@ export default function ProfileSettingsPage() {
   const [passkeyLoading, setPasskeyLoading] = useState(false);
   const [revokingId, setRevokingId] = useState<string | null>(null);
 
-  // ── Hydrate auth on mount ──────────────────────────────────────────────────
-  useEffect(() => {
-    hydrate();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   // ── Sync local state and fetch data on user change ──────────────────────────
+  // (hydrate is called by the dashboard layout — no need to call it again here)
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
@@ -194,7 +189,7 @@ export default function ProfileSettingsPage() {
       const updatedUser = await authApi.uploadAvatar(base64String);
       setAvatarBase64(base64String);
       localStorage.setItem("auth-user", JSON.stringify(updatedUser));
-      await hydrate();
+      await useAuthStore.getState().hydrate();
       setSuccess("Avatar updated successfully.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to upload avatar");
@@ -207,7 +202,7 @@ export default function ProfileSettingsPage() {
       const updatedUser = await authApi.deleteAvatar();
       setAvatarBase64(null);
       localStorage.setItem("auth-user", JSON.stringify(updatedUser));
-      await hydrate();
+      await useAuthStore.getState().hydrate();
       setSuccess("Avatar removed.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to remove avatar");
@@ -233,7 +228,7 @@ export default function ProfileSettingsPage() {
       }
       const updated = await authApi.updateProfile(payload);
       localStorage.setItem("auth-user", JSON.stringify(updated));
-      await hydrate();
+      await useAuthStore.getState().hydrate();
       setSuccess("Profile settings updated successfully.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update profile");

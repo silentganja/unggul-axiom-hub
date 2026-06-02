@@ -68,13 +68,13 @@ export default function DashboardLayout({
   const fetchQuota = useFileStore((state) => state.fetchQuota);
 
   useEffect(() => {
-    hydrate();
-    // Periodic re-hydration every 5 minutes to keep session state fresh
+    // Use getState() to avoid dependency on the hook reference
+    useAuthStore.getState().hydrate();
     const interval = setInterval(() => {
-      hydrate();
+      useAuthStore.getState().hydrate();
     }, 5 * 60 * 1000);
     return () => clearInterval(interval);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   // Timeout: if auth check takes >10s, force-show login
   const [authTimeout, setAuthTimeout] = useState(false);
