@@ -176,13 +176,13 @@ function AdminDashboardView() {
 
   const fetchUsers = useCallback(async () => {
     setIsLoading(true); setError(null);
-    try { setUsers(await adminApi.listUsers()); } catch (e) { setError(e instanceof Error ? e.message : "Failed to fetch users"); }
+    try { setUsers(await adminApi.listUsers()); } catch (e) { setError(`Users: ${e instanceof Error ? e.message : "Failed to fetch"}`); }
     finally { setIsLoading(false); }
   }, []);
 
   const fetchDashboard = useCallback(async () => {
     try { setDashboard(await adminApi.getDashboard()); } catch (e) {
-      setSseToast({ message: e instanceof Error ? e.message : "Dashboard fetch failed", type: "error" });
+      setSseToast({ message: `Dashboard: ${e instanceof Error ? e.message : "Fetch failed"}`, type: "error" });
       setTimeout(() => setSseToast(null), 5000);
     }
   }, []);

@@ -286,14 +286,6 @@ export default function DashboardLayout({
         {/* ── Storage Quota Widget ── */}
         <StorageQuotaWidget />
 
-        {/* Admin Panel link — visible for chief/director roles */}
-        {(user?.role === "chief" || user?.role === "director") && (
-          <a href="/dev/admin"
-            className="flex items-center gap-2 px-3 py-2 rounded text-[11px] font-mono tracking-wider uppercase transition-all duration-150 border border-accent/30 text-accent bg-accent/5 hover:bg-accent/15 no-underline shrink-0">
-            <Shield size={13} />
-            <span>Admin Panel</span>
-          </a>
-        )}
       </aside>
 
       {/* ── Right Content Panel (Dynamic Viewport) ── */}
