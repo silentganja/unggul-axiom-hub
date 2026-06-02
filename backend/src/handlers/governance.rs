@@ -1,7 +1,9 @@
 use crate::{
     app_middleware::auth::AuthUser,
     errors::AppError,
-    models::governance::{CreateGovernanceRequest, GovernanceListResponse, GovernanceRequestResponse},
+    models::governance::{
+        CreateGovernanceRequest, GovernanceListResponse, GovernanceRequestResponse,
+    },
     models::user,
 };
 use actix_web::{web, HttpRequest, HttpResponse};
@@ -115,20 +117,39 @@ pub async fn list_requests(
     // Validate status filter if provided
     if let Some(ref status) = query.status {
         if !["PENDING", "APPROVED", "REJECTED"].contains(&status.as_str()) {
-            return Err(AppError::BadRequest("Invalid status filter. Must be PENDING, APPROVED, or REJECTED".into()));
+            return Err(AppError::BadRequest(
+                "Invalid status filter. Must be PENDING, APPROVED, or REJECTED".into(),
+            ));
         }
     }
 
     // Validate type filter if provided
     if let Some(ref r#type) = query.r#type {
-        if !["FILE_LOCK", "FILE_UNLOCK", "CLASSIFICATION_UPGRADE", "CLASSIFICATION_DOWNGRADE", "FILE_MOVE", "FILE_DELETE"].contains(&r#type.as_str()) {
+        if ![
+            "FILE_LOCK",
+            "FILE_UNLOCK",
+            "CLASSIFICATION_UPGRADE",
+            "CLASSIFICATION_DOWNGRADE",
+            "FILE_MOVE",
+            "FILE_DELETE",
+        ]
+        .contains(&r#type.as_str())
+        {
             return Err(AppError::BadRequest("Invalid type filter".into()));
         }
     }
 
     // Build WHERE clauses
-    let status_clause = query.status.as_ref().map(|s| format!("AND gr.status = '{}'", s)).unwrap_or_default();
-    let type_clause = query.r#type.as_ref().map(|t| format!("AND gr.type = '{}'", t)).unwrap_or_default();
+    let status_clause = query
+        .status
+        .as_ref()
+        .map(|s| format!("AND gr.status = '{}'", s))
+        .unwrap_or_default();
+    let type_clause = query
+        .r#type
+        .as_ref()
+        .map(|t| format!("AND gr.type = '{}'", t))
+        .unwrap_or_default();
     let user_clause = if user::can_govern(&user.role) {
         String::new()
     } else {
@@ -304,8 +325,10 @@ pub async fn approve_request(
                     .map_err(AppError::Database)?;
             }
             Some("FILE_UNLOCK") => {
-                sqlx::query("UPDATE files SET locked_by = NULL, locked_at = NULL, lock_reason = NULL WHERE id = $1")
-                    .bind(file_id)
+                sqlx::query(
+                    "UPDATE files SET locked_by = NULL, locked_at = NULL, lock_reason = NULL WHERE id = $1",
+                )
+                .bind(file_id)
                     .execute(pool.get_ref())
                     .await
                     .map_err(AppError::Database)?;
@@ -319,29 +342,34 @@ pub async fn approve_request(
                         }
 
                         // Get current file classification to validate direction
-                        let current_class: Option<String> = sqlx::query_scalar(
-                            "SELECT classification FROM files WHERE id = $1",
-                        )
-                        .bind(file_id)
+                        let current_class: Option<String> =
+                            sqlx::query_scalar("SELECT classification FROM files WHERE id = $1")
+                                .bind(file_id)
                         .fetch_optional(pool.get_ref())
                         .await
                         .map_err(AppError::Database)?
                         .flatten();
 
                         if let Some(ref cur) = current_class {
-                            let cur_idx = crate::models::file::VALID_CLASSIFICATIONS.iter().position(|&c| c == cur.as_str());
-                            let new_idx = crate::models::file::VALID_CLASSIFICATIONS.iter().position(|&c| c == new_class);
+                            let cur_idx = crate::models::file::VALID_CLASSIFICATIONS
+                                .iter()
+                                .position(|&c| c == cur.as_str());
+                            let new_idx = crate::models::file::VALID_CLASSIFICATIONS
+                                .iter()
+                                .position(|&c| c == new_class);
                             if let (Some(ci), Some(ni)) = (cur_idx, new_idx) {
                                 let is_upgrade = req_type.as_deref() == Some("CLASSIFICATION_UPGRADE");
                                 if is_upgrade && ci <= ni {
-                                    return Err(AppError::BadRequest(
-                                        format!("Cannot upgrade: {} is not higher than {}", new_class, cur)
-                                    ));
+                                    return Err(AppError::BadRequest(format!(
+                                        "Cannot upgrade: {} is not higher than {}",
+                                        new_class, cur
+                                    )));
                                 }
                                 if !is_upgrade && ci >= ni {
-                                    return Err(AppError::BadRequest(
-                                        format!("Cannot downgrade: {} is not lower than {}", new_class, cur)
-                                    ));
+                                    return Err(AppError::BadRequest(format!(
+                                        "Cannot downgrade: {} is not lower than {}",
+                                        new_class, cur
+                                    )));
                                 }
                             }
                         }
@@ -359,9 +387,13 @@ pub async fn approve_request(
                 if let Some(ref meta) = metadata {
                     let has_target = meta.get("targetFolderId").and_then(|v| v.as_str()).is_some();
                     if !has_target {
-                        return Err(AppError::BadRequest("FILE_MOVE requires targetFolderId in metadata".into()));
-                    }
-                    if let Some(target_folder_id) = meta.get("targetFolderId").and_then(|v| v.as_str()) {
+                        return Err(AppError::BadRequest(
+                        "FILE_MOVE requires targetFolderId in metadata".into(),
+                    ));
+                    if let Some(target_folder_id) = meta
+                        .get("targetFolderId")
+                        .and_then(|v| v.as_str())
+                    {
                         if let Ok(folder_uuid) = uuid::Uuid::parse_str(target_folder_id) {
                             sqlx::query("UPDATE files SET parent_id = $1 WHERE id = $2")
                                 .bind(folder_uuid)
@@ -566,7 +598,10 @@ pub async fn batch_approve(
             "CLASSIFICATION_UPGRADE" | "CLASSIFICATION_DOWNGRADE"
         ) && !user::can_govern_classified(&user.role)
         {
-            errors.push(format!("{}: classification changes require director+ authority", request_id));
+            errors.push(format!(
+                "{}: classification changes require director+ authority",
+                request_id
+            ));
             failed += 1;
             continue;
         }
@@ -641,13 +676,18 @@ pub async fn batch_approve(
                 }
                 "CLASSIFICATION_UPGRADE" | "CLASSIFICATION_DOWNGRADE" => {
                     if let Some(ref meta) = metadata {
-                        if let Some(new_class) = meta.get("newClassification").and_then(|v| v.as_str()) {
+                        if let Some(new_class) = meta
+                            .get("newClassification")
+                            .and_then(|v| v.as_str())
+                        {
                             if !crate::models::file::VALID_CLASSIFICATIONS.contains(&new_class) {
                                 errors.push(format!("{}: invalid classification", request_id));
                                 failed += 1;
                                 continue;
                             }
-                            if let Err(e) = sqlx::query("UPDATE files SET classification = $1 WHERE id = $2")
+                            if let Err(e) = sqlx::query(
+                                "UPDATE files SET classification = $1 WHERE id = $2",
+                            )
                                 .bind(new_class)
                                 .bind(file_id)
                                 .execute(pool.get_ref())
@@ -662,9 +702,14 @@ pub async fn batch_approve(
                 }
                 "FILE_MOVE" => {
                     if let Some(ref meta) = metadata {
-                        if let Some(target_folder_id) = meta.get("targetFolderId").and_then(|v| v.as_str()) {
+                        if let Some(target_folder_id) = meta
+                            .get("targetFolderId")
+                            .and_then(|v| v.as_str())
+                        {
                             if let Ok(folder_uuid) = uuid::Uuid::parse_str(target_folder_id) {
-                                if let Err(e) = sqlx::query("UPDATE files SET parent_id = $1 WHERE id = $2")
+                                if let Err(e) = sqlx::query(
+                                    "UPDATE files SET parent_id = $1 WHERE id = $2",
+                                )
                                     .bind(folder_uuid)
                                     .bind(file_id)
                                     .execute(pool.get_ref())
@@ -676,12 +721,18 @@ pub async fn batch_approve(
                                 }
                             }
                         } else {
-                            errors.push(format!("{}: FILE_MOVE requires targetFolderId in metadata", request_id));
+                            errors.push(format!(
+                                "{}: FILE_MOVE requires targetFolderId in metadata",
+                                request_id
+                            ));
                             failed += 1;
                             continue;
                         }
                     } else {
-                        errors.push(format!("{}: FILE_MOVE requires targetFolderId in metadata", request_id));
+                        errors.push(format!(
+                            "{}: FILE_MOVE requires targetFolderId in metadata",
+                            request_id
+                        ));
                         failed += 1;
                         continue;
                     }
@@ -909,7 +960,9 @@ pub async fn undo_request(
 
     // Prevent undoing requests without a target file (would create zombie auto-approved requests)
     if existing.target_file_id.is_none() {
-        return Err(AppError::BadRequest("Cannot undo a request without a target file".into()));
+        return Err(AppError::BadRequest(
+            "Cannot undo a request without a target file".into(),
+        ));
     }
 
     match existing.status.as_str() {
@@ -1002,10 +1055,15 @@ pub async fn undo_request(
                     }
                     "CLASSIFICATION_UPGRADE" | "CLASSIFICATION_DOWNGRADE" => {
                         if let Some(ref meta) = inverse_metadata {
-                            if let Some(new_class) = meta.get("newClassification").and_then(|v| v.as_str()) {
+                            if let Some(new_class) = meta
+                                .get("newClassification")
+                                .and_then(|v| v.as_str())
+                            {
                                 if crate::models::file::VALID_CLASSIFICATIONS.contains(&new_class) {
-                                    sqlx::query("UPDATE files SET classification = $1 WHERE id = $2")
-                                        .bind(new_class)
+                                    sqlx::query(
+                                        "UPDATE files SET classification = $1 WHERE id = $2",
+                                    )
+                                    .bind(new_class)
                                         .bind(file_id)
                                         .execute(pool.get_ref())
                                         .await
@@ -1051,7 +1109,9 @@ pub async fn undo_request(
             .await;
         }
         _ => {
-            return Err(AppError::BadRequest("Cannot undo a PENDING request. Cancel it instead.".into()));
+            return Err(AppError::BadRequest(
+                "Cannot undo a PENDING request. Cancel it instead.".into(),
+            ));
         }
     }
 

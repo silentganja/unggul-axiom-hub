@@ -509,8 +509,10 @@ pub async fn update_config(
     _admin: AdminUser,
     body: web::Json<UpdateConfigRequest>,
 ) -> Result<HttpResponse, AppError> {
-    sqlx::query("INSERT INTO system_config (key, value, updated_at) VALUES ($1, $2, NOW()) ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW()")
-        .bind(&body.key)
+    sqlx::query(
+        "INSERT INTO system_config (key, value, updated_at) VALUES ($1, $2, NOW()) ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW()",
+    )
+    .bind(&body.key)
         .bind(&body.value)
         .execute(pool.get_ref())
         .await
@@ -544,19 +546,38 @@ pub async fn admin_governance_list(
     // Validate status filter if provided
     if let Some(ref status) = query.status {
         if !["PENDING", "APPROVED", "REJECTED"].contains(&status.as_str()) {
-            return Err(AppError::BadRequest("Invalid status filter. Must be PENDING, APPROVED, or REJECTED".into()));
+            return Err(AppError::BadRequest(
+                "Invalid status filter. Must be PENDING, APPROVED, or REJECTED".into(),
+            ));
         }
     }
 
     // Validate type filter if provided
     if let Some(ref r#type) = query.r#type {
-        if !["FILE_LOCK", "FILE_UNLOCK", "CLASSIFICATION_UPGRADE", "CLASSIFICATION_DOWNGRADE", "FILE_MOVE", "FILE_DELETE"].contains(&r#type.as_str()) {
+        if ![
+            "FILE_LOCK",
+            "FILE_UNLOCK",
+            "CLASSIFICATION_UPGRADE",
+            "CLASSIFICATION_DOWNGRADE",
+            "FILE_MOVE",
+            "FILE_DELETE",
+        ]
+        .contains(&r#type.as_str())
+        {
             return Err(AppError::BadRequest("Invalid type filter".into()));
         }
     }
 
-    let status_clause = query.status.as_ref().map(|s| format!("AND gr.status = '{}'", s)).unwrap_or_default();
-    let type_clause = query.r#type.as_ref().map(|t| format!("AND gr.type = '{}'", t)).unwrap_or_default();
+    let status_clause = query
+        .status
+        .as_ref()
+        .map(|s| format!("AND gr.status = '{}'", s))
+        .unwrap_or_default();
+    let type_clause = query
+        .r#type
+        .as_ref()
+        .map(|t| format!("AND gr.type = '{}'", t))
+        .unwrap_or_default();
 
     let sql = format!(
         "SELECT gr.id, gr.type, gr.title, gr.description, gr.status,
@@ -604,13 +625,15 @@ pub async fn admin_governance_list(
         0
     };
 
-    Ok(HttpResponse::Ok().json(crate::models::governance::GovernanceListResponse {
-        requests,
-        total,
-        page,
-        per_page,
-        total_pages,
-    }))
+    Ok(
+        HttpResponse::Ok().json(crate::models::governance::GovernanceListResponse {
+            requests,
+            total,
+            page,
+            per_page,
+            total_pages,
+        }),
+    )
 }
 
 #[derive(Deserialize)]
@@ -628,8 +651,10 @@ pub async fn force_approve(
 ) -> Result<HttpResponse, AppError> {
     let request_id = path.into_inner();
     // Mark as approved by the given reviewer
-    sqlx::query("UPDATE governance_requests SET status = 'APPROVED', reviewed_by = $1, updated_at = NOW() WHERE id = $2")
-        .bind(body.reviewer_id)
+    sqlx::query(
+        "UPDATE governance_requests SET status = 'APPROVED', reviewed_by = $1, updated_at = NOW() WHERE id = $2",
+    )
+    .bind(body.reviewer_id)
         .bind(request_id)
         .execute(pool.get_ref())
         .await
@@ -666,8 +691,10 @@ pub async fn force_approve(
                         .await
                         .map_err(AppError::Database)?
                         .flatten();
-                sqlx::query("UPDATE files SET locked_by = (SELECT requested_by FROM governance_requests WHERE id = $1), locked_at = NOW(), lock_reason = $2 WHERE id = $3")
-                    .bind(request_id)
+                sqlx::query(
+                    "UPDATE files SET locked_by = (SELECT requested_by FROM governance_requests WHERE id = $1), locked_at = NOW(), lock_reason = $2 WHERE id = $3",
+                )
+                .bind(request_id)
                     .bind(title.as_deref())
                     .bind(fid)
                     .execute(pool.get_ref())
@@ -675,8 +702,10 @@ pub async fn force_approve(
                     .map_err(AppError::Database)?;
             }
             "FILE_UNLOCK" => {
-                sqlx::query("UPDATE files SET locked_by = NULL, locked_at = NULL, lock_reason = NULL WHERE id = $1")
-                    .bind(fid)
+                sqlx::query(
+                    "UPDATE files SET locked_by = NULL, locked_at = NULL, lock_reason = NULL WHERE id = $1",
+                )
+                .bind(fid)
                     .execute(pool.get_ref())
                     .await
                     .map_err(AppError::Database)?;
@@ -684,10 +713,13 @@ pub async fn force_approve(
             "CLASSIFICATION_UPGRADE" | "CLASSIFICATION_DOWNGRADE" => {
                 let meta = metadata.as_ref();
                 if let Some(ref meta) = meta {
-                    if let Some(new_class) = meta.get("newClassification").and_then(|v| v.as_str()) {
+                    if let Some(new_class) = meta.get("newClassification").and_then(|v| v.as_str())
+                    {
                         if crate::models::file::VALID_CLASSIFICATIONS.contains(&new_class) {
-                            let _ = sqlx::query("UPDATE files SET classification = $1 WHERE id = $2")
-                                .bind(new_class)
+                            let _ = sqlx::query(
+                                "UPDATE files SET classification = $1 WHERE id = $2",
+                            )
+                            .bind(new_class)
                                 .bind(fid)
                                 .execute(pool.get_ref())
                                 .await;
@@ -697,7 +729,10 @@ pub async fn force_approve(
             }
             "FILE_MOVE" => {
                 if let Some(ref meta) = metadata {
-                    if let Some(target_folder_id) = meta.get("targetFolderId").and_then(|v| v.as_str()) {
+                    if let Some(target_folder_id) = meta
+                        .get("targetFolderId")
+                        .and_then(|v| v.as_str())
+                    {
                         if let Ok(folder_uuid) = uuid::Uuid::parse_str(target_folder_id) {
                             let _ = sqlx::query("UPDATE files SET parent_id = $1 WHERE id = $2")
                                 .bind(folder_uuid)

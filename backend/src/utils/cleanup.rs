@@ -78,11 +78,7 @@ pub async fn cleanup_expired_trash(pool: &PgPool, storage_path: &str) {
         let filepath = Path::new(storage_path).join(file_id.to_string());
         if filepath.exists() {
             if let Err(e) = tokio::fs::remove_file(&filepath).await {
-                tracing::warn!(
-                    "Failed to remove physical file {} on disk: {}",
-                    file_id,
-                    e
-                );
+                tracing::warn!("Failed to remove physical file {} on disk: {}", file_id, e);
             }
         }
 
