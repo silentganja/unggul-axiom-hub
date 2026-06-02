@@ -47,6 +47,7 @@ function RowDropdownMenu({
 }) {
   const [pos, setPos] = useState({ top: 0, left: 0 });
   const menuRef = useRef<HTMLDivElement>(null);
+  const rafRef = useRef<number>(0);
 
   const recalc = useCallback(() => {
     if (!anchorEl) return;
@@ -63,15 +64,18 @@ function RowDropdownMenu({
   }, [anchorEl]);
 
   useEffect(() => {
-    if (open) {
-      recalc();
-      window.addEventListener("scroll", recalc, true);
-      window.addEventListener("resize", recalc);
-      return () => {
-        window.removeEventListener("scroll", recalc, true);
-        window.removeEventListener("resize", recalc);
-      };
-    }
+    if (!open) return;
+
+    // Defer initial position calc to avoid setState-in-effect lint
+    rafRef.current = requestAnimationFrame(recalc);
+
+    window.addEventListener("scroll", recalc, true);
+    window.addEventListener("resize", recalc);
+    return () => {
+      cancelAnimationFrame(rafRef.current);
+      window.removeEventListener("scroll", recalc, true);
+      window.removeEventListener("resize", recalc);
+    };
   }, [open, recalc]);
 
   if (!open) return null;
@@ -203,7 +207,7 @@ export default function FileExplorerPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
-  const menuButtonEls = useRef<Map<string, HTMLButtonElement>>(new Map());
+  const [menuAnchorEl, setMenuAnchorEl] = useState<HTMLElement | null>(null);
 
   // ── Drag & drop handlers ───────────────────────────────────────────────────
   const handleDragEnter = (e: React.DragEvent) => {
@@ -772,38 +776,43 @@ export default function FileExplorerPage() {
                     <td className="px-4 py-2 font-mono text-[11px] text-foreground-muted">{file.modifiedAt}</td>
                     <td className="px-4 py-2 text-right">
                       <button
-                        ref={(el) => {
-                          if (el) menuButtonEls.current.set(file.id, el);
-                          else menuButtonEls.current.delete(file.id);
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (menuOpenId === file.id) {
+                            setMenuOpenId(null);
+                            setMenuAnchorEl(null);
+                          } else {
+                            setMenuAnchorEl(e.currentTarget as HTMLElement);
+                            setMenuOpenId(file.id);
+                          }
                         }}
-                        onClick={(e) => { e.stopPropagation(); setMenuOpenId(menuOpenId === file.id ? null : file.id); }}
                         className="h-7 w-7 rounded flex items-center justify-center border border-transparent hover:border-border hover:bg-background/40 text-foreground-subtle hover:text-foreground transition-colors"
                       >
                         <MoreHorizontal size={14} />
                       </button>
                       <RowDropdownMenu
                         open={menuOpenId === file.id}
-                        onClose={() => setMenuOpenId(null)}
-                        anchorEl={menuButtonEls.current.get(file.id) ?? null}
+                        onClose={() => { setMenuOpenId(null); setMenuAnchorEl(null); }}
+                        anchorEl={menuAnchorEl}
                       >
                         <button
-                          onClick={() => { setMenuOpenId(null); if (file.type !== "folder") setPreviewFileId(file.id); else openAccessControl(file); }}
+                          onClick={() => { setMenuOpenId(null); setMenuAnchorEl(null); if (file.type !== "folder") setPreviewFileId(file.id); else openAccessControl(file); }}
                           className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[10px] text-foreground-muted hover:text-foreground hover:bg-background-subtle/50 rounded transition-colors"
                         >
                           <Eye size={11} className="text-foreground-subtle shrink-0" /> View
                         </button>
-                        <button onClick={() => { setMenuOpenId(null); openAccessControl(file); }} className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[10px] text-foreground-muted hover:text-foreground hover:bg-background-subtle/50 rounded transition-colors">
+                        <button onClick={() => { setMenuOpenId(null); setMenuAnchorEl(null); openAccessControl(file); }} className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[10px] text-foreground-muted hover:text-foreground hover:bg-background-subtle/50 rounded transition-colors">
                           <Share2 size={11} className="text-foreground-subtle shrink-0" /> Manage Access
                         </button>
-                        <button onClick={() => { setMenuOpenId(null); toggleFavorite(file.id); }} className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[10px] text-foreground-muted hover:text-foreground hover:bg-background-subtle/50 rounded transition-colors">
+                        <button onClick={() => { setMenuOpenId(null); setMenuAnchorEl(null); toggleFavorite(file.id); }} className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[10px] text-foreground-muted hover:text-foreground hover:bg-background-subtle/50 rounded transition-colors">
                           <Star size={11} className={cn("shrink-0", file.isFavorite ? "text-accent fill-accent" : "text-foreground-subtle")} />
                           {file.isFavorite ? "Remove Favorite" : "Add Favorite"}
                         </button>
-                        <button onClick={() => { setMenuOpenId(null); downloadFile(file.id); }} className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[10px] text-foreground-muted hover:text-foreground hover:bg-background-subtle/50 rounded transition-colors">
+                        <button onClick={() => { setMenuOpenId(null); setMenuAnchorEl(null); downloadFile(file.id); }} className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[10px] text-foreground-muted hover:text-foreground hover:bg-background-subtle/50 rounded transition-colors">
                           <Download size={11} className="text-foreground-subtle shrink-0" /> Download
                         </button>
                         <hr className="border-t border-border/10 my-1" />
-                        <button onClick={() => { setMenuOpenId(null); deleteFile(file.id); }} className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[10px] text-destructive hover:bg-destructive/15 rounded transition-colors">
+                        <button onClick={() => { setMenuOpenId(null); setMenuAnchorEl(null); deleteFile(file.id); }} className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[10px] text-destructive hover:bg-destructive/15 rounded transition-colors">
                           <Trash2 size={11} className="text-destructive shrink-0" /> Move to Trash
                         </button>
                       </RowDropdownMenu>
@@ -1103,27 +1112,32 @@ export default function FileExplorerPage() {
                       </td>
                       <td className="px-4 py-2 text-right">
                         <button
-                          ref={(el) => {
-                            if (el) menuButtonEls.current.set(file.id, el);
-                            else menuButtonEls.current.delete(file.id);
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (menuOpenId === file.id) {
+                              setMenuOpenId(null);
+                              setMenuAnchorEl(null);
+                            } else {
+                              setMenuAnchorEl(e.currentTarget as HTMLElement);
+                              setMenuOpenId(file.id);
+                            }
                           }}
-                          onClick={(e) => { e.stopPropagation(); setMenuOpenId(menuOpenId === file.id ? null : file.id); }}
                           className="h-7 w-7 rounded flex items-center justify-center border border-transparent hover:border-border hover:bg-background/40 text-foreground-subtle hover:text-foreground transition-colors"
                         >
                           <MoreHorizontal size={14} />
                         </button>
                         <RowDropdownMenu
                           open={menuOpenId === file.id}
-                          onClose={() => setMenuOpenId(null)}
-                          anchorEl={menuButtonEls.current.get(file.id) ?? null}
+                          onClose={() => { setMenuOpenId(null); setMenuAnchorEl(null); }}
+                          anchorEl={menuAnchorEl}
                         >
                           <button
-                            onClick={() => { setMenuOpenId(null); if (file.type !== "folder") setPreviewFileId(file.id); else openAccessControl(file); }}
+                            onClick={() => { setMenuOpenId(null); setMenuAnchorEl(null); if (file.type !== "folder") setPreviewFileId(file.id); else openAccessControl(file); }}
                             className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[10px] text-foreground-muted hover:text-foreground hover:bg-background-subtle/50 rounded transition-colors"
                           >
                             <Eye size={11} className="text-foreground-subtle shrink-0" /> View
                           </button>
-                          <button onClick={() => { setMenuOpenId(null); openAccessControl(file); }} className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[10px] text-foreground-muted hover:text-foreground hover:bg-background-subtle/50 rounded transition-colors">
+                          <button onClick={() => { setMenuOpenId(null); setMenuAnchorEl(null); openAccessControl(file); }} className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[10px] text-foreground-muted hover:text-foreground hover:bg-background-subtle/50 rounded transition-colors">
                             <Share2 size={11} className="text-foreground-subtle shrink-0" /> Manage Access
                           </button>
                           {file.lockedBy ? (
@@ -1132,15 +1146,15 @@ export default function FileExplorerPage() {
                               <span className="ml-auto text-[8px] font-bold text-accent uppercase">LOCKED</span>
                             </button>
                           ) : (
-                            <button onClick={() => { setMenuOpenId(null); initiateRename(file); }} className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[10px] text-foreground-muted hover:text-foreground hover:bg-background-subtle/50 rounded transition-colors">
+                            <button onClick={() => { setMenuOpenId(null); setMenuAnchorEl(null); initiateRename(file); }} className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[10px] text-foreground-muted hover:text-foreground hover:bg-background-subtle/50 rounded transition-colors">
                               <Edit2 size={11} className="text-foreground-subtle shrink-0" /> Rename
                             </button>
                           )}
-                          <button onClick={() => { setMenuOpenId(null); toggleFavorite(file.id); }} className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[10px] text-foreground-muted hover:text-foreground hover:bg-background-subtle/50 rounded transition-colors">
+                          <button onClick={() => { setMenuOpenId(null); setMenuAnchorEl(null); toggleFavorite(file.id); }} className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[10px] text-foreground-muted hover:text-foreground hover:bg-background-subtle/50 rounded transition-colors">
                             <Star size={11} className={cn("shrink-0", file.isFavorite ? "text-accent fill-accent" : "text-foreground-subtle")} />
                             {file.isFavorite ? "Remove Favorite" : "Add Favorite"}
                           </button>
-                          <button onClick={() => { setMenuOpenId(null); downloadFile(file.id); }} className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[10px] text-foreground-muted hover:text-foreground hover:bg-background-subtle/50 rounded transition-colors">
+                          <button onClick={() => { setMenuOpenId(null); setMenuAnchorEl(null); downloadFile(file.id); }} className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[10px] text-foreground-muted hover:text-foreground hover:bg-background-subtle/50 rounded transition-colors">
                             <Download size={11} className="text-foreground-subtle shrink-0" /> Download
                           </button>
                           <hr className="border-t border-border/10 my-1" />
@@ -1150,7 +1164,7 @@ export default function FileExplorerPage() {
                               <span className="ml-auto text-[8px] font-bold text-accent uppercase">LOCKED</span>
                             </button>
                           ) : (
-                            <button onClick={() => { setMenuOpenId(null); deleteFile(file.id); }} className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[10px] text-destructive hover:bg-destructive/15 rounded transition-colors">
+                            <button onClick={() => { setMenuOpenId(null); setMenuAnchorEl(null); deleteFile(file.id); }} className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[10px] text-destructive hover:bg-destructive/15 rounded transition-colors">
                               <Trash2 size={11} className="text-destructive shrink-0" /> Delete
                             </button>
                           )}
