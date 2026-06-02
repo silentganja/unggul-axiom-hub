@@ -210,10 +210,10 @@ export default function HomePage() {
             &copy; {new Date().getFullYear()} Unggul Axiom. All rights reserved.
           </div>
           <div className="flex items-center gap-6">
-            <span className="hover:text-foreground transition-colors cursor-pointer">Support</span>
-            <span className="hover:text-foreground transition-colors cursor-pointer">Security</span>
-            <span className="hover:text-foreground transition-colors cursor-pointer">Privacy Policy</span>
-            <span className="hover:text-foreground transition-colors cursor-pointer">Platform Status</span>
+            <Link href="/support" className="hover:text-foreground transition-colors cursor-pointer">Support</Link>
+            <Link href="/security" className="hover:text-foreground transition-colors cursor-pointer">Security</Link>
+            <Link href="/privacy" className="hover:text-foreground transition-colors cursor-pointer">Privacy Policy</Link>
+            <Link href="/status" className="hover:text-foreground transition-colors cursor-pointer">Platform Status</Link>
           </div>
         </div>
       </footer>

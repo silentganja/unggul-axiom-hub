@@ -121,10 +121,25 @@ async function apiFetch<T>(
     headers["Authorization"] = `Bearer ${token}`;
   }
 
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers: { ...headers, ...((options.headers as Record<string, string>) || {}) },
-  });
+  // Timeout: abort requests that take longer than 15 seconds
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      ...options,
+      headers: { ...headers, ...((options.headers as Record<string, string>) || {}) },
+      signal: controller.signal,
+    });
+  } catch (err) {
+    clearTimeout(timeoutId);
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw new Error("Request timed out — server may be unreachable");
+    }
+    throw err;
+  }
+  clearTimeout(timeoutId);
 
   if (res.status === 401) {
     // If an admin endpoint returned 401 but we're NOT using the admin token,
