@@ -69,7 +69,7 @@ function exportCSV(headers: string[], rows: string[][], filename: string) {
 export default function AuditLogTab() {
   const [entries, setEntries] = useState<AuditLogEntry[]>([]);
   const [users, setUsers] = useState<AdminUserEntry[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Filters
@@ -84,8 +84,9 @@ export default function AuditLogTab() {
   const [total, setTotal] = useState(0);
   const perPage = 30;
 
-  // Search (client-side)
+  // Search (client-side, filters current page only)
   const [search, setSearch] = useState("");
+  const [exportLoading, setExportLoading] = useState(false);
 
   const fetchLogs = async (pg: number) => {
     setLoading(true);
@@ -130,16 +131,31 @@ export default function AuditLogTab() {
     return true;
   });
 
-  const handleExport = () => {
-    const headers = ["Timestamp", "User", "Action", "Target Resource", "IP Address"];
-    const rows = filtered.map(e => [
-      formatTimestamp(e.createdAt),
-      e.userName || "—",
-      e.action.replace(/_/g, " "),
-      e.targetResource || "—",
-      e.ipAddress || "—",
-    ]);
-    exportCSV(headers, rows, `audit-log-${new Date().toISOString().slice(0, 10)}.csv`);
+  const handleExport = async () => {
+    setExportLoading(true);
+    try {
+      // Fetch ALL matching entries with a high limit for export
+      const all = await adminApi.listAuditLogs({
+        perPage: 9999,
+        userId: filterUser !== "ALL" ? filterUser : undefined,
+        action: filterAction !== "ALL" ? filterAction : undefined,
+        from: filterFrom || undefined,
+        to: filterTo || undefined,
+      });
+      const headers = ["Timestamp", "User", "Action", "Target Resource", "IP Address"];
+      const rows = all.entries.map(e => [
+        formatTimestamp(e.createdAt),
+        e.userName || "—",
+        e.action.replace(/_/g, " "),
+        e.targetResource || "—",
+        e.ipAddress || "—",
+      ]);
+      exportCSV(headers, rows, `audit-log-${new Date().toISOString().slice(0, 10)}.csv`);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Export failed");
+    } finally {
+      setExportLoading(false);
+    }
   };
 
   return (
@@ -152,9 +168,9 @@ export default function AuditLogTab() {
             {total} entries recorded
           </p>
         </div>
-        <button onClick={handleExport} disabled={filtered.length === 0}
+        <button onClick={handleExport} disabled={exportLoading || filtered.length === 0}
           className="h-7 px-3 rounded-sm border border-accent/30 text-accent bg-accent/5 hover:bg-accent/15 text-[9px] font-bold uppercase font-mono transition-colors flex items-center gap-1.5 disabled:opacity-40 cursor-pointer">
-          <Download size={11} /> Export CSV
+          {exportLoading ? <Loader2 size={11} className="animate-spin" /> : <Download size={11} />} Export CSV
         </button>
       </div>
 
@@ -185,11 +201,11 @@ export default function AuditLogTab() {
           <input type="date" value={filterTo} onChange={e => { setFilterTo(e.target.value); handleFilterChange(); }}
             className="h-7 px-2 rounded-sm border border-border bg-background text-[10px] text-foreground focus:outline-none focus:ring-1 focus:ring-accent" />
         </div>
-        <div className="relative ml-auto">
+        <div className="relative">
           <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-foreground-subtle pointer-events-none" />
           <input type="text" value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Search..."
-            className="h-7 w-40 pl-7 pr-2 rounded-sm border border-input-border bg-input-bg text-[10px] text-foreground focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent" />
+            placeholder="Search (current page)..."
+            className="h-7 w-44 pl-7 pr-2 rounded-sm border border-input-border bg-input-bg text-[10px] text-foreground focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent" />
         </div>
       </div>
 

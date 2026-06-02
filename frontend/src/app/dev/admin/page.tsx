@@ -159,7 +159,7 @@ function AdminDashboardView() {
 
   // Tab-specific state
   const [govRequests, setGovRequests] = useState<GovernanceRequest[]>([]);
-  const [govLoading, setGovLoading] = useState(false);
+  const [govLoading, setGovLoading] = useState(true);
   const [storageRows, setStorageRows] = useState<UserStorageRow[]>([]);
   const [storageLoading, setStorageLoading] = useState(false);
   const [configMap, setConfigMap] = useState<Record<string, string>>({});
@@ -181,7 +181,10 @@ function AdminDashboardView() {
   }, []);
 
   const fetchDashboard = useCallback(async () => {
-    try { setDashboard(await adminApi.getDashboard()); } catch {}
+    try { setDashboard(await adminApi.getDashboard()); } catch (e) {
+      setSseToast({ message: e instanceof Error ? e.message : "Dashboard fetch failed", type: "error" });
+      setTimeout(() => setSseToast(null), 5000);
+    }
   }, []);
 
   // ── SSE subscription for real-time updates ──
@@ -198,7 +201,7 @@ function AdminDashboardView() {
       unsub();
       useNotificationStore.getState().setOnGovernanceUpdate(null);
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fetchDashboard]);
 
   useEffect(() => { fetchUsers(); fetchDashboard(); }, [fetchUsers, fetchDashboard]); // eslint-disable-line react-hooks/set-state-in-effect
 
@@ -223,7 +226,8 @@ function AdminDashboardView() {
 
   const handleForceDelete = async (fileId: string, fileName: string) => {
     if (!confirm(`Permanently delete "${fileName}"?`)) return;
-    try { await adminApi.forceDeleteFile(fileId); await handleExpandUser(expandedUserId!); }
+    if (!expandedUserId) return;
+    try { await adminApi.forceDeleteFile(fileId); await handleExpandUser(expandedUserId); }
     catch (e) { alert(e instanceof Error ? e.message : "Failed to delete"); }
   };
 
@@ -451,7 +455,7 @@ function AdminDashboardView() {
                             </td>
                           </tr>
                           {expandedUserId === user.id && (
-                            <tr key={`exp-${user.id}`}>
+                            <tr>
                               <td colSpan={6} className="px-4 py-3 bg-background/30 border-b border-border/20">
                                 <div className="space-y-2">
                                   <div className="flex items-center justify-between">
@@ -514,7 +518,7 @@ function AdminDashboardView() {
                 Export CSV
               </button>
             </div>
-            <GovernanceTab govRequests={govRequests} setGovRequests={setGovRequests} govLoading={govLoading} setGovLoading={setGovLoading} fetchUsers={fetchUsers} />
+            <GovernanceTab govRequests={govRequests} setGovRequests={setGovRequests} govLoading={govLoading} setGovLoading={setGovLoading} />
           </div>
         )}
 

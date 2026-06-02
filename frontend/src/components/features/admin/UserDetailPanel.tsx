@@ -86,14 +86,14 @@ export default function UserDetailPanel({ userId, onBack, onRefresh }: Props) {
           <button onClick={() => {
             const pw = prompt("Enter new password (min 6 chars):");
             if (pw && pw.length >= 6) {
-              adminApi.resetUserPassword(detail.id, pw).then(() => alert("Password reset")).catch(e => alert(e.message));
+              adminApi.resetUserPassword(detail.id, pw).then(() => { alert("Password reset"); onRefresh(); }).catch(e => alert(e.message));
             }
           }}
             className="h-7 px-2.5 rounded-sm border border-accent/30 text-accent bg-accent/5 hover:bg-accent/15 text-[9px] font-bold uppercase font-mono transition-colors flex items-center gap-1.5 cursor-pointer">
             <Lock size={10} /> Reset Password
           </button>
           <button onClick={() => {
-            adminApi.toggleUserActive(detail.id).then(() => { onRefresh(); onBack(); }).catch(e => alert(e.message));
+            adminApi.toggleUserActive(detail.id).then(async () => { await onRefresh(); onBack(); }).catch(e => alert(e.message));
           }}
             className="h-7 px-2.5 rounded-sm border border-warning/30 text-warning bg-warning/5 hover:bg-warning/15 text-[9px] font-bold uppercase font-mono transition-colors flex items-center gap-1.5 cursor-pointer">
             <Shield size={10} /> Toggle Active

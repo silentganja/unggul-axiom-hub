@@ -29,12 +29,16 @@ function exportCSV(headers: string[], rows: string[][], filename: string) {
 export default function ShareManagementTab() {
   const [shares, setShares] = useState<AllSharesRow[]>([]);
   const [users, setUsers] = useState<AdminUserEntry[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Filters
   const [filterUser, setFilterUser] = useState("ALL");
   const [search, setSearch] = useState("");
+
+  // Pagination
+  const [page, setPage] = useState(1);
+  const perPage = 25;
 
   // Revoke confirmation
   const [revokeTarget, setRevokeTarget] = useState<AllSharesRow | null>(null);
@@ -67,6 +71,9 @@ export default function ShareManagementTab() {
     if (search && !s.fileName.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
+  const paginated = filtered.slice((page - 1) * perPage, page * perPage);
 
   const handleRevoke = async () => {
     if (!revokeTarget) return;
@@ -116,7 +123,7 @@ export default function ShareManagementTab() {
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex items-center gap-1.5">
           <span className="text-[9px] font-mono text-foreground-subtle uppercase">User:</span>
-          <select value={filterUser} onChange={e => setFilterUser(e.target.value)}
+          <select value={filterUser} onChange={e => { setFilterUser(e.target.value); setPage(1); }}
             className="h-7 px-2 rounded-sm border border-border bg-background text-[10px] text-foreground focus:outline-none focus:ring-1 focus:ring-accent">
             <option value="ALL">All Users</option>
             {users.map(u => <option key={u.id} value={u.id}>{u.fullName}</option>)}
@@ -124,7 +131,7 @@ export default function ShareManagementTab() {
         </div>
         <div className="relative ml-auto">
           <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-foreground-subtle pointer-events-none" />
-          <input type="text" value={search} onChange={e => setSearch(e.target.value)}
+          <input type="text" value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
             placeholder="Search by file name..."
             className="h-7 w-48 pl-7 pr-2 rounded-sm border border-input-border bg-input-bg text-[10px] text-foreground focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent" />
         </div>
@@ -154,7 +161,7 @@ export default function ShareManagementTab() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/10">
-                {filtered.map(s => (
+                {paginated.map(s => (
                   <tr key={s.id} className="hover:bg-background-subtle/30 transition-colors">
                     <td className="px-4 py-2 font-sans text-foreground font-semibold truncate max-w-[200px]">{s.fileName}</td>
                     <td className="px-4 py-2 text-foreground-muted">{s.sharedByName}</td>
@@ -175,6 +182,20 @@ export default function ShareManagementTab() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between font-mono text-[10px] text-foreground-subtle select-none">
+          <span>{filtered.length} items</span>
+          <div className="flex items-center gap-1">
+            <button disabled={page <= 1} onClick={() => setPage(page - 1)}
+              className="h-7 w-7 rounded border border-border bg-background-panel hover:bg-background-subtle/50 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center text-foreground transition-colors">&lt;</button>
+            <span className="px-2 text-foreground-muted font-bold">Page {page} / {totalPages}</span>
+            <button disabled={page >= totalPages} onClick={() => setPage(page + 1)}
+              className="h-7 w-7 rounded border border-border bg-background-panel hover:bg-background-subtle/50 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center text-foreground transition-colors">&gt;</button>
           </div>
         </div>
       )}

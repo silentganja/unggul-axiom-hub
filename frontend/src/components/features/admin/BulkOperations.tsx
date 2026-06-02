@@ -15,11 +15,19 @@ interface Props {
 export default function BulkOperations({ users, fetchUsers, bulkCsvText, setBulkCsvText, bulkResult, setBulkResult, bulkLoading, setBulkLoading, bulkRoleUserIds, setBulkRoleUserIds, bulkRoleTarget, setBulkRoleTarget }: Props) {
   const handleBulkImport = async () => {
     const lines = bulkCsvText.trim().split("\n").filter(Boolean);
-    const parsed = lines.map(line => {
+    const errors: string[] = [];
+    const parsed = lines.map((line, idx) => {
       const [email, password, fullName, role] = line.split(",").map(s => s.trim());
-      return { email, password, fullName: fullName || email.split("@")[0], role: role || "staff" };
+      if (!email) errors.push(`Line ${idx + 1}: missing email`);
+      if (!password) errors.push(`Line ${idx + 1}: missing password`);
+      return { email, password, fullName: fullName || (email ? email.split("@")[0] : ""), role: role || "staff" };
     });
+    if (errors.length > 0) {
+      alert(`CSV validation errors:\n${errors.join("\n")}`);
+      return;
+    }
     if (parsed.length === 0) return;
+    if (!confirm(`Import ${parsed.length} users?`)) return;
     setBulkLoading(true);
     try { setBulkResult(await adminApi.bulkCreateUsers(parsed)); fetchUsers(); }
     catch { alert("Bulk import failed"); }
@@ -28,6 +36,7 @@ export default function BulkOperations({ users, fetchUsers, bulkCsvText, setBulk
 
   const handleBulkRole = async () => {
     if (bulkRoleUserIds.length === 0) return;
+    if (!confirm(`Update ${bulkRoleUserIds.length} users to role "${bulkRoleTarget}"?`)) return;
     setBulkLoading(true);
     try { await adminApi.bulkRoleUpdate(bulkRoleUserIds, bulkRoleTarget); fetchUsers(); setBulkRoleUserIds([]); }
     catch { alert("Bulk role update failed"); }

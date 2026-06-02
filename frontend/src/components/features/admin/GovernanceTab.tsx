@@ -14,7 +14,6 @@ interface Props {
   govRequests: GovernanceRequest[];
   setGovRequests: (r: GovernanceRequest[]) => void;
   govLoading: boolean; setGovLoading: (v: boolean) => void;
-  fetchUsers: () => void;
 }
 
 const REQUEST_TYPES = [
@@ -67,9 +66,8 @@ export default function GovernanceTab({ govRequests, setGovRequests, govLoading,
     loading: boolean;
   } | null>(null);
 
-  // Batch confirm modal
+  // Batch reject modal
   const [batchModal, setBatchModal] = useState<{
-    action: "APPROVE" | "REJECT";
     reason: string;
     error: string | null;
     loading: boolean;
@@ -97,7 +95,7 @@ export default function GovernanceTab({ govRequests, setGovRequests, govLoading,
       if (pg > totalPgs) setPage(totalPgs);
     } catch {}
     finally { setGovLoading(false); }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [statusFilter, typeFilter, perPage]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -156,14 +154,14 @@ export default function GovernanceTab({ govRequests, setGovRequests, govLoading,
     }
   };
 
-  // Re-apply filters when status/type changes
+  // Re-apply filters when status/type/govRequests changes
   useEffect(() => {
     const f = filterRequests(govRequests, statusFilter, typeFilter);
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setTotal(f.length);
     setTotalPages(Math.max(1, Math.ceil(f.length / perPage)));
     setPage(1);
-  }, [statusFilter, typeFilter]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [statusFilter, typeFilter, govRequests, perPage]);
 
   const activeBatchCount = batchSelectedIds.length;
 
@@ -375,7 +373,7 @@ export default function GovernanceTab({ govRequests, setGovRequests, govLoading,
             </div>
             <div className="flex items-center gap-2">
               <button disabled={!selectedReviewer}
-                onClick={() => setBatchModal({ action: "REJECT", reason: "", error: null, loading: false })}
+                onClick={() => setBatchModal({ reason: "", error: null, loading: false })}
                 className="h-7 px-2.5 rounded-sm border border-destructive/25 text-destructive bg-destructive/5 hover:bg-destructive/15 text-[9px] font-bold uppercase font-mono transition-all disabled:opacity-30 cursor-pointer">Batch Reject</button>
               <button disabled={!selectedReviewer} onClick={handleBatchApprove}
                 className="h-7 px-2.5 rounded-sm border border-success/25 text-success bg-success/5 hover:bg-success/15 text-[9px] font-bold uppercase font-mono transition-all disabled:opacity-30 cursor-pointer">Batch Approve</button>
@@ -390,30 +388,26 @@ export default function GovernanceTab({ govRequests, setGovRequests, govLoading,
       {batchModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="w-full max-w-sm rounded-sm border border-border/80 bg-background-panel shadow-none p-5 space-y-4">
-            <h3 className="text-sm font-semibold text-foreground font-serif">{batchModal.action === "APPROVE" ? "Batch Approve" : "Batch Reject"} ({activeBatchCount})</h3>
+            <h3 className="text-sm font-semibold text-foreground font-serif">Batch Reject ({activeBatchCount})</h3>
             {batchModal.error && <div className="flex items-start gap-2 rounded border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive"><AlertCircle size={12} className="mt-0.5 shrink-0" /><span>{batchModal.error}</span></div>}
-            {batchModal.action === "REJECT" && (
-              <div>
-                <label className="block text-[9px] font-bold font-mono uppercase text-foreground-subtle mb-1">Reason <span className="text-destructive">*</span></label>
-                <textarea rows={3} value={batchModal.reason} onChange={e => setBatchModal({ ...batchModal, reason: e.target.value })}
-                  placeholder="Provide a reason for all selected..."
-                  className="w-full px-2.5 py-1.5 rounded-sm border border-border bg-background text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-accent resize-none" autoFocus />
-                <p className="text-[8px] font-mono text-foreground-subtle/60 mt-1">{batchModal.reason.length}/10 minimum</p>
-              </div>
-            )}
+            <div>
+              <label className="block text-[9px] font-bold font-mono uppercase text-foreground-subtle mb-1">Reason <span className="text-destructive">*</span></label>
+              <textarea rows={3} value={batchModal.reason} onChange={e => setBatchModal({ ...batchModal, reason: e.target.value })}
+                placeholder="Provide a reason for all selected..."
+                className="w-full px-2.5 py-1.5 rounded-sm border border-border bg-background text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-accent resize-none" autoFocus />
+              <p className="text-[8px] font-mono text-foreground-subtle/60 mt-1">{batchModal.reason.length}/10 minimum</p>
+            </div>
             <div className="flex items-center justify-end gap-2 text-[10px] font-bold font-mono">
               <button onClick={() => setBatchModal(null)} className="h-8 px-3 rounded-sm border border-transparent bg-transparent text-foreground-subtle hover:text-foreground hover:bg-background-subtle/50 transition-colors cursor-pointer">Cancel</button>
-              {batchModal.action === "REJECT" && (
-                <button onClick={async () => {
-                  if (batchModal.reason.trim().length < 10) { setBatchModal({ ...batchModal, error: "Minimum 10 characters required." }); return; }
-                  setBatchModal({ ...batchModal, loading: true, error: null });
-                  try { await handleBatchReject(batchModal.reason.trim()); setBatchModal(null); }
-                  catch (err) { setBatchModal({ ...batchModal, loading: false, error: err instanceof Error ? err.message : "Failed" }); }
-                }} disabled={batchModal.loading}
-                  className="h-8 px-4 rounded-sm border border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/20 font-mono text-[11px] font-bold uppercase tracking-wider transition-colors disabled:opacity-50 cursor-pointer">
-                  {batchModal.loading ? <Loader2 size={12} className="animate-spin" /> : "Confirm Reject"}
-                </button>
-              )}
+              <button onClick={async () => {
+                if (batchModal.reason.trim().length < 10) { setBatchModal({ ...batchModal, error: "Minimum 10 characters required." }); return; }
+                setBatchModal({ ...batchModal, loading: true, error: null });
+                try { await handleBatchReject(batchModal.reason.trim()); setBatchModal(null); }
+                catch (err) { setBatchModal({ ...batchModal, loading: false, error: err instanceof Error ? err.message : "Failed" }); }
+              }} disabled={batchModal.loading}
+                className="h-8 px-4 rounded-sm border border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/20 font-mono text-[11px] font-bold uppercase tracking-wider transition-colors disabled:opacity-50 cursor-pointer">
+                {batchModal.loading ? <Loader2 size={12} className="animate-spin" /> : "Confirm Reject"}
+              </button>
             </div>
           </div>
         </div>

@@ -1,5 +1,5 @@
 "use client";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Loader2, Edit2, Check } from "lucide-react";
 import { adminApi } from "@/lib/api";
 
@@ -17,8 +17,12 @@ const LABELS: Record<string, string> = {
 };
 
 export default function ConfigTab({ configMap, setConfigMap, configEditKey, setConfigEditKey, configEditVal, setConfigEditVal }: Props) {
+  const [isLoading, setIsLoading] = useState(true);
+
   useEffect(() => {
-    adminApi.getConfig().then(setConfigMap).catch(() => {});
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setIsLoading(true);
+    adminApi.getConfig().then(setConfigMap).catch(() => {}).finally(() => setIsLoading(false));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSave = async (key: string) => {
@@ -33,7 +37,7 @@ export default function ConfigTab({ configMap, setConfigMap, configEditKey, setC
         <p className="text-[10px] text-foreground-subtle font-mono mt-0.5">Runtime configuration values stored in the database.</p>
       </div>
       <div className="border border-border/40 rounded bg-background-panel/40 overflow-hidden divide-y divide-border/20">
-        {Object.keys(LABELS).length === 0 ? (
+        {isLoading ? (
           <div className="p-8 text-center"><Loader2 size={16} className="animate-spin mx-auto text-accent" /></div>
         ) : (
           Object.entries(LABELS).map(([key, label]) => (

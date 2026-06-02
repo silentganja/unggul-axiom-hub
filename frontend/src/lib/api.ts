@@ -126,6 +126,12 @@ async function apiFetch<T>(
   });
 
   if (res.status === 401) {
+    // If an admin endpoint returned 401 but we're NOT using the admin token,
+    // this is an admin authentication failure — never touch the regular user session.
+    if (path.includes("/api/admin") && !useAdminToken) {
+      throw new Error("Admin authentication failed");
+    }
+
     // Only redirect if we're NOT already on a login page —
     // a 401 from /api/auth/login means "wrong credentials", not "expired session".
     const isOnLoginPage =

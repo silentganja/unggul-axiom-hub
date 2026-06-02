@@ -34,11 +34,10 @@ function getFileIcon(file: BackendFileNode) {
 }
 
 export default function FileBrowserTab({ initialFilter, initialUserId }: Props) {
-  void initialFilter; // Mark as intentionally unused for future use
   const [users, setUsers] = useState<AdminUserEntry[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string>(initialUserId || "ALL");
   const [allFiles, setAllFiles] = useState<BackendFileNode[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Folder navigation
@@ -67,14 +66,21 @@ export default function FileBrowserTab({ initialFilter, initialUserId }: Props) 
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     setError(null);
-    Promise.all([
-      adminApi.listUsers(),
-      selectedUserId === "ALL"
-        ? Promise.resolve([])
-        : adminApi.getUserFiles(selectedUserId),
-    ])
-      .then(([u, f]) => {
+    adminApi.listUsers()
+      .then(u => {
         setUsers(u);
+        if (selectedUserId === "ALL") {
+          // Fetch files for every user in parallel, then merge
+          return Promise.all(
+            u.map(user =>
+              adminApi.getUserFiles(user.id).catch(() => [])
+            )
+          ).then(results => results.flat());
+        } else {
+          return adminApi.getUserFiles(selectedUserId);
+        }
+      })
+      .then(f => {
         setAllFiles(f);
       })
       .catch((e) => setError(e instanceof Error ? e.message : "Failed to load"))
@@ -105,22 +111,15 @@ export default function FileBrowserTab({ initialFilter, initialUserId }: Props) 
     setPage(1);
   };
 
-  // Filter files based on current folder and search
-  const visibleFiles = allFiles.filter(f => {
-    // If root, show only top-level items for the selected user
-    const matchesFolder = f.parentId === currentFolderId;
-    const matchesSearch = !search || f.name.toLowerCase().includes(search.toLowerCase());
-    return matchesFolder && matchesSearch;
-  });
+  // Initial filter (applied before sorting and other filtering)
+  const initialFilteredFiles = !initialFilter || initialFilter === "ALL"
+    ? allFiles
+    : initialFilter === "LOCKED"
+      ? allFiles.filter(f => !!f.lockedBy)
+      : allFiles;
 
-  if (selectedUserId === "ALL") {
-    // For all users, we need to fetch all files from all users
-    // This is a simplification - in reality we'd fetch more data
-    // For now, if "ALL" is selected, we try to aggregate
-  }
-
-  // Sort
-  visibleFiles.sort((a, b) => {
+  // Sort a copy to avoid mutation and persist across pages
+  const sortedFiles = [...initialFilteredFiles].sort((a, b) => {
     // Folders first
     if (a.isFolder !== b.isFolder) return a.isFolder ? -1 : 1;
     let cmp = 0;
@@ -129,6 +128,13 @@ export default function FileBrowserTab({ initialFilter, initialUserId }: Props) 
     else if (sortField === "classification") cmp = (CLASSIFICATION_ORDER[a.classification] ?? 0) - (CLASSIFICATION_ORDER[b.classification] ?? 0);
     else if (sortField === "updated") cmp = a.updatedAt.localeCompare(b.updatedAt);
     return sortOrder === "asc" ? cmp : -cmp;
+  });
+
+  // Filter files based on current folder and search
+  const visibleFiles = sortedFiles.filter(f => {
+    const matchesFolder = f.parentId === currentFolderId;
+    const matchesSearch = !search || f.name.toLowerCase().includes(search.toLowerCase());
+    return matchesFolder && matchesSearch;
   });
 
   const total = visibleFiles.length;
@@ -151,7 +157,7 @@ export default function FileBrowserTab({ initialFilter, initialUserId }: Props) 
 
   const handleDownload = async (file: BackendFileNode) => {
     try {
-      const token = localStorage.getItem("auth-token");
+      const token = localStorage.getItem("admin-token") || localStorage.getItem("auth-token");
       const res = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"}/api/files/${file.id}/download`,
         { headers: { Authorization: `Bearer ${token}` } }
