@@ -474,7 +474,7 @@ pub async fn approve_request(
                                 .map_err(AppError::Database)?;
 
                             // Update metadata with original parent for undo
-                            if let Some(orig_pid) = original_parent_id {
+                            if let Some(_orig_pid) = original_parent_id {
                                 let _ = sqlx::query(
                                     "UPDATE governance_requests SET metadata = $1 WHERE id = $2",
                                 )

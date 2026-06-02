@@ -97,22 +97,20 @@ pub async fn share_file(
     .map_err(AppError::Database)?;
 
     if let Some((locker, locker_role)) = lock_info {
-        if let Some(locker_id) = locker {
-            match locker_role {
-                Some(role) => {
-                    if locker_id != user.id
-                        && user::role_level(&user.role) < user::role_level(&role)
-                    {
-                        return Err(AppError::Conflict(
-                            "This file is locked by a higher authority and cannot be shared".into(),
-                        ));
-                    }
-                }
-                None => {
+        match locker_role {
+            Some(role) => {
+                if locker != user.id
+                    && user::role_level(&user.role) < user::role_level(&role)
+                {
                     return Err(AppError::Conflict(
-                        "File is locked by a deleted user. Contact an administrator.".into(),
+                        "This file is locked by a higher authority and cannot be shared".into(),
                     ));
                 }
+            }
+            None => {
+                return Err(AppError::Conflict(
+                    "File is locked by a deleted user. Contact an administrator.".into(),
+                ));
             }
         }
     }

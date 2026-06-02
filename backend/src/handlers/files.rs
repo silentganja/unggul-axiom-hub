@@ -385,22 +385,20 @@ pub async fn update_classification(
     .map_err(AppError::Database)?;
 
     if let Some((locker, locker_role)) = lock_info {
-        if let Some(locker_id) = locker {
-            match locker_role {
-                Some(role) => {
-                    if locker_id != user.id
-                        && user::role_level(&user.role) < user::role_level(&role)
-                    {
-                        return Err(AppError::Conflict(
-                            "This file is locked by a higher authority and cannot change classification".into(),
-                        ));
-                    }
-                }
-                None => {
+        match locker_role {
+            Some(role) => {
+                if locker != user.id
+                    && user::role_level(&user.role) < user::role_level(&role)
+                {
                     return Err(AppError::Conflict(
-                        "File is locked by a deleted user. Contact an administrator.".into(),
+                        "This file is locked by a higher authority and cannot change classification".into(),
                     ));
                 }
+            }
+            None => {
+                return Err(AppError::Conflict(
+                    "File is locked by a deleted user. Contact an administrator.".into(),
+                ));
             }
         }
     }
@@ -471,23 +469,21 @@ pub async fn rename_file(
     .map_err(AppError::Database)?;
 
     if let Some((locker, locker_role)) = lock_info {
-        if let Some(locker_id) = locker {
-            match locker_role {
-                Some(role) => {
-                    if locker_id != user.id
-                        && user::role_level(&user.role) < user::role_level(&role)
-                    {
-                        return Err(AppError::Conflict(
-                            "This file is locked by a higher authority and cannot be renamed"
-                                .into(),
-                        ));
-                    }
-                }
-                None => {
+        match locker_role {
+            Some(role) => {
+                if locker != user.id
+                    && user::role_level(&user.role) < user::role_level(&role)
+                {
                     return Err(AppError::Conflict(
-                        "File is locked by a deleted user. Contact an administrator.".into(),
+                        "This file is locked by a higher authority and cannot be renamed"
+                            .into(),
                     ));
                 }
+            }
+            None => {
+                return Err(AppError::Conflict(
+                    "File is locked by a deleted user. Contact an administrator.".into(),
+                ));
             }
         }
     }
@@ -828,23 +824,21 @@ pub async fn move_files(
         .map_err(AppError::Database)?;
 
         if let Some((locker, locker_role)) = lock_info {
-            if let Some(locker_id) = locker {
-                match locker_role {
-                    Some(role) => {
-                        if locker_id != user.id
-                            && user::role_level(&user.role) < user::role_level(&role)
-                        {
-                            return Err(AppError::Conflict(
-                                "This file is locked by a higher authority and cannot be moved"
-                                    .into(),
-                            ));
-                        }
-                    }
-                    None => {
+            match locker_role {
+                Some(role) => {
+                    if locker != user.id
+                        && user::role_level(&user.role) < user::role_level(&role)
+                    {
                         return Err(AppError::Conflict(
-                            "File is locked by a deleted user. Contact an administrator.".into(),
+                            "This file is locked by a higher authority and cannot be moved"
+                                .into(),
                         ));
                     }
+                }
+                None => {
+                    return Err(AppError::Conflict(
+                        "File is locked by a deleted user. Contact an administrator.".into(),
+                    ));
                 }
             }
         }
