@@ -107,10 +107,7 @@ pub async fn list_audit_logs(
         where_clause, per_page, offset,
     );
 
-    let count_sql = format!(
-        "SELECT COUNT(*) FROM audit_logs {}",
-        where_clause,
-    );
+    let count_sql = format!("SELECT COUNT(*) FROM audit_logs {}", where_clause,);
 
     // Build the count query with bind parameters
     let mut count_query = sqlx::query_scalar::<_, i64>(&count_sql);
@@ -166,14 +163,20 @@ pub async fn list_audit_logs(
                 e.id,
                 e.user_id.map(|u| u.to_string()).unwrap_or_default(),
                 escape_csv(&e.action),
-                e.target_resource.as_deref().map(escape_csv).unwrap_or_default(),
+                e.target_resource
+                    .as_deref()
+                    .map(escape_csv)
+                    .unwrap_or_default(),
                 e.ip_address.as_deref().map(escape_csv).unwrap_or_default(),
                 e.created_at.format("%Y-%m-%dT%H:%M:%S%.3fZ"),
             ));
         }
         return Ok(HttpResponse::Ok()
             .content_type("text/csv; charset=utf-8")
-            .insert_header(("Content-Disposition", "attachment; filename=\"audit_logs.csv\""))
+            .insert_header((
+                "Content-Disposition",
+                "attachment; filename=\"audit_logs.csv\"",
+            ))
             .body(csv));
     }
 

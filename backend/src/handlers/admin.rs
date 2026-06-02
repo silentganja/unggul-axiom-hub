@@ -545,13 +545,12 @@ pub async fn transfer_ownership(
     let new_owner_id = body.new_owner_id;
 
     // Verify the new owner exists
-    let new_owner_exists: bool = sqlx::query_scalar(
-        "SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)",
-    )
-    .bind(new_owner_id)
-    .fetch_one(pool.get_ref())
-    .await
-    .map_err(AppError::Database)?;
+    let new_owner_exists: bool =
+        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)")
+            .bind(new_owner_id)
+            .fetch_one(pool.get_ref())
+            .await
+            .map_err(AppError::Database)?;
 
     if !new_owner_exists {
         return Err(AppError::BadRequest("New owner not found".into()));
@@ -1141,13 +1140,12 @@ pub async fn user_detail(
     .await
     .map_err(AppError::Database)?;
 
-    let shared_with_count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM file_shares WHERE user_id = $1",
-    )
-    .bind(user_id)
-    .fetch_one(pool.get_ref())
-    .await
-    .map_err(AppError::Database)?;
+    let shared_with_count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM file_shares WHERE user_id = $1")
+            .bind(user_id)
+            .fetch_one(pool.get_ref())
+            .await
+            .map_err(AppError::Database)?;
 
     let last_login: Option<chrono::DateTime<chrono::Utc>> = sqlx::query_scalar(
         "SELECT created_at FROM audit_logs
@@ -1173,13 +1171,12 @@ pub async fn user_detail(
     .await
     .map_err(AppError::Database)?;
 
-    let governance_total: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM governance_requests WHERE requested_by = $1",
-    )
-    .bind(user_id)
-    .fetch_one(pool.get_ref())
-    .await
-    .map_err(AppError::Database)?;
+    let governance_total: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM governance_requests WHERE requested_by = $1")
+            .bind(user_id)
+            .fetch_one(pool.get_ref())
+            .await
+            .map_err(AppError::Database)?;
 
     let governance_pending: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM governance_requests WHERE requested_by = $1 AND status = 'PENDING'",
@@ -1292,4 +1289,3 @@ pub async fn bulk_role_update(
     }
     Ok(HttpResponse::Ok().json(serde_json::json!({ "updated": updated })))
 }
-

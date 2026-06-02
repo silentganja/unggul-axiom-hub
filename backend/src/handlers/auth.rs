@@ -245,7 +245,8 @@ pub async fn upload_avatar(
     }
 
     // Extract the base64 payload
-    let b64_part = data_url.split(',')
+    let b64_part = data_url
+        .split(',')
         .nth(1)
         .ok_or(AppError::BadRequest("Invalid data URL format".into()))?;
 
@@ -256,7 +257,9 @@ pub async fn upload_avatar(
         .map_err(|_| AppError::BadRequest("Invalid base64 encoding".into()))?;
 
     if decoded.len() > 1_500_000 {
-        return Err(AppError::BadRequest("Avatar image must be less than 1.5 MB".into()));
+        return Err(AppError::BadRequest(
+            "Avatar image must be less than 1.5 MB".into(),
+        ));
     }
 
     // Store the full data URL in the DB
@@ -316,14 +319,13 @@ pub async fn get_notification_prefs(
     pool: web::Data<PgPool>,
     user: AuthUser,
 ) -> Result<HttpResponse, AppError> {
-    let prefs: Option<serde_json::Value> = sqlx::query_scalar(
-        "SELECT notification_prefs FROM users WHERE id = $1",
-    )
-    .bind(user.id)
-    .fetch_optional(pool.get_ref())
-    .await
-    .map_err(AppError::Database)?
-    .flatten();
+    let prefs: Option<serde_json::Value> =
+        sqlx::query_scalar("SELECT notification_prefs FROM users WHERE id = $1")
+            .bind(user.id)
+            .fetch_optional(pool.get_ref())
+            .await
+            .map_err(AppError::Database)?
+            .flatten();
 
     Ok(HttpResponse::Ok().json(prefs.unwrap_or(serde_json::Value::Object(Default::default()))))
 }

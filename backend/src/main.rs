@@ -263,10 +263,7 @@ async fn main() -> std::io::Result<()> {
                         web::delete().to(handlers::admin::force_delete_file),
                     )
                     // Shares management
-                    .route(
-                        "/shares",
-                        web::get().to(handlers::admin::list_all_shares),
-                    )
+                    .route("/shares", web::get().to(handlers::admin::list_all_shares))
                     .route(
                         "/shares/{id}",
                         web::delete().to(handlers::admin::revoke_share),
@@ -303,10 +300,7 @@ async fn main() -> std::io::Result<()> {
                         "/notification-prefs",
                         web::put().to(handlers::auth::update_notification_prefs),
                     )
-                    .route(
-                        "/sessions",
-                        web::get().to(handlers::auth::list_sessions),
-                    )
+                    .route("/sessions", web::get().to(handlers::auth::list_sessions))
                     .route(
                         "/sessions/{id}",
                         web::delete().to(handlers::auth::delete_session),
