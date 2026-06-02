@@ -1,6 +1,6 @@
 "use client";
 
-import { Code, Fingerprint, Layers, Sparkles } from "lucide-react";
+import { Code, Fingerprint, Layers, Shield, Sparkles } from "lucide-react";
 
 export default function InfoFeaturesPage() {
   return (
@@ -125,6 +125,58 @@ tx.commit().await?;`}
               <strong>Governance Side-Effects:</strong> Once a supervisor approves a request, the backend updates the matching metadata fields. Moving a file updates its `parent_id` reference, locking a file sets the `locked_by` user UUID constraint, and soft-deletes mark `deleted_at` to send the document to the Trash view.
             </li>
           </ul>
+        </div>
+      </div>
+
+      {/* Feature 4: Admin Console */}
+      <div className="border border-border/30 rounded-lg bg-background-panel/40 p-6 space-y-4 shadow-sm hover:border-border/60 transition-all duration-300">
+        <div className="flex items-center gap-2.5">
+          <div className="h-8 w-8 rounded-lg bg-accent/5 border border-accent/20 flex items-center justify-center">
+            <Shield className="text-accent" size={16} />
+          </div>
+          <h3 className="font-mono text-[10px] font-bold text-accent uppercase tracking-widest">
+            4. Administrative Controls &amp; System Overrides
+          </h3>
+        </div>
+        <p className="text-xs sm:text-sm text-foreground-subtle leading-relaxed font-sans">
+          To maintain oversight, the platform provides a restricted Admin Console accessible via isolated administrative credentials. Admin sessions receive specialized JSON Web Tokens (JWT) containing administrative claims that are completely blocked for standard application users. The console coordinates configuration updates, user databases, file ownership, and system-wide storage monitoring.
+        </p>
+
+        <div className="space-y-4 text-xs sm:text-sm font-sans text-foreground-subtle leading-relaxed">
+          <p className="text-foreground-muted">
+            The admin module implements several system safety mechanisms and operations:
+          </p>
+          <ul className="list-disc pl-5 space-y-2.5">
+            <li>
+              <strong>Orphan Prevention:</strong> To avoid lockouts, database constraints prevent deleting or deactivating the last active Chief or Director. Users owning active documents cannot be deleted until file ownership is explicitly transferred.
+            </li>
+            <li>
+              <strong>Token Purging:</strong> Deactivating a user triggers an asynchronous Redis command to purge all active refresh tokens associated with that user ID, immediately terminating active sessions.
+            </li>
+            <li>
+              <strong>Dynamic Configuration:</strong> Key-value configurations are stored in the database `system_config` table, allowing administrators to modify system variables (such as password criteria or lockout thresholds) without restarting the services.
+            </li>
+          </ul>
+        </div>
+
+        <div className="space-y-3 font-mono text-[10px] sm:text-[11px] text-foreground-subtle">
+          <span className="block font-bold text-foreground">Admin Operations and Endpoints:</span>
+          <pre className="p-4 rounded border border-border/20 bg-background/80 leading-relaxed overflow-x-auto whitespace-pre select-all shadow-inner text-[10px] sm:text-xs">
+{`// 1. Admin login with configuration validation
+POST /api/admin/login
+Response: { "token": "ADMIN_JWT", "username": "admin" }
+
+// 2. Fetch or update live system parameters
+GET /api/admin/config
+POST /api/admin/config -> Payload: { "key": "REGISTRY_ACTIVE", "value": "false" }
+
+// 3. User lifecycle and token purge
+POST /api/admin/users/{id}/toggle-active
+Response: 200 OK -> Triggers Redis token revocation for user UUID
+
+// 4. Force override of assets and shares
+DELETE /api/admin/files/{id}/force -> Hard-deletes file database record and unlinks file from storage volume`}
+          </pre>
         </div>
       </div>
     </div>

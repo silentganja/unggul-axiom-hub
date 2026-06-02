@@ -116,6 +116,10 @@ function RowDropdownMenu({
   );
 }
 
+// Module-level: only set role-based landing view once per app session.
+// Survives page remounts (e.g. navigating from /dashboard/audit back to /dashboard).
+let roleLandingDone = false;
+
 export default function FileExplorerPage() {
   const folderNameInputId = useId();
   const classificationInputId = useId();
@@ -228,14 +232,14 @@ export default function FileExplorerPage() {
   }, [activeView, setOnGovernanceUpdate, fetchTasks]);
 
   // ── Role-based landing page ────────────────────────────────────────────────
-  // Only sets the initial view once when the user first loads. Does NOT
-  // interfere with subsequent tab switches.
+  // Module-level flag — survives page remounts when navigating between
+  // /dashboard/audit and /dashboard. Only fires once per app session.
   const user = useAuthStore((state) => state.user);
-  const initialViewSet = useRef(false);
 
   useEffect(() => {
-    if (initialViewSet.current || !user?.role) return;
-    initialViewSet.current = true;
+    if (!user?.role) return;
+    if (roleLandingDone) return;
+    roleLandingDone = true;
     const roleViewMap: Record<string, string> = {
       chief: "overview",
       director: "governance",
