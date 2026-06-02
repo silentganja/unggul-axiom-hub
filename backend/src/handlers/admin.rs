@@ -948,7 +948,7 @@ pub async fn storage_breakdown(
 
 // ===== Tier 2: Storage Analytics =====
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
 struct ClassificationBreakdown {
     classification: String,
@@ -956,7 +956,7 @@ struct ClassificationBreakdown {
     total_bytes: i64,
 }
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
 struct LargestFileEntry {
     id: Uuid,
@@ -966,7 +966,7 @@ struct LargestFileEntry {
     classification: String,
 }
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
 struct StorageTrendEntry {
     date: String,
@@ -974,7 +974,7 @@ struct StorageTrendEntry {
     file_count: i64,
 }
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
 struct OverQuotaUser {
     id: Uuid,
@@ -1072,7 +1072,7 @@ struct UserDetailGovernanceCounts {
     pending: i64,
 }
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
 struct RecentActivityEntry {
     action: String,

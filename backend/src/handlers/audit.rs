@@ -72,22 +72,22 @@ pub async fn list_audit_logs(
         param_idx += 1;
     }
 
-    if let Some(ref uid) = query.user_id {
+    if query.user_id.is_some() {
         conditions.push(format!("user_id = ${}", param_idx));
         param_idx += 1;
     }
 
-    if let Some(ref action) = query.action {
+    if query.action.is_some() {
         conditions.push(format!("action = ${}", param_idx));
         param_idx += 1;
     }
 
-    if let Some(ref date_from) = query.date_from {
+    if query.date_from.is_some() {
         conditions.push(format!("created_at >= ${}::timestamp", param_idx));
         param_idx += 1;
     }
 
-    if let Some(ref date_to) = query.date_to {
+    if query.date_to.is_some() {
         conditions.push(format!("created_at <= ${}::timestamp", param_idx));
         param_idx += 1;
     }
