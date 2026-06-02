@@ -56,6 +56,37 @@ pub async fn create_request(
         }
     }
 
+    // Type-specific validations
+    match req_type.as_str() {
+        "FILE_DELETE" => {
+            if body.target_file_id.is_none() {
+                return Err(AppError::BadRequest(
+                    "FILE_DELETE requires a target_file_id".into(),
+                ));
+            }
+        }
+        "FILE_MOVE" => {
+            if body.target_file_id.is_none() {
+                return Err(AppError::BadRequest(
+                    "FILE_MOVE requires a target_file_id".into(),
+                ));
+            }
+            let has_target_folder = body
+                .metadata
+                .as_ref()
+                .and_then(|m| m.get("targetFolderId"))
+                .and_then(|v| v.as_str())
+                .map(|s| !s.is_empty())
+                .unwrap_or(false);
+            if !has_target_folder {
+                return Err(AppError::BadRequest(
+                    "FILE_MOVE requires targetFolderId in metadata".into(),
+                ));
+            }
+        }
+        _ => {}
+    }
+
     let request: GovernanceRequestResponse = sqlx::query_as::<_, GovernanceRequestResponse>(
         "INSERT INTO governance_requests (type, title, description, requested_by, target_file_id, metadata)
          VALUES ($1, $2, $3, $4, $5, $6)

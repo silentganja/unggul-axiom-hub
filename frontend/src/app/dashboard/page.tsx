@@ -253,6 +253,7 @@ export default function FileExplorerPage() {
     title: "",
     description: "",
     targetFileId: "",
+    targetFolderId: "",
   });
   const [govFormError, setGovFormError] = useState<string | null>(null);
   const [govFormLoading, setGovFormLoading] = useState(false);
@@ -263,6 +264,8 @@ export default function FileExplorerPage() {
   // File picker state
   const [filePickerOpen, setFilePickerOpen] = useState(false);
   const [filePickerSearch, setFilePickerSearch] = useState("");
+  const [folderPickerOpen, setFolderPickerOpen] = useState(false);
+  const [folderPickerSearch, setFolderPickerSearch] = useState("");
 
   // Confirm/reason modal for approve/reject
   const [confirmModal, setConfirmModal] = useState<{
@@ -430,9 +433,13 @@ export default function FileExplorerPage() {
               ? { newClassification: classificationTarget }
               : govForm.type === "FILE_LOCK"
                 ? { lockReason: govForm.description || "Governance review required" }
-                : undefined,
+                : govForm.type === "FILE_MOVE"
+                  ? { targetFolderId: govForm.targetFolderId || undefined }
+                  : govForm.type === "FILE_DELETE"
+                    ? { deleteReason: govForm.description || "Governance deletion request" }
+                    : undefined,
         });
-        setGovForm({ type: "FILE_LOCK", title: "", description: "", targetFileId: "" });
+        setGovForm({ type: "FILE_LOCK", title: "", description: "", targetFileId: "", targetFolderId: "" });
         setClassificationTarget("SULIT");
         setFilePickerSearch("");
         setIsGovModalOpen(false);
@@ -782,6 +789,8 @@ export default function FileExplorerPage() {
                     <option value="FILE_UNLOCK">File Unlock</option>
                     <option value="CLASSIFICATION_UPGRADE">Classification Upgrade</option>
                     <option value="CLASSIFICATION_DOWNGRADE">Classification Downgrade</option>
+                    <option value="FILE_MOVE">File Move</option>
+                    <option value="FILE_DELETE">File Delete</option>
                   </select>
                 </div>
                 <div>
@@ -908,6 +917,88 @@ export default function FileExplorerPage() {
                         <option key={c} value={c}>{c}</option>
                       ))}
                     </select>
+                  </div>
+                )}
+
+                {/* Target folder picker for FILE_MOVE */}
+                {govForm.type === "FILE_MOVE" && (
+                  <div>
+                    <label className="block text-[9px] font-bold font-mono uppercase text-foreground-subtle mb-1">Target Folder {govForm.targetFolderId ? "(selected)" : "(optional)"}</label>
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setFolderPickerOpen(!folderPickerOpen)}
+                        className="h-8 w-full flex items-center gap-2 px-2.5 rounded-sm border border-border bg-background text-xs text-left text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+                      >
+                        {govForm.targetFolderId ? (
+                          <>
+                            <Folder size={12} className="shrink-0 text-accent" />
+                            <span className="truncate flex-1">{files.find(f => f.id === govForm.targetFolderId)?.name || "Folder"}</span>
+                          </>
+                        ) : (
+                          <span className="text-foreground-subtle">Click to select a folder...</span>
+                        )}
+                      </button>
+                      {folderPickerOpen && (
+                        <>
+                          <div className="fixed inset-0 z-10" onClick={() => setFolderPickerOpen(false)} />
+                          <div className="absolute top-full left-0 right-0 z-20 mt-1 rounded-sm border border-border bg-background-panel shadow-md overflow-hidden">
+                            <div className="p-2 border-b border-border/20">
+                              <div className="relative">
+                                <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-foreground-subtle pointer-events-none" />
+                                <input
+                                  type="text"
+                                  placeholder="Search folders..."
+                                  value={folderPickerSearch}
+                                  onChange={(e) => setFolderPickerSearch(e.target.value)}
+                                  className="h-7 w-full pl-7 pr-2 rounded-sm border border-border bg-background text-[10px] text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+                                  autoFocus
+                                />
+                              </div>
+                            </div>
+                            <div className="max-h-[180px] overflow-y-auto divide-y divide-border/10">
+                              {files.filter(f => {
+                                const q = folderPickerSearch.toLowerCase();
+                                return f.type === "folder" && (!q || f.name.toLowerCase().includes(q));
+                              }).length === 0 ? (
+                                <div className="p-4 text-center text-[10px] text-foreground-subtle font-mono">No folders found</div>
+                              ) : (
+                                files.filter(f => {
+                                  const q = folderPickerSearch.toLowerCase();
+                                  return f.type === "folder" && (!q || f.name.toLowerCase().includes(q));
+                                }).map((pf) => (
+                                  <button
+                                    key={pf.id}
+                                    type="button"
+                                    onClick={() => {
+                                      setGovForm((f) => ({ ...f, targetFolderId: pf.id }));
+                                      setFolderPickerOpen(false);
+                                      setFolderPickerSearch("");
+                                    }}
+                                    className="w-full flex items-center gap-2 px-3 py-2 text-[10px] text-left hover:bg-accent-subtle/15 transition-colors"
+                                  >
+                                    <Folder size={12} className="text-accent shrink-0" />
+                                    <span className="truncate flex-1 text-foreground">{pf.name}</span>
+                                  </button>
+                                ))
+                              )}
+                            </div>
+                            <div className="p-1.5 border-t border-border/10 bg-background/30">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setGovForm((f) => ({ ...f, targetFolderId: "" }));
+                                  setFolderPickerOpen(false);
+                                }}
+                                className="w-full text-[9px] font-mono text-foreground-subtle hover:text-destructive text-center py-1 transition-colors"
+                              >
+                                Clear selection
+                              </button>
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
                   </div>
                 )}
 

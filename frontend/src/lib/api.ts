@@ -542,14 +542,43 @@ export const filesApi = {
 export interface AuditLogEntry {
   id: string;
   userId: string | null;
+  userName: string | null;
   action: string;
   targetResource: string | null;
   ipAddress: string | null;
   createdAt: string;
 }
 
+export interface AuditLogListResponse {
+  entries: AuditLogEntry[];
+  total: number;
+  page: number;
+  perPage: number;
+  totalPages: number;
+}
+
+export interface AuditLogParams {
+  page?: number;
+  perPage?: number;
+  userId?: string;
+  action?: string;
+  from?: string;
+  to?: string;
+}
+
 export const auditApi = {
-  list(): Promise<AuditLogEntry[]> {
+  list(params?: AuditLogParams): Promise<AuditLogListResponse> {
+    if (params) {
+      const qs = new URLSearchParams();
+      if (params.page) qs.set("page", String(params.page));
+      if (params.perPage) qs.set("perPage", String(params.perPage));
+      if (params.userId) qs.set("userId", params.userId);
+      if (params.action) qs.set("action", params.action);
+      if (params.from) qs.set("from", params.from);
+      if (params.to) qs.set("to", params.to);
+      const str = qs.toString();
+      return apiFetch("/api/audit" + (str ? "?" + str : ""));
+    }
     return apiFetch("/api/audit");
   },
 };
@@ -558,9 +587,10 @@ export const auditApi = {
 
 export interface GovernanceRequest {
   id: string;
-  type: "FILE_LOCK" | "FILE_UNLOCK" | "CLASSIFICATION_UPGRADE" | "CLASSIFICATION_DOWNGRADE";
+  type: "FILE_LOCK" | "FILE_UNLOCK" | "CLASSIFICATION_UPGRADE" | "CLASSIFICATION_DOWNGRADE" | "FILE_MOVE" | "FILE_DELETE";
   title: string;
   description: string | null;
+  reviewNote: string | null;
   status: "PENDING" | "APPROVED" | "REJECTED";
   requestedBy: string;
   requestedByName: string;
@@ -851,6 +881,43 @@ export const adminApi = {
   bulkRoleUpdate(userIds: string[], newRole: string): Promise<{ updated: number }> {
     return apiFetch("/api/admin/users/bulk-role", { method: "PUT", body: JSON.stringify({ userIds, newRole }) }, true);
   },
+
+  listShares(): Promise<AllSharesRow[]> {
+    return apiFetch("/api/admin/shares", {}, true);
+  },
+
+  revokeShare(shareId: string): Promise<void> {
+    return apiFetch(`/api/admin/shares/${shareId}`, { method: "DELETE" }, true);
+  },
+
+  transferOwnership(fileId: string, newOwnerId: string): Promise<void> {
+    return apiFetch(`/api/admin/files/${fileId}/transfer-ownership`, {
+      method: "POST", body: JSON.stringify({ newOwnerId }),
+    }, true);
+  },
+
+  getStorageAnalytics(): Promise<StorageAnalytics> {
+    return apiFetch("/api/admin/storage-analytics", {}, true);
+  },
+
+  getUserDetail(userId: string): Promise<UserDetail> {
+    return apiFetch(`/api/admin/users/${userId}/detail`, {}, true);
+  },
+
+  listAuditLogs(params?: AuditLogParams): Promise<AuditLogListResponse> {
+    if (params) {
+      const qs = new URLSearchParams();
+      if (params.page) qs.set("page", String(params.page));
+      if (params.perPage) qs.set("perPage", String(params.perPage));
+      if (params.userId) qs.set("userId", params.userId);
+      if (params.action) qs.set("action", params.action);
+      if (params.from) qs.set("from", params.from);
+      if (params.to) qs.set("to", params.to);
+      const str = qs.toString();
+      return apiFetch("/api/admin/audit" + (str ? "?" + str : ""), {}, true);
+    }
+    return apiFetch("/api/admin/audit", {}, true);
+  },
 };
 
 export interface UserStorageRow {
@@ -872,6 +939,50 @@ export interface AdminDashboard {
   pendingGovernance: number;
   lockedFiles: number;
   sharedFiles: number;
+}
+
+export interface AllSharesRow {
+  id: string;
+  fileId: string;
+  fileName: string;
+  sharedById: string;
+  sharedByName: string;
+  sharedWithId: string;
+  sharedWithName: string;
+  sharedWithEmail: string;
+  role: string;
+  createdAt: string;
+}
+
+export interface StorageAnalytics {
+  byClassification: Array<{ classification: string; bytes: number; fileCount: number }>;
+  topFiles: Array<{ id: string; name: string; ownerName: string; sizeBytes: number }>;
+  trend: Array<{ date: string; bytes: number }>;
+  overQuotaUsers: Array<{ userId: string; fullName: string; email: string; usedBytes: number; quotaBytes: number }>;
+}
+
+export interface UserDetailActivity {
+  id: string;
+  action: string;
+  targetResource: string | null;
+  createdAt: string;
+}
+
+export interface UserDetail {
+  id: string;
+  email: string;
+  fullName: string;
+  role: string;
+  active: boolean;
+  storageQuotaBytes: number | null;
+  createdAt: string;
+  lastLoginAt: string | null;
+  storageUsedBytes: number;
+  fileCount: number;
+  folderCount: number;
+  governanceTotal: number;
+  governancePending: number;
+  recentActivity: UserDetailActivity[];
 }
 
 // ── Favorites API ─────────────────────────────────────────────────────────────

@@ -38,6 +38,7 @@ export default function FloatingActionBar() {
   const [govLoading, setGovLoading] = useState(false);
   const [govError, setGovError] = useState<string | null>(null);
   const [govClassificationTarget, setGovClassificationTarget] = useState("SULIT");
+  const [govTargetFolderId, setGovTargetFolderId] = useState("");
 
   const selectedFiles = files.filter((f) => selectedIds.includes(f.id));
 
@@ -173,13 +174,18 @@ export default function FloatingActionBar() {
                           ? { newClassification: govClassificationTarget }
                           : govType === "FILE_LOCK"
                             ? { lockReason: govDescription || "Governance review required" }
-                            : undefined,
+                            : govType === "FILE_MOVE"
+                              ? { targetFolderId: govTargetFolderId || undefined }
+                              : govType === "FILE_DELETE"
+                                ? { deleteReason: govDescription || "Governance deletion request" }
+                                : undefined,
                     });
                   }
                   setIsGovModalOpen(false);
                   setGovTitle("");
                   setGovDescription("");
                   setGovClassificationTarget("SULIT");
+                  setGovTargetFolderId("");
                 } catch (err) {
                   setGovError(err instanceof Error ? err.message : "Failed to submit request");
                 } finally {
@@ -199,6 +205,8 @@ export default function FloatingActionBar() {
                   <option value="FILE_UNLOCK">File Unlock</option>
                   <option value="CLASSIFICATION_UPGRADE">Classification Upgrade</option>
                   <option value="CLASSIFICATION_DOWNGRADE">Classification Downgrade</option>
+                  <option value="FILE_MOVE">File Move</option>
+                  <option value="FILE_DELETE">File Delete</option>
                 </select>
               </div>
               <div>
@@ -249,6 +257,23 @@ export default function FloatingActionBar() {
                       return [];
                     })().map((c) => (
                       <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Target folder picker for FILE_MOVE */}
+              {govType === "FILE_MOVE" && (
+                <div>
+                  <label className="block text-[9px] font-bold font-mono uppercase text-foreground-subtle mb-1">Target Folder (optional)</label>
+                  <select
+                    value={govTargetFolderId}
+                    onChange={(e) => setGovTargetFolderId(e.target.value)}
+                    className="h-8 w-full px-2 rounded-sm border border-border bg-background text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+                  >
+                    <option value="">Select folder...</option>
+                    {files.filter(f => f.type === "folder" && !selectedIds.includes(f.id)).map(f => (
+                      <option key={f.id} value={f.id}>{f.name}</option>
                     ))}
                   </select>
                 </div>

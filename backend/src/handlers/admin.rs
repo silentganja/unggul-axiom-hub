@@ -457,6 +457,137 @@ pub async fn toggle_user_active(
 
 // â”€â”€ Tier 1: DELETE /api/admin/files/{id}/force â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+pub async fn list_all_shares(
+    pool: web::Data<PgPool>,
+    _admin: AdminUser,
+) -> Result<HttpResponse, AppError> {
+    #[derive(serde::Serialize, sqlx::FromRow)]
+    #[serde(rename_all = "camelCase")]
+    struct AdminShareRow {
+        id: Uuid,
+        file_id: Uuid,
+        file_name: String,
+        owner_id: Uuid,
+        owner_name: String,
+        user_id: Uuid,
+        user_name: String,
+        user_email: String,
+        role: String,
+        shared_by_id: Uuid,
+        shared_by_name: String,
+        created_at: chrono::DateTime<chrono::Utc>,
+    }
+
+    let shares: Vec<AdminShareRow> = sqlx::query_as(
+        "SELECT
+            fs.id,
+            fs.file_id,
+            f.name AS file_name,
+            f.owner_id,
+            u_owner.full_name AS owner_name,
+            fs.user_id,
+            u_user.full_name AS user_name,
+            u_user.email AS user_email,
+            fs.role,
+            fs.shared_by AS shared_by_id,
+            u_shared.full_name AS shared_by_name,
+            fs.created_at
+         FROM file_shares fs
+         JOIN files f ON f.id = fs.file_id
+         JOIN users u_owner ON u_owner.id = f.owner_id
+         JOIN users u_user ON u_user.id = fs.user_id
+         JOIN users u_shared ON u_shared.id = fs.shared_by
+         ORDER BY fs.created_at DESC
+         LIMIT 500",
+    )
+    .fetch_all(pool.get_ref())
+    .await
+    .map_err(AppError::Database)?;
+
+    Ok(HttpResponse::Ok().json(shares))
+}
+
+pub async fn revoke_share(
+    pool: web::Data<PgPool>,
+    _admin: AdminUser,
+    path: web::Path<Uuid>,
+) -> Result<HttpResponse, AppError> {
+    let share_id = path.into_inner();
+
+    let deleted = sqlx::query("DELETE FROM file_shares WHERE id = $1")
+        .bind(share_id)
+        .execute(pool.get_ref())
+        .await
+        .map_err(AppError::Database)?;
+
+    if deleted.rows_affected() == 0 {
+        return Err(AppError::NotFound);
+    }
+
+    tracing::warn!(admin = "admin", share_id = %share_id, "Admin revoked share");
+
+    Ok(HttpResponse::NoContent().finish())
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TransferOwnershipRequest {
+    new_owner_id: Uuid,
+}
+
+pub async fn transfer_ownership(
+    pool: web::Data<PgPool>,
+    _admin: AdminUser,
+    path: web::Path<Uuid>,
+    body: web::Json<TransferOwnershipRequest>,
+) -> Result<HttpResponse, AppError> {
+    let file_id = path.into_inner();
+    let new_owner_id = body.new_owner_id;
+
+    // Verify the new owner exists
+    let new_owner_exists: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)",
+    )
+    .bind(new_owner_id)
+    .fetch_one(pool.get_ref())
+    .await
+    .map_err(AppError::Database)?;
+
+    if !new_owner_exists {
+        return Err(AppError::BadRequest("New owner not found".into()));
+    }
+
+    // Verify the file exists
+    let file_exists: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM files WHERE id = $1 AND deleted_at IS NULL)",
+    )
+    .bind(file_id)
+    .fetch_one(pool.get_ref())
+    .await
+    .map_err(AppError::Database)?;
+
+    if !file_exists {
+        return Err(AppError::NotFound);
+    }
+
+    // Transfer ownership
+    sqlx::query("UPDATE files SET owner_id = $1 WHERE id = $2")
+        .bind(new_owner_id)
+        .bind(file_id)
+        .execute(pool.get_ref())
+        .await
+        .map_err(AppError::Database)?;
+
+    tracing::warn!(
+        admin = "admin",
+        file_id = %file_id,
+        new_owner = %new_owner_id,
+        "File ownership transferred"
+    );
+
+    Ok(HttpResponse::Ok().json(serde_json::json!({ "status": "ok" })))
+}
+
 pub async fn force_delete_file(
     pool: web::Data<PgPool>,
     _admin: AdminUser,
@@ -816,8 +947,270 @@ pub async fn storage_breakdown(
     Ok(HttpResponse::Ok().json(rows))
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// Tier 2: Bulk User Operations
+// ===== Tier 2: Storage Analytics =====
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ClassificationBreakdown {
+    classification: String,
+    count: i64,
+    total_bytes: i64,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LargestFileEntry {
+    id: Uuid,
+    name: String,
+    owner_name: String,
+    size_bytes: i64,
+    classification: String,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct StorageTrendEntry {
+    date: String,
+    total_bytes: i64,
+    file_count: i64,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct OverQuotaUser {
+    id: Uuid,
+    name: String,
+    email: String,
+    used_bytes: i64,
+    quota_bytes: i64,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct StorageAnalyticsResponse {
+    by_classification: Vec<ClassificationBreakdown>,
+    largest_files: Vec<LargestFileEntry>,
+    storage_trend: Vec<StorageTrendEntry>,
+    over_quota_users: Vec<OverQuotaUser>,
+}
+
+pub async fn storage_analytics(
+    pool: web::Data<PgPool>,
+    _admin: AdminUser,
+) -> Result<HttpResponse, AppError> {
+    let by_classification: Vec<ClassificationBreakdown> = sqlx::query_as(
+        "SELECT classification, COUNT(*) AS count, COALESCE(SUM(size_bytes), 0) AS total_bytes
+         FROM files WHERE deleted_at IS NULL
+         GROUP BY classification
+         ORDER BY total_bytes DESC",
+    )
+    .fetch_all(pool.get_ref())
+    .await
+    .map_err(AppError::Database)?;
+
+    let largest_files: Vec<LargestFileEntry> = sqlx::query_as(
+        "SELECT f.id, f.name, u.full_name AS owner_name, f.size_bytes, f.classification
+         FROM files f
+         JOIN users u ON u.id = f.owner_id
+         WHERE f.deleted_at IS NULL AND f.is_folder = FALSE
+         ORDER BY f.size_bytes DESC
+         LIMIT 50",
+    )
+    .fetch_all(pool.get_ref())
+    .await
+    .map_err(AppError::Database)?;
+
+    let storage_trend: Vec<StorageTrendEntry> = sqlx::query_as(
+        "SELECT
+            d.date::TEXT AS date,
+            COALESCE(SUM(f.size_bytes), 0) AS total_bytes,
+            COUNT(f.id) AS file_count
+         FROM generate_series(
+            CURRENT_DATE - INTERVAL '29 days',
+            CURRENT_DATE,
+            INTERVAL '1 day'
+         ) d(date)
+         LEFT JOIN files f ON f.created_at::DATE = d.date::DATE AND f.deleted_at IS NULL
+         GROUP BY d.date
+         ORDER BY d.date ASC",
+    )
+    .fetch_all(pool.get_ref())
+    .await
+    .map_err(AppError::Database)?;
+
+    let over_quota_users: Vec<OverQuotaUser> = sqlx::query_as(
+        "SELECT
+            u.id,
+            u.full_name AS name,
+            u.email,
+            COALESCE(SUM(f.size_bytes), 0) AS used_bytes,
+            u.storage_quota_bytes AS quota_bytes
+         FROM users u
+         LEFT JOIN files f ON f.owner_id = u.id AND f.deleted_at IS NULL
+         WHERE u.storage_quota_bytes IS NOT NULL
+         GROUP BY u.id
+         HAVING COALESCE(SUM(f.size_bytes), 0) > u.storage_quota_bytes
+         ORDER BY used_bytes DESC",
+    )
+    .fetch_all(pool.get_ref())
+    .await
+    .map_err(AppError::Database)?;
+
+    Ok(HttpResponse::Ok().json(StorageAnalyticsResponse {
+        by_classification,
+        largest_files,
+        storage_trend,
+        over_quota_users,
+    }))
+}
+
+// ===== Tier 2: User Detail =====
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct UserDetailGovernanceCounts {
+    total: i64,
+    pending: i64,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RecentActivityEntry {
+    action: String,
+    target: Option<String>,
+    timestamp: chrono::DateTime<chrono::Utc>,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct UserDetailResponse {
+    id: Uuid,
+    email: String,
+    full_name: String,
+    role: String,
+    active: bool,
+    storage_quota_bytes: Option<i64>,
+    created_at: chrono::DateTime<chrono::Utc>,
+    storage_used: i64,
+    file_count: i64,
+    folder_count: i64,
+    shared_with_count: i64,
+    last_login: Option<chrono::DateTime<chrono::Utc>>,
+    recent_activity: Vec<RecentActivityEntry>,
+    governance_requests: UserDetailGovernanceCounts,
+}
+
+pub async fn user_detail(
+    pool: web::Data<PgPool>,
+    _admin: AdminUser,
+    path: web::Path<Uuid>,
+) -> Result<HttpResponse, AppError> {
+    let user_id = path.into_inner();
+
+    let user: crate::models::user::User = sqlx::query_as::<_, crate::models::user::User>(
+        "SELECT id, email, password_hash, full_name, role, active, storage_quota_bytes, created_at
+         FROM users WHERE id = $1",
+    )
+    .bind(user_id)
+    .fetch_optional(pool.get_ref())
+    .await
+    .map_err(AppError::Database)?
+    .ok_or(AppError::NotFound)?;
+
+    let storage_used: i64 = sqlx::query_scalar(
+        "SELECT COALESCE(SUM(size_bytes), 0) FROM files WHERE owner_id = $1 AND deleted_at IS NULL",
+    )
+    .bind(user_id)
+    .fetch_one(pool.get_ref())
+    .await
+    .map_err(AppError::Database)?;
+
+    let file_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM files WHERE owner_id = $1 AND deleted_at IS NULL AND is_folder = FALSE",
+    )
+    .bind(user_id)
+    .fetch_one(pool.get_ref())
+    .await
+    .map_err(AppError::Database)?;
+
+    let folder_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM files WHERE owner_id = $1 AND deleted_at IS NULL AND is_folder = TRUE",
+    )
+    .bind(user_id)
+    .fetch_one(pool.get_ref())
+    .await
+    .map_err(AppError::Database)?;
+
+    let shared_with_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM file_shares WHERE user_id = $1",
+    )
+    .bind(user_id)
+    .fetch_one(pool.get_ref())
+    .await
+    .map_err(AppError::Database)?;
+
+    let last_login: Option<chrono::DateTime<chrono::Utc>> = sqlx::query_scalar(
+        "SELECT created_at FROM audit_logs
+         WHERE user_id = $1 AND action = 'LOGIN'
+         ORDER BY created_at DESC
+         LIMIT 1",
+    )
+    .bind(user_id)
+    .fetch_optional(pool.get_ref())
+    .await
+    .map_err(AppError::Database)?
+    .flatten();
+
+    let recent_activity: Vec<RecentActivityEntry> = sqlx::query_as(
+        "SELECT action, target_resource AS target, created_at AS timestamp
+         FROM audit_logs
+         WHERE user_id = $1
+         ORDER BY created_at DESC
+         LIMIT 20",
+    )
+    .bind(user_id)
+    .fetch_all(pool.get_ref())
+    .await
+    .map_err(AppError::Database)?;
+
+    let governance_total: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM governance_requests WHERE requested_by = $1",
+    )
+    .bind(user_id)
+    .fetch_one(pool.get_ref())
+    .await
+    .map_err(AppError::Database)?;
+
+    let governance_pending: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM governance_requests WHERE requested_by = $1 AND status = 'PENDING'",
+    )
+    .bind(user_id)
+    .fetch_one(pool.get_ref())
+    .await
+    .map_err(AppError::Database)?;
+
+    Ok(HttpResponse::Ok().json(UserDetailResponse {
+        id: user.id,
+        email: user.email,
+        full_name: user.full_name,
+        role: user.role,
+        active: user.active,
+        storage_quota_bytes: user.storage_quota_bytes,
+        created_at: user.created_at,
+        storage_used,
+        file_count,
+        folder_count,
+        shared_with_count,
+        last_login,
+        recent_activity,
+        governance_requests: UserDetailGovernanceCounts {
+            total: governance_total,
+            pending: governance_pending,
+        },
+    }))
+}
+
+// ===== Tier 2: Bulk User Operations =====
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 #[derive(Deserialize)]

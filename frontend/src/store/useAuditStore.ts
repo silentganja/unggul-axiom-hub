@@ -48,7 +48,8 @@ export const useAuditStore = create<AuditState>((set) => ({
   fetchLogs: async () => {
     set({ isLoading: true, error: null });
     try {
-      const entries = await auditApi.list();
+      const result = await auditApi.list();
+      const entries = Array.isArray(result) ? result : result.entries;
       const transformed = entries.map(transformAuditEntry);
       set({ logs: transformed, isLoading: false });
     } catch (err) {

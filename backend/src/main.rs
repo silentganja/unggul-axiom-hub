@@ -261,6 +261,30 @@ async fn main() -> std::io::Result<()> {
                     .route(
                         "/files/{id}/force",
                         web::delete().to(handlers::admin::force_delete_file),
+                    )
+                    // Shares management
+                    .route(
+                        "/shares",
+                        web::get().to(handlers::admin::list_all_shares),
+                    )
+                    .route(
+                        "/shares/{id}",
+                        web::delete().to(handlers::admin::revoke_share),
+                    )
+                    // File transfer ownership
+                    .route(
+                        "/files/{id}/transfer-ownership",
+                        web::post().to(handlers::admin::transfer_ownership),
+                    )
+                    // Storage analytics
+                    .route(
+                        "/storage-analytics",
+                        web::get().to(handlers::admin::storage_analytics),
+                    )
+                    // User detail
+                    .route(
+                        "/users/{id}/detail",
+                        web::get().to(handlers::admin::user_detail),
                     ),
             )
             // /api/auth
