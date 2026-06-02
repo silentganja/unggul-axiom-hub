@@ -13,7 +13,7 @@ import {
   Zap,
 } from "lucide-react";
 
-type TabId = "overview" | "frontend" | "backend" | "security" | "tradeoffs";
+type TabId = "overview" | "frontend" | "backend" | "security" | "devops" | "tradeoffs";
 
 export default function TechStackPage() {
   const [activeTab, setActiveTab] = useState<TabId>("overview");
@@ -23,6 +23,7 @@ export default function TechStackPage() {
     { id: "frontend", label: "Frontend Stack", icon: <Code2 size={14} /> },
     { id: "backend", label: "Backend Core", icon: <Terminal size={14} /> },
     { id: "security", label: "Security & Cryptography", icon: <Lock size={14} /> },
+    { id: "devops", label: "DevOps & Deployment", icon: <Boxes size={14} /> },
     { id: "tradeoffs", label: "Tradeoffs & Rationale", icon: <Zap size={14} /> },
   ] as const;
 
@@ -64,7 +65,7 @@ export default function TechStackPage() {
         {activeTab === "overview" && (
           <div className="space-y-6">
             {/* Grid summary */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="border border-border/30 rounded-lg bg-background-panel/40 p-5 space-y-3 hover:border-border/60 transition-all duration-300">
                 <div className="flex items-center gap-2 text-accent">
                   <Code2 size={16} />
@@ -110,6 +111,22 @@ export default function TechStackPage() {
                   <span className="px-2 py-0.5 rounded border border-border/30 bg-background/55 text-foreground-subtle">PostgreSQL 16</span>
                   <span className="px-2 py-0.5 rounded border border-border/30 bg-background/55 text-foreground-subtle">Redis 7.x</span>
                   <span className="px-2 py-0.5 rounded border border-border/30 bg-background/55 text-foreground-subtle">Row Locks</span>
+                </div>
+              </div>
+
+              <div className="border border-border/30 rounded-lg bg-background-panel/40 p-5 space-y-3 hover:border-border/60 transition-all duration-300">
+                <div className="flex items-center gap-2 text-accent">
+                  <Boxes size={16} />
+                  <span className="font-mono text-xs font-bold uppercase tracking-wider">DevOps &amp; Infrastructure</span>
+                </div>
+                <h3 className="text-lg font-bold font-serif text-foreground">CI/CD &amp; VPS Cloud</h3>
+                <p className="text-xs text-foreground-subtle leading-relaxed">
+                  Automated workflows build and verify Docker container configurations, pushing images to AWS ECR, and initiating automated SSH/SCP zero-downtime hot swaps on Lightsail.
+                </p>
+                <div className="pt-2 flex flex-wrap gap-1.5 font-mono text-[9px]">
+                  <span className="px-2 py-0.5 rounded border border-border/30 bg-background/55 text-foreground-subtle">GitHub Actions</span>
+                  <span className="px-2 py-0.5 rounded border border-border/30 bg-background/55 text-foreground-subtle">AWS Lightsail</span>
+                  <span className="px-2 py-0.5 rounded border border-border/30 bg-background/55 text-foreground-subtle">AWS ECR</span>
                 </div>
               </div>
             </div>
@@ -634,6 +651,94 @@ export default function TechStackPage() {
                   <span>Category: Token Authentication</span>
                   <span>Algorithm: HMAC-SHA256 (HS256)</span>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === "devops" && (
+          <div className="space-y-6 animate-in fade-in duration-300">
+            <div className="flex items-center justify-between border-b border-border/10 pb-2">
+              <span className="font-mono text-xs font-bold text-accent uppercase tracking-wider flex items-center gap-1.5">
+                <Boxes size={14} /> DevOps Pipeline &amp; Cloud Specifications
+              </span>
+              <span className="font-mono text-[10px] text-foreground-subtle">Continuous Integration &amp; Deployment</span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* GitHub Actions */}
+              <div className="border border-border/20 rounded-lg bg-background-panel/30 p-5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-foreground text-sm font-sans flex items-center gap-2">
+                    <Boxes size={14} className="text-accent" /> GitHub Actions
+                  </span>
+                  <span className="font-mono text-[9px] text-accent bg-accent-subtle/20 border border-accent/20 px-2 py-0.5 rounded font-semibold">Workflow runner</span>
+                </div>
+                <p className="text-xs text-foreground-subtle leading-relaxed">
+                  Automates testing and containerization. Runs code validation checks (ESLint + TypeScript on frontend, clippy + cargo fmt on backend) before building Docker images using Docker Buildx and caching layers.
+                </p>
+                <div className="font-mono text-[9px] text-foreground-subtle border-t border-border/10 pt-2 flex justify-between">
+                  <span>Category: CI Engine</span>
+                  <span>Scope: Automated Pipeline</span>
+                </div>
+              </div>
+
+              {/* AWS ECR */}
+              <div className="border border-border/20 rounded-lg bg-background-panel/30 p-5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-foreground text-sm font-sans flex items-center gap-2">
+                    <Boxes size={14} className="text-accent" /> Amazon ECR
+                  </span>
+                  <span className="font-mono text-[9px] text-accent bg-accent-subtle/20 border border-accent/20 px-2 py-0.5 rounded font-semibold">ap-southeast-1</span>
+                </div>
+                <p className="text-xs text-foreground-subtle leading-relaxed">
+                  Amazon Elastic Container Registry acts as our secure, private Docker image repository. It stores tagged commit versions of frontend and backend images, ready for deployment fetching.
+                </p>
+                <div className="font-mono text-[9px] text-foreground-subtle border-t border-border/10 pt-2 flex justify-between">
+                  <span>Category: Image Registry</span>
+                  <span>Scope: Secure Storage</span>
+                </div>
+              </div>
+
+              {/* AWS Lightsail */}
+              <div className="border border-border/20 rounded-lg bg-background-panel/30 p-5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-foreground text-sm font-sans flex items-center gap-2">
+                    <Boxes size={14} className="text-accent" /> Amazon Lightsail
+                  </span>
+                  <span className="font-mono text-[9px] text-accent bg-accent-subtle/20 border border-accent/20 px-2 py-0.5 rounded font-semibold">Ubuntu VPS Host</span>
+                </div>
+                <p className="text-xs text-foreground-subtle leading-relaxed">
+                  Hosts the live application services. Configured with Nginx TLS termination. Deploys container updates via SSH SCP triggers, completing clean recreations with zero service downtime.
+                </p>
+                <div className="font-mono text-[9px] text-foreground-subtle border-t border-border/10 pt-2 flex justify-between">
+                  <span>Category: VPS Hosting</span>
+                  <span>Scope: Production Node</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Docker compose production config */}
+            <div className="border border-border/20 rounded-lg bg-background-panel/20 p-6 space-y-4">
+              <h4 className="text-base font-bold text-foreground font-serif border-b border-border/10 pb-2 flex items-center gap-2">
+                <Server size={16} className="text-accent" /> VPS Deployment Script Sequence (deploy.yml workflow)
+              </h4>
+              <div className="space-y-3 font-mono text-[10px] text-foreground-subtle">
+                <span className="block font-bold text-foreground">Production SSH Script execution steps:</span>
+                <pre className="p-4 rounded border border-border/20 bg-background/80 leading-relaxed overflow-x-auto whitespace-pre select-all shadow-inner text-[10px] sm:text-xs">
+{`# 1. Authenticate local docker agent against AWS ECR
+aws ecr get-login-password --region ap-southeast-1 | docker login --username AWS --password-stdin $ECR_REGISTRY
+
+# 2. Sync production compose templates and environment variables
+scp docker-compose.prod.yml /home/ubuntu/unggul-axiom-hub/
+
+# 3. Pull latest container images and perform zero-downtime hot-swap
+docker compose -f docker-compose.prod.yml pull
+docker compose -f docker-compose.prod.yml up -d --remove-orphans
+
+# 4. Prune legacy unused images to maintain VPS storage capacity
+docker image prune -af --filter "until=24h"`}
+                </pre>
               </div>
             </div>
           </div>
