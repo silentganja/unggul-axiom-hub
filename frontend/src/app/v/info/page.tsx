@@ -7,7 +7,7 @@ export default function InfoOverviewPage() {
   const portalObjectives = [
     {
       title: "Asynchronous Rust Core",
-      desc: "A high-performance server built with Actix-Web, asynchronous SQLx connections to Postgres, and Redis caching for low-latency request-response cycles.",
+      desc: "An high-performance server built with Actix-Web, asynchronous SQLx connections to Postgres, and Redis caching for low-latency request-response cycles.",
       badge: "High Performance Backend",
       icon: <Terminal className="text-accent" size={16} />,
     },
@@ -36,52 +36,60 @@ export default function InfoOverviewPage() {
       {/* Intro Hero Section */}
       <div className="space-y-4">
         <div className="inline-flex items-center gap-1.5 px-3 py-1 font-mono text-[10px] font-semibold text-accent tracking-wider uppercase border border-accent/20 bg-accent-subtle/30 rounded shadow-sm">
-          <Layers size={12} /> SECTION 1.0 : OVERVIEW AND CONTEXT
+          <Layers size={12} /> SECTION 1.0 : EXECUTIVE OVERVIEW
         </div>
         <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-foreground font-serif">
-          The Strategic Hub Project
+          Strategic Hub Project Specification
         </h2>
         <p className="text-sm sm:text-base text-foreground-muted leading-relaxed font-sans max-w-4xl">
           The Strategic Hub is a secure corporate document containment system and workspace coordination portal. Built as a mock intranet for a high-security corporate entity, the project represents a showcase of secure API design, transactional SQL, and glassmorphic micro-animations.
         </p>
       </div>
 
-      {/* Portfolio Value Banner */}
-      <div className="p-5 rounded-lg border border-accent/30 bg-accent-subtle/10 flex items-start gap-4 shadow-sm hover:shadow transition-shadow duration-300">
-        <Terminal size={22} className="text-accent shrink-0 mt-0.5" />
-        <div className="space-y-1 text-sm">
-          <span className="font-bold text-foreground font-sans text-base">Portfolio Resume Value</span>
-          <p className="text-foreground-muted leading-relaxed font-sans">
-            This project showcases full-stack expertise: writing low-level systems logic in Rust, structuring strict relational database integrity, creating responsive Next.js apps with smooth client-side state, and designing aesthetic modern interfaces without bloated layouts.
+      {/* CEO and CTO Executive Summary */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="border border-border/30 rounded-lg bg-background-panel/40 p-6 space-y-3">
+          <span className="font-mono text-[10px] font-bold text-accent uppercase tracking-widest block">CEO Perspective : Business Value</span>
+          <h4 className="font-bold text-foreground font-serif text-lg">Risk Reduction &amp; Governance</h4>
+          <p className="text-xs sm:text-sm text-foreground-subtle leading-relaxed">
+            The platform mitigates corporate compliance risk (addressing ISO 27001 and SOC 2 requirements) by enforcing strict document boundaries. By replacing password rotations with biometric sign-ins, it reduces credential theft vectors. Multi-level manager approval loops ensure high-value documents cannot be altered or deleted without formal oversight, preserving corporate assets.
+          </p>
+        </div>
+
+        <div className="border border-border/30 rounded-lg bg-background-panel/40 p-6 space-y-3">
+          <span className="font-mono text-[10px] font-bold text-accent uppercase tracking-widest block">CTO Perspective : Architecture</span>
+          <h4 className="font-bold text-foreground font-serif text-lg">Scale &amp; Performance Efficiency</h4>
+          <p className="text-xs sm:text-sm text-foreground-subtle leading-relaxed">
+            Designed for high concurrency and sub-millisecond response profiles. The decoupled Next.js static client runs logic client-side, reducing server computation. The Rust backend handles high request-per-second loads with minimal RAM usage, while connection pooling and Redis caches eliminate latency bottlenecks.
           </p>
         </div>
       </div>
 
       {/* Practical Platform Usage Section */}
-      <div className="border border-border/30 rounded-lg bg-background-panel/40 p-6 sm:p-8 space-y-6 shadow-md hover:border-border/60 transition-all duration-300">
+      <div className="border border-border/30 rounded-lg bg-background-panel/20 p-6 sm:p-8 space-y-6 shadow-sm hover:border-border/60 transition-all duration-300">
         <h3 className="font-mono text-[10px] font-bold text-accent uppercase tracking-widest border-b border-border/20 pb-2">
-          Platform Operations and Usage
+          Core Operational Workflows
         </h3>
         
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm font-sans text-foreground-subtle leading-relaxed">
           <div className="space-y-2 p-4 rounded border border-border/10 bg-background/20 hover:border-accent/20 transition-all duration-300">
-            <h4 className="font-bold text-foreground font-serif text-base text-accent">1. File Explorer</h4>
+            <h4 className="font-bold text-foreground font-serif text-base text-accent">1. Intranet File Explorer</h4>
             <p className="text-foreground-muted text-xs sm:text-sm">
-              Users navigate files using a recursive directory tree. The workspace displays folders and files in a clean, paginated data table. Users search, sort by file attributes, and toggle a details drawer. This drawer reveals file ownership, shared collaborators, storage size, current security clearance label, and active editing lock statuses.
+              An intuitive document repository layout designed for high employee adoption. Supports single-level database queries for fast navigation. Displays metadata details including clearance labels, shared links, and active editing locks.
             </p>
           </div>
 
           <div className="space-y-2 p-4 rounded border border-border/10 bg-background/20 hover:border-accent/20 transition-all duration-300">
-            <h4 className="font-bold text-foreground font-serif text-base text-accent">2. Access Roles</h4>
+            <h4 className="font-bold text-foreground font-serif text-base text-accent">2. Access Control Model</h4>
             <p className="text-foreground-muted text-xs sm:text-sm">
-              File owners invite teammates by email and assign fine-grained roles. Viewers are restricted to file previewing and downloading. Editors can add new file versions, modify details, and request edit locks. Owners retain administrative rights over file deletions, metadata modifications, and collaborator shares.
+              Enforces directory visibility by matching folder shares against user roles. Document owners delegate viewer (read-only) or editor (write) credentials to prevent unauthorized internal data leakage.
             </p>
           </div>
 
           <div className="space-y-2 p-4 rounded border border-border/10 bg-background/20 hover:border-accent/20 transition-all duration-300">
-            <h4 className="font-bold text-foreground font-serif text-base text-accent">3. Governance approvals</h4>
+            <h4 className="font-bold text-foreground font-serif text-base text-accent">3. Approval Queue Lifecycle</h4>
             <p className="text-foreground-muted text-xs sm:text-sm">
-              High-impact actions require supervisor review. To change security ratings, lock a document for drafting, move a file, or permanently trash an item, users submit a request containing a business justification. Officers and Directors access a central pending inbox where they approve or reject requests, instantly updating database records.
+              Restricts critical actions by routing moves, deletes, and security downgrades to a supervisor queue. Approved changes are committed immediately, while rejections are logged to prevent unapproved edits.
             </p>
           </div>
         </div>

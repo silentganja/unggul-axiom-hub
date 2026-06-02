@@ -25,16 +25,16 @@ export default function InfoFeaturesPage() {
             <Fingerprint className="text-accent" size={16} />
           </div>
           <h3 className="font-mono text-[10px] font-bold text-accent uppercase tracking-widest">
-            1. WebAuthn Biometrics (Passkeys)
+            1. WebAuthn Biometrics (Anti-Phishing Security)
           </h3>
         </div>
         <p className="text-xs sm:text-sm text-foreground-subtle leading-relaxed font-sans">
-          The hub integrates native browser WebAuthn credentials to allow passwordless logging via Fingerprint Reader or Face ID. 
+          Credential harvesting and weak passwords represent the primary entry point for corporate data breaches. The platform bypasses passwords entirely by implementing the WebAuthn standard. Users bind face scans or fingerprints directly to the browser, producing cryptographic signature validations that cannot be phished or intercepted.
         </p>
 
         <div className="space-y-3 font-mono text-[10px] sm:text-[11px] text-foreground-subtle">
           <span className="block font-bold text-foreground">Authentication Challenge Handshake:</span>
-          <pre className="p-4 rounded border border-border/20 bg-background/80 leading-relaxed overflow-x-auto whitespace-pre select-all shadow-inner">
+          <pre className="p-4 rounded border border-border/20 bg-background/80 leading-relaxed overflow-x-auto whitespace-pre select-all shadow-inner text-[10px] sm:text-xs">
 {`// 1. Client requests a WebAuthn login challenge
 POST /api/webauthn/login/start
 Response: 200 OK
@@ -63,16 +63,16 @@ Response: 200 OK (returns Session JWT token)`}
             <Layers className="text-accent" size={16} />
           </div>
           <h3 className="font-mono text-[10px] font-bold text-accent uppercase tracking-widest">
-            2. Transactional Database Safety in Rust
+            2. Transactional Database Safety (ACID Compliance)
           </h3>
         </div>
         <p className="text-xs sm:text-sm text-foreground-subtle leading-relaxed font-sans">
-          When an administrator approves a batch of file governance requests (like locking or classification changes), operations must be atomic. The Rust backend uses SQLx transaction rollbacks to prevent partial successes.
+          To prevent data corruption during bulk governance updates, the system utilizes explicit database transactions. If any check fails, SQLx triggers a full database rollback. This prevents partial state updates where requests are approved but changes are not executed.
         </p>
 
         <div className="space-y-3 font-mono text-[10px] sm:text-[11px] text-foreground-subtle">
           <span className="block font-bold text-foreground">Backend Transaction Flow:</span>
-          <pre className="p-4 rounded border border-border/20 bg-background/80 leading-relaxed overflow-x-auto whitespace-pre select-all shadow-inner">
+          <pre className="p-4 rounded border border-border/20 bg-background/80 leading-relaxed overflow-x-auto whitespace-pre select-all shadow-inner text-[10px] sm:text-xs">
 {`// Rust implementation using sqlx transaction block
 let mut tx = pool.begin().await?;
 
@@ -107,7 +107,7 @@ tx.commit().await?;`}
             <Sparkles className="text-accent" size={16} />
           </div>
           <h3 className="font-mono text-[10px] font-bold text-accent uppercase tracking-widest">
-            3. File Explorer &amp; Directory Tree Navigation
+            3. Optimized Directory Queries (Linear Scalability)
           </h3>
         </div>
         <div className="space-y-4 text-xs sm:text-sm font-sans text-foreground-subtle leading-relaxed">
@@ -116,7 +116,7 @@ tx.commit().await?;`}
           </p>
           <ul className="list-disc pl-5 space-y-2.5">
             <li>
-              <strong>Virtual Folder Queries:</strong> When a user navigates to a folder, the client dispatches a request specifying the parent folder ID. The backend queries PostgreSQL matching the `parent_id` column, returning child folders and files in a flat array list.
+              <strong>Lazy Directory Loading:</strong> When a user navigates to a folder, the client dispatches a request specifying the parent folder ID. The backend queries PostgreSQL matching the `parent_id` column, returning child folders and files in a flat array list. This avoids heavy recursive SQL loops.
             </li>
             <li>
               <strong>Reactive Tree State:</strong> Zustand stores handle sorting (by name, date, size) and filtering dynamically in the client-side cache. This eliminates latency caused by triggering repeated database queries during sorting.

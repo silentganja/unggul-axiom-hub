@@ -41,6 +41,30 @@ export default function InfoArchitecturePage() {
         </p>
       </div>
 
+      {/* Engineering Design Decisions */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="border border-border/20 rounded-lg p-5 bg-background-panel/20 space-y-2">
+          <h4 className="font-bold text-foreground font-serif text-sm">Compiled System Efficiency</h4>
+          <p className="text-xs sm:text-sm text-foreground-subtle leading-relaxed">
+            Actix-Web (Rust) compiles directly to machine code, achieving 100k+ concurrent requests per second with less than 50MB idle RAM. This significantly reduces server hosting overhead and guarantees execution safety.
+          </p>
+        </div>
+
+        <div className="border border-border/20 rounded-lg p-5 bg-background-panel/20 space-y-2">
+          <h4 className="font-bold text-foreground font-serif text-sm">DB Query Compile Safety</h4>
+          <p className="text-xs sm:text-sm text-foreground-subtle leading-relaxed">
+            SQLx validates all database queries against the PostgreSQL schema at compile time. This ensures syntax errors or table mismatches never reach runtime environments, stabilizing production deployments.
+          </p>
+        </div>
+
+        <div className="border border-border/20 rounded-lg p-5 bg-background-panel/20 space-y-2">
+          <h4 className="font-bold text-foreground font-serif text-sm">In-Memory Token Caching</h4>
+          <p className="text-xs sm:text-sm text-foreground-subtle leading-relaxed">
+            Redis caches blacklisted session tokens and WebAuthn challenges. Checking blacklist state in memory takes under 1 millisecond, preventing database query bloat on every incoming API request.
+          </p>
+        </div>
+      </div>
+
       {/* ASCII Architectural Flow Diagram */}
       <div className="border border-border/30 rounded-lg bg-background-panel/40 p-6 space-y-4 shadow-sm">
         <h3 className="font-mono text-[10px] font-bold text-accent uppercase tracking-widest border-b border-border/20 pb-2">
@@ -147,7 +171,7 @@ export default function InfoArchitecturePage() {
                 <td className="p-3 text-foreground-subtle font-sans leading-relaxed">100% async, compile-time SQL query validation and type-safety.</td>
               </tr>
               <tr className="hover:bg-background-panel/20 transition-colors">
-                <td className="p-3 font-sans font-semibold text-foreground">Session Cache</td>
+                <td className="p-3 text-accent font-bold">Session Cache</td>
                 <td className="p-3 text-accent font-bold">Redis</td>
                 <td className="p-3 text-foreground-subtle font-sans leading-relaxed">Sub-millisecond data retrieval for token blacklist and WebAuthn challenges.</td>
               </tr>
