@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import {
   X,
   Download,
-  FileText,
   File,
   Shield,
   Clock,
@@ -74,6 +73,18 @@ export default function FilePreviewOverlay() {
   const isImage = mimeType.startsWith("image/");
   const isText = mimeType.startsWith("text/") || ["json", "csv", "xml", "yaml", "yml", "log", "env", "md", "js", "ts", "jsx", "tsx", "css", "html"].includes(ext);
   const isPDF = mimeType === "application/pdf" || ext === "pdf";
+  const isVideo = mimeType.startsWith("video/");
+  const isAudio = mimeType.startsWith("audio/");
+  const isOfficeDoc = ["doc", "docx", "xls", "xlsx", "ppt", "pptx"].includes(ext);
+
+  // Auth-token-embedded content URL for iframe-based previews
+  const authToken = typeof window !== "undefined" ? localStorage.getItem("auth-token") : null;
+  const authContentUrl = authToken
+    ? `${filesApi.contentUrl(file.id)}?token=${encodeURIComponent(authToken)}`
+    : filesApi.contentUrl(file.id);
+  const googleViewerUrl = isOfficeDoc
+    ? `https://docs.google.com/gview?url=${encodeURIComponent(authContentUrl)}&embedded=true`
+    : "";
 
   const handleDownload = async () => {
     try {
@@ -157,16 +168,48 @@ export default function FilePreviewOverlay() {
                   </div>
                 ) : isText && textContent ? (
                   <pre className="p-5 text-[11px] font-mono text-foreground whitespace-pre-wrap break-all leading-relaxed max-h-[55vh] overflow-auto select-text">{textContent}</pre>
+                ) : isVideo && content ? (
+                  <div className="flex items-center justify-center p-4">
+                    <video
+                      controls
+                      className="max-w-full max-h-[55vh] rounded-sm shadow-lg"
+                      src={URL.createObjectURL(new Blob([content.data], { type: mimeType }))}
+                    >
+                      Your browser does not support video playback.
+                    </video>
+                  </div>
+                ) : isAudio && content ? (
+                  <div className="flex items-center justify-center p-8">
+                    <audio
+                      controls
+                      className="w-full max-w-md"
+                      src={URL.createObjectURL(new Blob([content.data], { type: mimeType }))}
+                    >
+                      Your browser does not support audio playback.
+                    </audio>
+                  </div>
                 ) : isPDF ? (
-                  <div className="p-10 text-center space-y-4">
-                    <FileText size={40} className="mx-auto text-accent/60" />
-                    <h3 className="text-sm font-bold text-foreground font-serif">{file.name}</h3>
-                    <p className="text-[10px] text-foreground-subtle font-mono max-w-sm mx-auto leading-relaxed">
-                      PDF documents are rendered in your browser&apos;s native viewer. Click download to open.
+                  <div className="flex items-center justify-center p-0 w-full h-full min-h-[55vh]">
+                    <iframe
+                      src={authContentUrl}
+                      className="w-full h-[55vh] border-0"
+                      title={file.name}
+                    />
+                  </div>
+                ) : isOfficeDoc ? (
+                  <div className="flex flex-col items-center justify-center p-6 gap-4">
+                    <div className="w-full h-[50vh] border border-border/20 rounded-sm overflow-hidden">
+                      <iframe
+                        src={googleViewerUrl}
+                        className="w-full h-full border-0"
+                        title={file.name}
+                      />
+                    </div>
+                    <p className="text-[9px] text-foreground-subtle font-mono text-center">
+                      If the document does not load,{" "}
+                      <button onClick={handleDownload} className="text-accent hover:underline cursor-pointer">download it</button>{" "}
+                      to view locally.
                     </p>
-                    <button onClick={handleDownload} className="btn-shimmer h-9 px-5 rounded-sm font-mono text-[11px] font-bold uppercase tracking-wider inline-flex items-center gap-2">
-                      <Download size={12} /> Download PDF
-                    </button>
                   </div>
                 ) : (
                   <div className="p-10 text-center space-y-4">

@@ -10,7 +10,6 @@ use actix_web::{web, HttpRequest, HttpResponse};
 use chrono::{DateTime, Utc};
 use futures_util::stream::StreamExt;
 use sqlx::PgPool;
-use tokio::io::AsyncWriteExt;
 use uuid::Uuid;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -29,7 +28,7 @@ pub async fn get_file(
 
     let file: Option<FileNode> = sqlx::query_as::<_, FileNode>(
         "SELECT id, parent_id, owner_id, name, is_folder,
-                size_bytes, mime_type, classification, created_at, updated_at, locked_by, locked_at
+                size_bytes, mime_type, classification, created_at, updated_at, locked_by, locked_at, lock_reason
          FROM files
          WHERE id = $1 AND owner_id = $2 AND deleted_at IS NULL",
     )
@@ -78,16 +77,38 @@ pub async fn list_files(
         _ => "ASC",
     };
 
+    // Detect whether the tsvector search_vector column exists (added by migration 9015)
+    let has_tsvector: bool = if !search.is_empty() {
+        sqlx::query_scalar(
+            "SELECT EXISTS(
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'files' AND column_name = 'search_vector'
+            )",
+        )
+        .fetch_one(pool.get_ref())
+        .await
+        .map_err(AppError::Database)?
+    } else {
+        false
+    };
+
     // Build WHERE clauses dynamically
     let parent_clause = if query.parent_id.is_some() {
         "AND f.parent_id = $2"
     } else {
         "AND f.parent_id IS NULL"
     };
-    let search_clause = if !search.is_empty() {
-        "AND f.name ILIKE $3"
+    let (search_clause, search_param): (&str, fn(&str) -> String) = if !search.is_empty() {
+        if has_tsvector {
+            (
+                "AND f.search_vector @@ plainto_tsquery('english', $3)",
+                |s: &str| s.to_string(),
+            )
+        } else {
+            ("AND f.name ILIKE $3", |s: &str| format!("%{}%", s))
+        }
     } else {
-        ""
+        ("", |_: &str| String::new())
     };
 
     // Verify parent if scoped
@@ -115,7 +136,7 @@ pub async fn list_files(
         sqlx::query_scalar(&count_sql)
             .bind(user.id)
             .bind(query.parent_id.unwrap_or_default())
-            .bind(format!("%{}%", search))
+            .bind(search_param(search))
             .fetch_one(pool.get_ref())
             .await
             .map_err(AppError::Database)?
@@ -138,7 +159,7 @@ pub async fn list_files(
     let data_sql = format!(
         "SELECT f.id, f.parent_id, f.owner_id, f.name, f.is_folder,
                 f.size_bytes, f.mime_type, f.classification, f.created_at, f.updated_at,
-                f.locked_by, f.locked_at
+                f.locked_by, f.locked_at, f.lock_reason
          FROM files f
          WHERE f.owner_id = $1 AND f.deleted_at IS NULL {parent} {search}
          ORDER BY f.is_folder DESC, {sort_col} {order}
@@ -155,7 +176,7 @@ pub async fn list_files(
         sqlx::query_as::<_, FileNode>(&data_sql)
             .bind(user.id)
             .bind(query.parent_id.unwrap_or_default())
-            .bind(format!("%{}%", search))
+            .bind(search_param(search))
             .fetch_all(pool.get_ref())
             .await
             .map_err(AppError::Database)?
@@ -235,7 +256,7 @@ pub async fn create_folder(
             (parent_id, owner_id, name, is_folder, size_bytes, classification)
          VALUES ($1, $2, $3, TRUE, 0, $4)
          RETURNING id, parent_id, owner_id, name, is_folder,
-                   size_bytes, mime_type, classification, created_at, updated_at, locked_by, locked_at",
+                   size_bytes, mime_type, classification, created_at, updated_at, locked_by, locked_at, lock_reason",
     )
     .bind(body.parent_id)
     .bind(user.id)
@@ -300,12 +321,31 @@ pub async fn update_classification(
         return Err(AppError::BadRequest("Invalid classification".into()));
     }
 
+    // ── Enforce lock: hierarchical — must be the locker or have >= role level ──
+    let lock_info: Option<(Uuid, String)> = sqlx::query_as(
+        "SELECT f.locked_by, u.role FROM files f JOIN users u ON u.id = f.locked_by WHERE f.id = $1 AND f.owner_id = $2",
+    )
+    .bind(file_id)
+    .bind(user.id)
+    .fetch_optional(pool.get_ref())
+    .await
+    .map_err(AppError::Database)?
+    .map(|(id, role): (Uuid, String)| (id, role));
+
+    if let Some((locker, locker_role)) = lock_info {
+        if locker != user.id && user::role_level(&user.role) < user::role_level(&locker_role) {
+            return Err(AppError::Conflict(
+                "This file is locked by a higher authority and cannot change classification".into(),
+            ));
+        }
+    }
+
     let updated: Option<FileNode> = sqlx::query_as::<_, FileNode>(
         "UPDATE files
          SET classification = $1
          WHERE id = $2 AND owner_id = $3
          RETURNING id, parent_id, owner_id, name, is_folder,
-                   size_bytes, mime_type, classification, created_at, updated_at, locked_by, locked_at",
+                   size_bytes, mime_type, classification, created_at, updated_at, locked_by, locked_at, lock_reason",
     )
     .bind(&body.classification)
     .bind(file_id)
@@ -380,7 +420,7 @@ pub async fn rename_file(
          SET name = $1
          WHERE id = $2 AND owner_id = $3
          RETURNING id, parent_id, owner_id, name, is_folder,
-                   size_bytes, mime_type, classification, created_at, updated_at, locked_by, locked_at",
+                   size_bytes, mime_type, classification, created_at, updated_at, locked_by, locked_at, lock_reason",
     )
     .bind(&new_name)
     .bind(file_id)
@@ -430,7 +470,7 @@ pub async fn delete_file(
     // ── Fetch the row — verify it exists AND belongs to this user ─────────────
     let file: Option<FileNode> = sqlx::query_as::<_, FileNode>(
         "SELECT id, parent_id, owner_id, name, is_folder,
-                size_bytes, mime_type, classification, created_at, updated_at, locked_by, locked_at
+                size_bytes, mime_type, classification, created_at, updated_at, locked_by, locked_at, lock_reason
          FROM files
          WHERE id = $1 AND owner_id = $2",
     )
@@ -520,7 +560,7 @@ pub async fn delete_file(
 pub async fn list_trash(pool: web::Data<PgPool>, user: AuthUser) -> Result<HttpResponse, AppError> {
     let files: Vec<FileNode> = sqlx::query_as::<_, FileNode>(
         "SELECT id, parent_id, owner_id, name, is_folder,
-                size_bytes, mime_type, classification, created_at, updated_at, locked_by, locked_at
+                size_bytes, mime_type, classification, created_at, updated_at, locked_by, locked_at, lock_reason
          FROM files
          WHERE owner_id = $1 AND deleted_at IS NOT NULL
          ORDER BY updated_at DESC
@@ -561,7 +601,7 @@ pub async fn restore_file(
 
     let file: FileNode = sqlx::query_as::<_, FileNode>(
         "SELECT id, parent_id, owner_id, name, is_folder,
-                size_bytes, mime_type, classification, created_at, updated_at, locked_by, locked_at
+                size_bytes, mime_type, classification, created_at, updated_at, locked_by, locked_at, lock_reason
          FROM files WHERE id = $1",
     )
     .bind(file_id)
@@ -698,6 +738,27 @@ pub async fn move_files(
         }
     }
 
+    // ── Enforce lock: hierarchical — must be the locker or have >= role level ──
+    for file_id in &body.file_ids {
+        let lock_info: Option<(Uuid, String)> = sqlx::query_as(
+            "SELECT f.locked_by, u.role FROM files f JOIN users u ON u.id = f.locked_by WHERE f.id = $1 AND f.owner_id = $2",
+        )
+        .bind(file_id)
+        .bind(user.id)
+        .fetch_optional(pool.get_ref())
+        .await
+        .map_err(AppError::Database)?
+        .map(|(id, role): (Uuid, String)| (id, role));
+
+        if let Some((locker, locker_role)) = lock_info {
+            if locker != user.id && user::role_level(&user.role) < user::role_level(&locker_role) {
+                return Err(AppError::Conflict(
+                    "This file is locked by a higher authority and cannot be moved".into(),
+                ));
+            }
+        }
+    }
+
     // Use a transaction to move all files atomically
     let mut tx = pool.begin().await.map_err(AppError::Database)?;
 
@@ -793,7 +854,7 @@ pub async fn download_file(
 
     let file: Option<FileNode> = sqlx::query_as::<_, FileNode>(
         "SELECT id, parent_id, owner_id, name, is_folder,
-                size_bytes, mime_type, classification, created_at, updated_at, locked_by, locked_at
+                size_bytes, mime_type, classification, created_at, updated_at, locked_by, locked_at, lock_reason
          FROM files WHERE id = $1 AND owner_id = $2 AND deleted_at IS NULL AND is_folder = FALSE",
     )
     .bind(file_id)
@@ -810,9 +871,16 @@ pub async fn download_file(
         return Err(AppError::NotFound);
     }
 
-    let data = tokio::fs::read(&filepath)
+    let encrypted = tokio::fs::read(&filepath)
         .await
         .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to read file: {}", e)))?;
+
+    // Decrypt if encryption key is configured
+    let data = if let Some(ref enc_key) = config.encryption_key {
+        crate::utils::crypto::decrypt(enc_key, &encrypted)?
+    } else {
+        encrypted
+    };
 
     let mime = file
         .mime_type
@@ -845,7 +913,7 @@ pub async fn get_file_content(
 
     let file: Option<FileNode> = sqlx::query_as::<_, FileNode>(
         "SELECT id, parent_id, owner_id, name, is_folder,
-                size_bytes, mime_type, classification, created_at, updated_at, locked_by, locked_at
+                size_bytes, mime_type, classification, created_at, updated_at, locked_by, locked_at, lock_reason
          FROM files WHERE id = $1 AND owner_id = $2 AND deleted_at IS NULL AND is_folder = FALSE",
     )
     .bind(file_id)
@@ -865,9 +933,16 @@ pub async fn get_file_content(
             .body(Vec::new()));
     }
 
-    let data = tokio::fs::read(&filepath)
+    let encrypted = tokio::fs::read(&filepath)
         .await
         .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to read file: {}", e)))?;
+
+    // Decrypt if encryption key is configured
+    let data = if let Some(ref enc_key) = config.encryption_key {
+        crate::utils::crypto::decrypt(enc_key, &encrypted)?
+    } else {
+        encrypted
+    };
 
     let mime = file
         .mime_type
@@ -1017,26 +1092,45 @@ pub async fn upload_file(
                     filename = fname;
                     mime_type = field.content_type().map(|m| m.to_string());
 
-                    // Stream to disk using tokio::fs
-                    let mut file = tokio::fs::File::create(&temp_filepath).await.map_err(|e| {
-                        AppError::Internal(anyhow::anyhow!("Failed to create file on disk: {}", e))
-                    })?;
-
                     file_written = true;
+
+                    // Accumulate all bytes in memory, checking size limit as we go
+                    let mut all_bytes: Vec<u8> = Vec::new();
 
                     while let Some(chunk) = field.next().await {
                         let bytes = chunk.map_err(|e| {
                             AppError::BadRequest(format!("Failed to read chunk: {}", e))
                         })?;
-                        file.write_all(&bytes).await.map_err(|e| {
-                            AppError::Internal(anyhow::anyhow!("Failed to write chunk: {}", e))
-                        })?;
                         size_bytes += bytes.len() as i64;
+
+                        // Enforce maximum upload size
+                        if size_bytes > config.max_upload_size_bytes {
+                            return Err(AppError::BadRequest(format!(
+                                "File exceeds maximum upload size of {} bytes",
+                                config.max_upload_size_bytes
+                            )));
+                        }
+
+                        all_bytes.extend_from_slice(&bytes);
                     }
 
-                    file.flush().await.map_err(|e| {
-                        AppError::Internal(anyhow::anyhow!("Failed to flush file: {}", e))
-                    })?;
+                    // Encrypt bytes before writing to disk (if encryption key is configured)
+                    let bytes_to_write: Vec<u8> =
+                        if let Some(ref enc_key) = config.encryption_key {
+                            crate::utils::crypto::encrypt(enc_key, &all_bytes)?
+                        } else {
+                            all_bytes
+                        };
+
+                    // Write (possibly encrypted) bytes to disk
+                    tokio::fs::write(&temp_filepath, &bytes_to_write).await.map_err(
+                        |e| {
+                            AppError::Internal(anyhow::anyhow!(
+                                "Failed to write file to disk: {}",
+                                e
+                            ))
+                        },
+                    )?;
                 }
                 _ => {
                     // Ignore unknown fields
@@ -1066,7 +1160,7 @@ pub async fn upload_file(
             (id, parent_id, owner_id, name, is_folder, size_bytes, mime_type, classification)
          VALUES ($1, $2, $3, $4, FALSE, $5, $6, $7)
          RETURNING id, parent_id, owner_id, name, is_folder,
-                   size_bytes, mime_type, classification, created_at, updated_at, locked_by, locked_at",
+                   size_bytes, mime_type, classification, created_at, updated_at, locked_by, locked_at, lock_reason",
     )
     .bind(generated_uuid)
     .bind(parent_id)

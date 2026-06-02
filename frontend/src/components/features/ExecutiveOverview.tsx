@@ -11,6 +11,9 @@ import {
   File,
   HardDrive,
   Folder,
+  AlertTriangle,
+  AlertCircle,
+  Loader2,
 } from "lucide-react";
 import { useFileStore, FileNode } from "@/store/useFileStore";
 import { useAuthStore } from "@/store/useAuthStore";
@@ -20,6 +23,7 @@ import { cn } from "@/lib/utils";
 
 export default function ExecutiveOverview() {
   const tasks = useOperationsStore((state) => state.tasks);
+  const fetchTasks = useOperationsStore((state) => state.fetchTasks);
   const approveTask = useOperationsStore((state) => state.approveTask);
   const rejectTask = useOperationsStore((state) => state.rejectTask);
 
@@ -33,11 +37,26 @@ export default function ExecutiveOverview() {
   const user = useAuthStore((state) => state.user);
 
   const [activityEntries, setActivityEntries] = useState<ActivityEntry[]>([]);
-  const [animatingId, setAnimatingId] = useState<string | null>(null);
+  const [animatingId] = useState<string | null>(null);
+  const [now] = useState(() => Date.now());
+
+  // ── Confirm/reason modal state ──────────────────────────────────────────────
+  const [confirmModal, setConfirmModal] = useState<{
+    show: boolean;
+    taskId: string;
+    action: "APPROVE" | "REJECT";
+  } | null>(null);
+  const [confirmReason, setConfirmReason] = useState("");
+  const [confirmError, setConfirmError] = useState<string | null>(null);
+  const [confirmLoading, setConfirmLoading] = useState(false);
 
   useEffect(() => {
     activityApi.getFeed().then(setActivityEntries).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    fetchTasks();
+  }, [fetchTasks]);
 
   // ── Real computed metrics ──────────────────────────────────────────────────
   const pendingTasks = tasks.filter((t) => t.status === "PENDING");
@@ -45,6 +64,47 @@ export default function ExecutiveOverview() {
   const totalFiles = files.filter((f) => f.type === "file").length;
   const totalFolders = files.filter((f) => f.type === "folder").length;
   const totalStorageBytes = files.reduce((sum, f) => sum + f.sizeBytes, 0);
+
+  // ── Trend indicators ───────────────────────────────────────────────────────
+  const oneWeekAgo = now - 7 * 24 * 60 * 60 * 1000;
+  const filesThisWeek = files.filter((f) => {
+    const d = new Date(f.modifiedAt).getTime();
+    return d >= oneWeekAgo;
+  }).length;
+
+  const dailyLabels: string[] = [];
+  const dailyCounts: number[] = [];
+  for (let i = 6; i >= 0; i--) {
+    const dayStart = new Date(now - i * 24 * 60 * 60 * 1000);
+    dailyLabels.push(dayStart.toLocaleDateString("en", { weekday: "short" }));
+    const count = files.filter((f) => {
+      const d = new Date(f.modifiedAt);
+      return d.toDateString() === dayStart.toDateString();
+    }).length;
+    dailyCounts.push(count);
+  }
+  const maxDaily = Math.max(...dailyCounts, 1);
+
+  // Governance requests by type
+  const govByType: Record<string, number> = {};
+  const typeColorMap: Record<string, string> = {
+    FILE_LOCK: "bg-destructive/60",
+    FILE_UNLOCK: "bg-success/60",
+    CLASSIFICATION: "bg-warning/60",
+  };
+  tasks.forEach((t) => {
+    const key = t.type;
+    govByType[key] = (govByType[key] || 0) + 1;
+  });
+  const govTypeLabels = Object.keys(govByType);
+  const govTypeValues = Object.values(govByType);
+  const maxGovType = Math.max(...govTypeValues, 1);
+
+  // ── Governance approval rate ─────────────────────────────────────────────────
+  const approvedCount = tasks.filter((t) => t.status === "APPROVED").length;
+  const rejectedCount = tasks.filter((t) => t.status === "REJECTED").length;
+  const totalProcessed = approvedCount + rejectedCount;
+  const approvalRate = totalProcessed > 0 ? Math.round((approvedCount / totalProcessed) * 100) : 0;
 
   const recentFiles = [...files]
     .filter((f) => f.type === "file")
@@ -74,13 +134,28 @@ export default function ExecutiveOverview() {
     setAccessSheetOpen(true);
   };
 
-  const handleTaskAction = (taskId: string, action: "APPROVE" | "REJECT") => {
-    setAnimatingId(taskId);
-    setTimeout(() => {
-      if (action === "APPROVE") approveTask(taskId);
-      else rejectTask(taskId);
-      setAnimatingId(null);
-    }, 400);
+  const handleConfirmAction = async () => {
+    if (!confirmModal) return;
+    if (!confirmReason.trim() || confirmReason.trim().length < 10) {
+      setConfirmError("Reason is required (minimum 10 characters).");
+      return;
+    }
+    setConfirmLoading(true);
+    setConfirmError(null);
+    try {
+      const id = confirmModal.taskId;
+      if (confirmModal.action === "APPROVE") {
+        await approveTask(id, confirmReason.trim());
+      } else {
+        await rejectTask(id, confirmReason.trim());
+      }
+      setConfirmModal(null);
+      setConfirmReason("");
+    } catch (err) {
+      setConfirmError(err instanceof Error ? err.message : "Action failed");
+    } finally {
+      setConfirmLoading(false);
+    }
   };
 
   return (
@@ -177,6 +252,125 @@ export default function ExecutiveOverview() {
         </div>
       </div>
 
+      {/* ── Analytics & Trends ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        {/* Weekly Activity mini chart */}
+        <div className="lg:col-span-5 border border-border/30 rounded-sm bg-background-panel/35 backdrop-blur-sm p-4 select-none">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <span className="font-mono text-[8px] font-bold uppercase tracking-widest text-foreground-subtle">
+                Files Added This Week
+              </span>
+              <div className="text-lg font-bold font-mono tracking-tight text-foreground mt-0.5">
+                {filesThisWeek}
+              </div>
+            </div>
+          </div>
+          <div className="flex items-end gap-1.5 h-16 mt-1">
+            {dailyCounts.map((count, i) => (
+              <div key={i} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end">
+                <span className="text-[7px] font-mono text-foreground-subtle/60 leading-none">{count || ""}</span>
+                <div
+                  className="w-full rounded-t-sm bg-accent/40 hover:bg-accent/60 transition-colors"
+                  style={{ height: `${Math.max(8, (count / maxDaily) * 48)}px` }}
+                />
+                <span className="text-[7px] font-mono text-foreground-subtle/50 leading-none">{dailyLabels[i]}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Governance Analytics */}
+        <div className="lg:col-span-4 border border-border/30 rounded-sm bg-background-panel/35 backdrop-blur-sm p-4 select-none">
+          <span className="font-mono text-[8px] font-bold uppercase tracking-widest text-foreground-subtle">
+            Governance Analytics
+          </span>
+
+          {/* Requests by type — mini bar chart */}
+          <div className="mt-3 space-y-2">
+            <span className="text-[7px] font-mono uppercase tracking-wider text-foreground-subtle/70">By Type</span>
+            {govTypeLabels.length === 0 ? (
+              <p className="text-[10px] font-mono text-foreground-subtle py-2 text-center">
+                No governance requests
+              </p>
+            ) : (
+              govTypeLabels.map((label, i) => {
+                const count = govTypeValues[i];
+                const pct = maxGovType > 0 ? (count / maxGovType) * 100 : 0;
+                return (
+                  <div key={label} className="space-y-0.5">
+                    <div className="flex items-center justify-between text-[9px] font-mono">
+                      <span className="text-foreground-subtle uppercase tracking-wider">{label.replace("_", " ")}</span>
+                      <span className="font-bold text-foreground">{count}</span>
+                    </div>
+                    <div className="h-3 w-full bg-background-subtle/60 rounded-sm overflow-hidden border border-border/10">
+                      <div
+                        className={`h-full rounded-sm transition-all duration-300 ${typeColorMap[label] || "bg-accent/60"}`}
+                        style={{ width: `${Math.max(4, pct)}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* Approval rate — horizontal stacked bar */}
+          <div className="mt-4 space-y-1.5">
+            <span className="text-[7px] font-mono uppercase tracking-wider text-foreground-subtle/70">Approval Rate</span>
+            {totalProcessed === 0 ? (
+              <p className="text-[10px] font-mono text-foreground-subtle py-1 text-center">No processed requests</p>
+            ) : (
+              <>
+                <div className="flex items-center justify-between text-[9px] font-mono">
+                  <span className="text-success">{approvedCount} Approved</span>
+                  <span className="text-destructive">{rejectedCount} Rejected</span>
+                </div>
+                <div className="h-4 w-full bg-background-subtle/60 rounded-sm overflow-hidden border border-border/10 flex">
+                  <div
+                    className="h-full bg-success/60 transition-all duration-300"
+                    style={{ width: `${approvalRate}%` }}
+                  />
+                  <div
+                    className="h-full bg-destructive/40 transition-all duration-300"
+                    style={{ width: `${100 - approvalRate}%` }}
+                  />
+                </div>
+                <div className="flex items-center justify-between text-[9px] font-mono">
+                  <span className="font-bold text-foreground">{approvalRate}%</span>
+                  <span className="text-foreground-subtle">{totalProcessed} total</span>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Storage distribution hint */}
+        <div className="lg:col-span-3 border border-border/30 rounded-sm bg-background-panel/35 backdrop-blur-sm p-4 select-none">
+          <span className="font-mono text-[8px] font-bold uppercase tracking-widest text-foreground-subtle">
+            Storage Overview
+          </span>
+          <div className="mt-3 space-y-2">
+            <div className="flex items-center justify-between text-[9px] font-mono">
+              <span className="text-foreground-subtle">Used</span>
+              <span className="font-bold text-foreground">{formatStorage(totalStorageBytes)}</span>
+            </div>
+            <div className="flex items-center justify-between text-[9px] font-mono">
+              <span className="text-foreground-subtle">Files</span>
+              <span className="font-bold text-foreground">{totalFiles}</span>
+            </div>
+            <div className="flex items-center justify-between text-[9px] font-mono">
+              <span className="text-foreground-subtle">Folders</span>
+              <span className="font-bold text-foreground">{totalFolders}</span>
+            </div>
+            <div className="flex items-center justify-between text-[9px] font-mono">
+              <span className="text-foreground-subtle">Pending Gov</span>
+              <span className="font-bold text-foreground">{pendingCount}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* ── Split Layout: Governance Queue vs Recent Files ── */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Governance / Approval Queue */}
@@ -244,15 +438,21 @@ export default function ExecutiveOverview() {
                       </div>
                       <div className="flex items-center gap-2 shrink-0 self-end sm:self-center font-mono">
                         <button
-                          onClick={() => handleTaskAction(task.id, "REJECT")}
-                          disabled={isAnimating}
+                          onClick={() => {
+                            setConfirmModal({ show: true, taskId: task.id, action: "REJECT" });
+                            setConfirmReason("");
+                            setConfirmError(null);
+                          }}
                           className="h-7 px-3 rounded-sm border border-destructive/25 text-destructive bg-destructive/5 hover:bg-destructive/15 transition-all text-[10px] font-bold tracking-wider uppercase cursor-pointer"
                         >
                           Decline
                         </button>
                         <button
-                          onClick={() => handleTaskAction(task.id, "APPROVE")}
-                          disabled={isAnimating}
+                          onClick={() => {
+                            setConfirmModal({ show: true, taskId: task.id, action: "APPROVE" });
+                            setConfirmReason("");
+                            setConfirmError(null);
+                          }}
                           className="h-7 px-3 rounded-sm border border-success/30 text-success bg-success/5 hover:bg-success/20 transition-all text-[10px] font-bold tracking-wider uppercase flex items-center gap-1 cursor-pointer"
                         >
                           Approve
@@ -374,6 +574,84 @@ export default function ExecutiveOverview() {
           )}
         </div>
       </div>
+
+      {/* ── Confirm / Reason Modal ── */}
+      {confirmModal?.show && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-background/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-sm rounded-sm border border-border/80 bg-background-panel shadow-none p-5 space-y-4">
+            <div className="flex items-start gap-3">
+              <div className={cn(
+                "h-8 w-8 rounded-full flex items-center justify-center shrink-0",
+                confirmModal.action === "APPROVE"
+                  ? "bg-success/10 border border-success/20"
+                  : "bg-destructive/10 border border-destructive/20"
+              )}>
+                <AlertTriangle size={14} className={cn(
+                  confirmModal.action === "APPROVE" ? "text-success" : "text-destructive"
+                )} />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-sm font-semibold text-foreground font-serif">
+                  {confirmModal.action === "APPROVE" ? "Approve" : "Decline"} Request
+                </h3>
+                <p className="text-[10px] text-foreground-subtle font-mono">
+                  This action requires a written justification.
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-sm border border-warning/20 bg-warning/5 px-3 py-2 text-[9px] font-mono text-foreground-subtle flex items-start gap-2">
+              <AlertTriangle size={10} className="text-warning shrink-0 mt-0.5" />
+              <span>This action cannot be undone — though you may use the Undo option on completed requests.</span>
+            </div>
+
+            {confirmError && (
+              <div className="flex items-start gap-2 rounded border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+                <AlertCircle size={12} className="mt-0.5 shrink-0" /><span>{confirmError}</span>
+              </div>
+            )}
+
+            <div>
+              <label className="block text-[9px] font-bold font-mono uppercase text-foreground-subtle mb-1">
+                Reason <span className="text-destructive">*</span>
+              </label>
+              <textarea
+                rows={3}
+                placeholder="Provide a detailed reason (minimum 10 characters)..."
+                value={confirmReason}
+                onChange={(e) => setConfirmReason(e.target.value)}
+                className="w-full px-2.5 py-1.5 rounded-sm border border-border bg-background text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-accent resize-none"
+                autoFocus
+              />
+              <p className="text-[8px] font-mono text-foreground-subtle/60 mt-1">
+                {confirmReason.length}/10 characters minimum
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 text-[10px] font-bold font-mono pt-2">
+              <button
+                type="button"
+                onClick={() => { setConfirmModal(null); setConfirmReason(""); setConfirmError(null); }}
+                className="h-8 px-3 rounded-sm border border-transparent bg-transparent text-foreground-subtle hover:text-foreground hover:bg-background-subtle/50 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmAction}
+                disabled={confirmLoading || confirmReason.trim().length < 10}
+                className={cn(
+                  "h-8 px-4 rounded-sm font-mono text-[11px] font-bold uppercase tracking-wider disabled:opacity-50 cursor-pointer",
+                  confirmModal.action === "APPROVE"
+                    ? "btn-shimmer text-accent-foreground"
+                    : "border border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors"
+                )}
+              >
+                {confirmLoading ? <Loader2 size={12} className="animate-spin" /> : confirmModal.action === "APPROVE" ? "Confirm Approve" : "Confirm Decline"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

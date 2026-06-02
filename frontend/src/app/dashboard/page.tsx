@@ -24,14 +24,29 @@ import {
   CheckCircle,
   Loader2,
   AlertCircle,
+  Undo2,
+  AlertTriangle,
+  X,
 } from "lucide-react";
 import { useFileStore, FileNode } from "@/store/useFileStore";
+import { useAuthStore } from "@/store/useAuthStore";
 import { useOperationsStore } from "@/store/useOperationsStore";
+import { useNotificationStore } from "@/store/useNotificationStore";
 import FileAccessSheet from "@/components/features/FileAccessSheet";
 import FloatingActionBar from "@/components/features/FloatingActionBar";
 import ExecutiveOverview from "@/components/features/ExecutiveOverview";
 import FilePreviewOverlay from "@/components/features/FilePreviewOverlay";
 import { cn } from "@/lib/utils";
+
+// ── Classification hierarchy ─────────────────────────────────────────────────
+const CLASSIFICATION_LEVELS: Record<string, number> = {
+  TERBUKA: 0,
+  TERHAD: 1,
+  SULIT: 2,
+  RAHSIA: 3,
+};
+
+const VALID_CLASSIFICATIONS = ["TERBUKA", "TERHAD", "SULIT", "RAHSIA"] as const;
 
 // ── Portal-based dropdown that escapes parent overflow clipping ─────────────
 function RowDropdownMenu({
@@ -155,6 +170,12 @@ export default function FileExplorerPage() {
   const fetchTasks = useOperationsStore((state) => state.fetchTasks);
   const approveTask = useOperationsStore((state) => state.approveTask);
   const rejectTask = useOperationsStore((state) => state.rejectTask);
+  const batchApproveTasks = useOperationsStore((state) => state.batchApproveTasks);
+  const batchRejectTasks = useOperationsStore((state) => state.batchRejectTasks);
+  const undoTask = useOperationsStore((state) => state.undoTask);
+  const govPage = useOperationsStore((state) => state.page);
+  const govTotalPages = useOperationsStore((state) => state.totalPages);
+  const govTotal = useOperationsStore((state) => state.total);
   const submitRequest = useOperationsStore((state) => state.submitRequest);
 
   // ── Fetch files on mount and when folder changes ───────────────────────────
@@ -179,9 +200,44 @@ export default function FileExplorerPage() {
   // ── Fetch governance tasks when switching to governance view ──────────────
   useEffect(() => {
     if (activeView === "governance") {
-      fetchTasks();
+      fetchTasks({ page: 1, perPage: 20, status: "PENDING" });
     }
   }, [activeView, fetchTasks]);
+
+  // ── Register governance update callback for SSE auto-refresh ──────────────
+  const setOnGovernanceUpdate = useNotificationStore((state) => state.setOnGovernanceUpdate);
+
+  useEffect(() => {
+    if (activeView === "governance") {
+      setOnGovernanceUpdate(() => {
+        fetchTasks({ page: 1, perPage: 20, status: "PENDING" });
+      });
+    }
+    return () => {
+      if (activeView === "governance") {
+        setOnGovernanceUpdate(null);
+      }
+    };
+  }, [activeView, setOnGovernanceUpdate, fetchTasks]);
+
+  // ── Role-based landing page ────────────────────────────────────────────────
+  const user = useAuthStore((state) => state.user);
+  const initialViewSet = useRef(false);
+
+  useEffect(() => {
+    if (initialViewSet.current || !user?.role) return;
+    initialViewSet.current = true;
+    const roleViewMap: Record<string, string> = {
+      chief: "overview",
+      director: "governance",
+      officer: "governance",
+      staff: "files",
+    };
+    const targetView = roleViewMap[user.role.toLowerCase()] || "files";
+    if (targetView !== activeView) {
+      setActiveView(targetView as "overview" | "files" | "shared" | "recent" | "favorites" | "trash" | "governance");
+    }
+  }, [user, activeView, setActiveView]);
 
   // ── Component state ────────────────────────────────────────────────────────
   const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
@@ -201,9 +257,33 @@ export default function FileExplorerPage() {
   const [govFormError, setGovFormError] = useState<string | null>(null);
   const [govFormLoading, setGovFormLoading] = useState(false);
 
+  // Classification target for upgrade/downgrade requests
+  const [classificationTarget, setClassificationTarget] = useState("SULIT");
+
+  // File picker state
+  const [filePickerOpen, setFilePickerOpen] = useState(false);
+  const [filePickerSearch, setFilePickerSearch] = useState("");
+
+  // Confirm/reason modal for approve/reject
+  const [confirmModal, setConfirmModal] = useState<{
+    show: boolean;
+    taskId: string | string[];
+    action: "APPROVE" | "REJECT";
+    batch: boolean;
+  } | null>(null);
+  const [confirmReason, setConfirmReason] = useState("");
+  const [confirmError, setConfirmError] = useState<string | null>(null);
+  const [confirmLoading, setConfirmLoading] = useState(false);
+
+  // Batch selection for governance tasks
+  const [batchSelectedIds, setBatchSelectedIds] = useState<string[]>([]);
+
+  // Undo confirmation
+  const [undoConfirmId, setUndoConfirmId] = useState<string | null>(null);
+
   // Form states
   const [newFolderName, setNewFolderName] = useState("");
-  const [uploadClassification, setUploadClassification] = useState<"RAHSIA" | "SULIT" | "TERBUKA">("TERBUKA");
+  const [uploadClassification, setUploadClassification] = useState<"RAHSIA" | "SULIT" | "TERHAD" | "TERBUKA">("TERBUKA");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
@@ -331,7 +411,6 @@ export default function FileExplorerPage() {
     const pendingTasks = tasks.filter((t) => t.status === "PENDING");
     const historyTasks = tasks.filter((t) => t.status !== "PENDING");
     const lockedFiles = files.filter((f) => f.lockedBy);
-
     const handleGovSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
       if (!govForm.title.trim()) {
@@ -348,18 +427,85 @@ export default function FileExplorerPage() {
           targetFileId: govForm.targetFileId || undefined,
           metadata:
             govForm.type === "CLASSIFICATION_UPGRADE" || govForm.type === "CLASSIFICATION_DOWNGRADE"
-              ? { newClassification: "SULIT" }
+              ? { newClassification: classificationTarget }
               : govForm.type === "FILE_LOCK"
                 ? { lockReason: govForm.description || "Governance review required" }
                 : undefined,
         });
         setGovForm({ type: "FILE_LOCK", title: "", description: "", targetFileId: "" });
+        setClassificationTarget("SULIT");
+        setFilePickerSearch("");
         setIsGovModalOpen(false);
       } catch (err) {
         setGovFormError(err instanceof Error ? err.message : "Failed to submit request");
       } finally {
         setGovFormLoading(false);
       }
+    };
+
+    // ── File picker helpers ──
+    const filteredPickerFiles = files.filter((f) => {
+      const q = filePickerSearch.toLowerCase();
+      return !q || f.name.toLowerCase().includes(q);
+    });
+
+    const selectedFileObj = files.find((f) => f.id === govForm.targetFileId);
+
+    // ── Classification filter helpers ──
+    const getClassificationsForTarget = () => {
+      if (!selectedFileObj) return VALID_CLASSIFICATIONS;
+      const currentLevel = CLASSIFICATION_LEVELS[selectedFileObj.classification] ?? 0;
+      if (govForm.type === "CLASSIFICATION_UPGRADE") {
+        return VALID_CLASSIFICATIONS.filter((c) => CLASSIFICATION_LEVELS[c] > currentLevel);
+      }
+      if (govForm.type === "CLASSIFICATION_DOWNGRADE") {
+        return VALID_CLASSIFICATIONS.filter((c) => CLASSIFICATION_LEVELS[c] < currentLevel);
+      }
+      return VALID_CLASSIFICATIONS;
+    };
+
+    const isClassificationType =
+      govForm.type === "CLASSIFICATION_UPGRADE" || govForm.type === "CLASSIFICATION_DOWNGRADE";
+
+    // ── Confirm approve/reject handler ──
+    const handleConfirmAction = async () => {
+      if (!confirmModal) return;
+      if (!confirmReason.trim() || confirmReason.trim().length < 10) {
+        setConfirmError("Reason is required (minimum 10 characters).");
+        return;
+      }
+      setConfirmLoading(true);
+      setConfirmError(null);
+      try {
+        if (confirmModal.batch) {
+          const ids = confirmModal.taskId as string[];
+          if (confirmModal.action === "APPROVE") {
+            await batchApproveTasks(ids, confirmReason.trim());
+          } else {
+            await batchRejectTasks(ids, confirmReason.trim());
+          }
+          setBatchSelectedIds([]);
+        } else {
+          const id = confirmModal.taskId as string;
+          if (confirmModal.action === "APPROVE") {
+            await approveTask(id, confirmReason.trim());
+          } else {
+            await rejectTask(id, confirmReason.trim());
+          }
+        }
+        setConfirmModal(null);
+        setConfirmReason("");
+      } catch (err) {
+        setConfirmError(err instanceof Error ? err.message : "Action failed");
+      } finally {
+        setConfirmLoading(false);
+      }
+    };
+
+    // ── Undo handler ──
+    const handleUndo = async (id: string) => {
+      setUndoConfirmId(null);
+      await undoTask(id).catch(() => {});
     };
 
     return (
@@ -440,27 +586,92 @@ export default function FileExplorerPage() {
               </div>
             ) : (
               <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1 flex-1">
-                {pendingTasks.map((task) => (
-                  <div key={task.id} className="p-3 border border-border/30 rounded-sm bg-background-panel/40 flex items-center justify-between gap-3 transition-all">
-                    <div className="space-y-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className={cn(
-                          "px-1.5 py-0.5 rounded-sm text-[8px] font-bold tracking-wider font-mono uppercase border",
-                          task.type === "FILE_LOCK" && "bg-destructive/10 text-destructive border-destructive/20",
-                          task.type === "FILE_UNLOCK" && "bg-success/10 text-success border-success/20",
-                          task.type === "CLASSIFICATION" && "bg-warning/10 text-warning border-warning/20"
-                        )}>{task.type.replace("_", " ")}</span>
-                        <span className="font-mono text-[9px] text-foreground-subtle">{task.timestamp}</span>
+                {pendingTasks.map((task) => {
+                  const isBatchChecked = batchSelectedIds.includes(task.id);
+                  return (
+                    <div key={task.id} className="p-3 border border-border/30 rounded-sm bg-background-panel/40 flex items-center justify-between gap-3 transition-all">
+                      <div className="flex items-center gap-3 min-w-0">
+                        {/* Batch checkbox */}
+                        <label className="relative flex items-center justify-center cursor-pointer shrink-0">
+                          <input
+                            type="checkbox"
+                            checked={isBatchChecked}
+                            onChange={() => {
+                              setBatchSelectedIds((prev) =>
+                                prev.includes(task.id)
+                                  ? prev.filter((id) => id !== task.id)
+                                  : [...prev, task.id]
+                              );
+                            }}
+                            className="sr-only peer"
+                          />
+                          <span className="h-3.5 w-3.5 rounded-sm border border-input-border bg-input-bg transition-all peer-checked:bg-accent peer-checked:border-accent flex items-center justify-center">
+                            <Check size={8} className="text-accent-foreground hidden peer-checked:block" strokeWidth={3} />
+                          </span>
+                        </label>
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className={cn(
+                              "px-1.5 py-0.5 rounded-sm text-[8px] font-bold tracking-wider font-mono uppercase border",
+                              task.type === "FILE_LOCK" && "bg-destructive/10 text-destructive border-destructive/20",
+                              task.type === "FILE_UNLOCK" && "bg-success/10 text-success border-success/20",
+                              task.type === "CLASSIFICATION" && "bg-warning/10 text-warning border-warning/20"
+                            )}>{task.type.replace("_", " ")}</span>
+                            <span className="font-mono text-[9px] text-foreground-subtle">{task.timestamp}</span>
+                          </div>
+                          <h4 className="text-xs font-bold text-foreground truncate max-w-[160px] sm:max-w-xs">{task.title}</h4>
+                          <p className="text-[9px] font-mono text-foreground-muted">REQ: {task.requestedBy} • {task.amountValue}</p>
+                        </div>
                       </div>
-                      <h4 className="text-xs font-bold text-foreground truncate max-w-[200px] sm:max-w-xs">{task.title}</h4>
-                      <p className="text-[9px] font-mono text-foreground-muted">REQ: {task.requestedBy} • {task.amountValue}</p>
+                      <div className="flex items-center gap-1.5 font-mono shrink-0">
+                        <button
+                          onClick={() => {
+                            setConfirmModal({ show: true, taskId: task.id, action: "REJECT", batch: false });
+                            setConfirmReason("");
+                            setConfirmError(null);
+                          }}
+                          className="h-6 px-2.5 rounded-sm border border-destructive/20 text-destructive bg-destructive/5 hover:bg-destructive/15 text-[9px] font-bold uppercase transition-all cursor-pointer"
+                        >
+                          Decline
+                        </button>
+                        <button
+                          onClick={() => {
+                            setConfirmModal({ show: true, taskId: task.id, action: "APPROVE", batch: false });
+                            setConfirmReason("");
+                            setConfirmError(null);
+                          }}
+                          className="h-6 px-2.5 rounded-sm border border-success/20 text-success bg-success/5 hover:bg-success/15 text-[9px] font-bold uppercase transition-all cursor-pointer"
+                        >
+                          Approve
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-1.5 font-mono shrink-0">
-                      <button onClick={() => rejectTask(task.id)} className="h-6 px-2.5 rounded-sm border border-destructive/20 text-destructive bg-destructive/5 hover:bg-destructive/15 text-[9px] font-bold uppercase transition-all cursor-pointer">Decline</button>
-                      <button onClick={() => approveTask(task.id)} className="h-6 px-2.5 rounded-sm border border-success/20 text-success bg-success/5 hover:bg-success/15 text-[9px] font-bold uppercase transition-all cursor-pointer">Approve</button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Pagination */}
+            {govTotalPages > 1 && (
+              <div className="flex items-center justify-between pt-2 select-none font-mono text-[10px] text-foreground-subtle border-t border-border/10">
+                <span>Total: {govTotal} requests</span>
+                <div className="flex items-center gap-1">
+                  <button
+                    disabled={govPage <= 1}
+                    onClick={() => { useOperationsStore.getState().setPage(govPage - 1); }}
+                    className="h-7 w-7 rounded border border-border bg-background-panel hover:bg-background-subtle/50 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center text-foreground transition-colors"
+                  >
+                    &lt;
+                  </button>
+                  <span className="px-2 text-foreground-muted font-bold">Page {govPage} / {govTotalPages}</span>
+                  <button
+                    disabled={govPage >= govTotalPages}
+                    onClick={() => { useOperationsStore.getState().setPage(govPage + 1); }}
+                    className="h-7 w-7 rounded border border-border bg-background-panel hover:bg-background-subtle/50 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center text-foreground transition-colors"
+                  >
+                    &gt;
+                  </button>
+                </div>
               </div>
             )}
 
@@ -472,14 +683,23 @@ export default function FileExplorerPage() {
               <div className="space-y-1.5 max-h-[140px] overflow-y-auto pr-1">
                 {historyTasks.slice(0, 20).map((task) => (
                   <div key={task.id} className="p-2 border border-border/10 rounded-sm bg-background/10 flex items-center justify-between text-[10px] font-mono">
-                    <div className="truncate max-w-[280px]">
+                    <div className="truncate max-w-[220px]">
                       <span className="font-bold text-foreground truncate block">{task.title}</span>
                       <span className="text-[8px] text-foreground-subtle">{task.requestedBy} • {task.timestamp}</span>
                     </div>
-                    <span className={cn(
-                      "px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider shrink-0 ml-2",
-                      task.status === "APPROVED" ? "bg-success/10 text-success border border-success/15" : "bg-destructive/10 text-destructive border border-destructive/15"
-                    )}>{task.status}</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className={cn(
+                        "px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider shrink-0",
+                        task.status === "APPROVED" ? "bg-success/10 text-success border border-success/15" : "bg-destructive/10 text-destructive border border-destructive/15"
+                      )}>{task.status}</span>
+                      <button
+                        onClick={() => setUndoConfirmId(task.id)}
+                        className="h-5 w-5 rounded flex items-center justify-center border border-border/20 hover:border-accent/30 hover:bg-accent/5 text-foreground-subtle hover:text-accent transition-all cursor-pointer"
+                        title="Undo this action"
+                      >
+                        <Undo2 size={10} />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -512,6 +732,7 @@ export default function FileExplorerPage() {
                           "px-1 py-0.5 rounded-sm text-[8px] font-bold tracking-wider font-mono uppercase border",
                           file.classification === "RAHSIA" && "bg-destructive/15 text-destructive border-destructive/25",
                           file.classification === "SULIT" && "bg-warning/15 text-warning border-warning/25",
+                          file.classification === "TERHAD" && "bg-info/15 text-info border-info/25",
                           file.classification === "TERBUKA" && "bg-background-muted/40 text-foreground-subtle border-border/40"
                         )}>{file.classification}</span>
                         <span className="font-mono text-[9px] text-foreground-subtle">ID: {file.id.slice(0, 8)}</span>
@@ -533,7 +754,7 @@ export default function FileExplorerPage() {
           </div>
         </div>
 
-        {/* ── New Governance Request Modal ── */}
+        {/* ── New Governance Request Modal (with file picker & classification target) ── */}
         {isGovModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/60 backdrop-blur-sm animate-in fade-in duration-200">
             <div className="w-full max-w-sm rounded-sm border border-border/80 bg-background-panel shadow-none p-5 space-y-4">
@@ -551,7 +772,10 @@ export default function FileExplorerPage() {
                   <label className="block text-[9px] font-bold font-mono uppercase text-foreground-subtle mb-1">Request Type</label>
                   <select
                     value={govForm.type}
-                    onChange={(e) => setGovForm((f) => ({ ...f, type: e.target.value }))}
+                    onChange={(e) => {
+                      setGovForm((f) => ({ ...f, type: e.target.value }));
+                      setClassificationTarget("SULIT");
+                    }}
                     className="h-8 w-full px-2 rounded-sm border border-border bg-background text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
                   >
                     <option value="FILE_LOCK">File Lock</option>
@@ -571,16 +795,122 @@ export default function FileExplorerPage() {
                     className="h-8 w-full px-2.5 rounded-sm border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
                   />
                 </div>
+
+                {/* File Picker */}
                 <div>
-                  <label className="block text-[9px] font-bold font-mono uppercase text-foreground-subtle mb-1">Target File ID (optional)</label>
-                  <input
-                    type="text"
-                    placeholder="UUID of the file"
-                    value={govForm.targetFileId}
-                    onChange={(e) => setGovForm((f) => ({ ...f, targetFileId: e.target.value }))}
-                    className="h-8 w-full px-2.5 rounded-sm border border-border bg-background text-xs font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
-                  />
+                  <label className="block text-[9px] font-bold font-mono uppercase text-foreground-subtle mb-1">Target File {govForm.targetFileId ? "(1 selected)" : "(optional)"}</label>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setFilePickerOpen(!filePickerOpen)}
+                      className="h-8 w-full flex items-center gap-2 px-2.5 rounded-sm border border-border bg-background text-xs text-left text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+                    >
+                      {selectedFileObj ? (
+                        <>
+                          <File size={12} className="shrink-0 text-accent" />
+                          <span className="truncate flex-1">{selectedFileObj.name}</span>
+                          <span className={cn(
+                            "px-1 py-0.5 rounded-sm text-[7px] font-bold font-mono uppercase border shrink-0",
+                            selectedFileObj.classification === "RAHSIA" && "bg-destructive/15 text-destructive border-destructive/25",
+                            selectedFileObj.classification === "SULIT" && "bg-warning/15 text-warning border-warning/25",
+                            selectedFileObj.classification === "TERHAD" && "bg-info/15 text-info border-info/25",
+                            selectedFileObj.classification === "TERBUKA" && "bg-background-muted/40 text-foreground-subtle border-border/40"
+                          )}>{selectedFileObj.classification}</span>
+                        </>
+                      ) : (
+                        <span className="text-foreground-subtle">Click to select a file...</span>
+                      )}
+                    </button>
+                    {filePickerOpen && (
+                      <>
+                        <div className="fixed inset-0 z-10" onClick={() => setFilePickerOpen(false)} />
+                        <div className="absolute top-full left-0 right-0 z-20 mt-1 rounded-sm border border-border bg-background-panel shadow-md overflow-hidden">
+                          <div className="p-2 border-b border-border/20">
+                            <div className="relative">
+                              <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-foreground-subtle pointer-events-none" />
+                              <input
+                                type="text"
+                                placeholder="Search files..."
+                                value={filePickerSearch}
+                                onChange={(e) => setFilePickerSearch(e.target.value)}
+                                className="h-7 w-full pl-7 pr-2 rounded-sm border border-border bg-background text-[10px] text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+                                autoFocus
+                              />
+                            </div>
+                          </div>
+                          <div className="max-h-[180px] overflow-y-auto divide-y divide-border/10">
+                            {filteredPickerFiles.length === 0 ? (
+                              <div className="p-4 text-center text-[10px] text-foreground-subtle font-mono">No files found</div>
+                            ) : (
+                              filteredPickerFiles.map((pf) => (
+                                <button
+                                  key={pf.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setGovForm((f) => ({ ...f, targetFileId: pf.id }));
+                                    setFilePickerOpen(false);
+                                    setFilePickerSearch("");
+                                  }}
+                                  className="w-full flex items-center gap-2 px-3 py-2 text-[10px] text-left hover:bg-accent-subtle/15 transition-colors"
+                                >
+                                  {pf.type === "folder" ? (
+                                    <Folder size={12} className="text-accent shrink-0" />
+                                  ) : (
+                                    <File size={12} className="text-foreground-subtle shrink-0" />
+                                  )}
+                                  <span className="truncate flex-1 text-foreground">{pf.name}</span>
+                                  <span className={cn(
+                                    "px-1 py-0.5 rounded-sm text-[7px] font-bold font-mono uppercase border shrink-0",
+                                    pf.classification === "RAHSIA" && "bg-destructive/15 text-destructive border-destructive/25",
+                                    pf.classification === "SULIT" && "bg-warning/15 text-warning border-warning/25",
+                                    pf.classification === "TERHAD" && "bg-info/15 text-info border-info/25",
+                                    pf.classification === "TERBUKA" && "bg-background-muted/40 text-foreground-subtle border-border/40"
+                                  )}>{pf.classification}</span>
+                                </button>
+                              ))
+                            )}
+                          </div>
+                          <div className="p-1.5 border-t border-border/10 bg-background/30">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setGovForm((f) => ({ ...f, targetFileId: "" }));
+                                setFilePickerOpen(false);
+                              }}
+                              className="w-full text-[9px] font-mono text-foreground-subtle hover:text-destructive text-center py-1 transition-colors"
+                            >
+                              Clear selection
+                            </button>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
                 </div>
+
+                {/* Classification target dropdown */}
+                {isClassificationType && (
+                  <div>
+                    <label className="block text-[9px] font-bold font-mono uppercase text-foreground-subtle mb-1">
+                      Target Classification
+                      {selectedFileObj && (
+                        <span className="text-foreground-muted font-normal normal-case ml-1">
+                          (current: {selectedFileObj.classification} {govForm.type === "CLASSIFICATION_UPGRADE" ? "→ up" : "→ down"})
+                        </span>
+                      )}
+                    </label>
+                    <select
+                      value={classificationTarget}
+                      onChange={(e) => setClassificationTarget(e.target.value)}
+                      className="h-8 w-full px-2 rounded-sm border border-border bg-background text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+                    >
+                      {getClassificationsForTarget().map((c) => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
                 <div>
                   <label className="block text-[9px] font-bold font-mono uppercase text-foreground-subtle mb-1">Description / Reason</label>
                   <textarea
@@ -598,6 +928,172 @@ export default function FileExplorerPage() {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* ── Confirm / Reason Modal for Approve/Reject ── */}
+        {confirmModal?.show && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-background/60 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="w-full max-w-sm rounded-sm border border-border/80 bg-background-panel shadow-none p-5 space-y-4">
+              <div className="flex items-start gap-3">
+                <div className={cn(
+                  "h-8 w-8 rounded-full flex items-center justify-center shrink-0",
+                  confirmModal.action === "APPROVE"
+                    ? "bg-success/10 border border-success/20"
+                    : "bg-destructive/10 border border-destructive/20"
+                )}>
+                  <AlertTriangle size={14} className={cn(
+                    confirmModal.action === "APPROVE" ? "text-success" : "text-destructive"
+                  )} />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-sm font-semibold text-foreground font-serif">
+                    {confirmModal.batch
+                      ? `${confirmModal.action === "APPROVE" ? "Approve" : "Reject"} ${(confirmModal.taskId as string[]).length} Requests`
+                      : `${confirmModal.action === "APPROVE" ? "Approve" : "Decline"} Request`}
+                  </h3>
+                  <p className="text-[10px] text-foreground-subtle font-mono">
+                    This action requires a written justification.
+                    {confirmModal.batch && (
+                      <span className="block mt-1 text-warning">The same reason will apply to all selected requests.</span>
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              {/* Warning */}
+              <div className="rounded-sm border border-warning/20 bg-warning/5 px-3 py-2 text-[9px] font-mono text-foreground-subtle flex items-start gap-2">
+                <AlertTriangle size={10} className="text-warning shrink-0 mt-0.5" />
+                <span>This action cannot be undone — though you may use the Undo option on completed requests.</span>
+              </div>
+
+              {confirmError && (
+                <div className="flex items-start gap-2 rounded border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+                  <AlertCircle size={12} className="mt-0.5 shrink-0" /><span>{confirmError}</span>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-[9px] font-bold font-mono uppercase text-foreground-subtle mb-1">
+                  Reason <span className="text-destructive">*</span>
+                </label>
+                <textarea
+                  rows={3}
+                  placeholder="Provide a detailed reason (minimum 10 characters)..."
+                  value={confirmReason}
+                  onChange={(e) => setConfirmReason(e.target.value)}
+                  className="w-full px-2.5 py-1.5 rounded-sm border border-border bg-background text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-accent resize-none"
+                  autoFocus
+                />
+                <p className="text-[8px] font-mono text-foreground-subtle/60 mt-1">
+                  {confirmReason.length}/10 characters minimum
+                </p>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 text-[10px] font-bold font-mono pt-2">
+                <button
+                  type="button"
+                  onClick={() => { setConfirmModal(null); setConfirmReason(""); setConfirmError(null); }}
+                  className="h-8 px-3 rounded-sm border border-transparent bg-transparent text-foreground-subtle hover:text-foreground hover:bg-background-subtle/50 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirmAction}
+                  disabled={confirmLoading || confirmReason.trim().length < 10}
+                  className={cn(
+                    "h-8 px-4 rounded-sm font-mono text-[11px] font-bold uppercase tracking-wider disabled:opacity-50 cursor-pointer",
+                    confirmModal.action === "APPROVE"
+                      ? "btn-shimmer text-accent-foreground"
+                      : "border border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors"
+                  )}
+                >
+                  {confirmLoading ? <Loader2 size={12} className="animate-spin" /> : confirmModal.action === "APPROVE" ? "Confirm Approve" : "Confirm Decline"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Undo Confirmation Modal ── */}
+        {undoConfirmId && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-background/60 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="w-full max-w-sm rounded-sm border border-border/80 bg-background-panel shadow-none p-5 space-y-4">
+              <div className="flex items-start gap-3">
+                <div className="h-8 w-8 rounded-full bg-warning/10 border border-warning/20 flex items-center justify-center shrink-0">
+                  <AlertTriangle size={14} className="text-warning" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-sm font-semibold text-foreground font-serif">Undo Governance Action</h3>
+                  <p className="text-[10px] text-foreground-subtle font-mono">
+                    This will reverse the previous decision and move this request back to PENDING status.
+                  </p>
+                </div>
+              </div>
+              <div className="rounded-sm border border-warning/20 bg-warning/5 px-3 py-2 text-[9px] font-mono text-foreground-subtle flex items-start gap-2">
+                <AlertTriangle size={10} className="text-warning shrink-0 mt-0.5" />
+                <span>This will undo the approval or rejection. The request will become available for re-review.</span>
+              </div>
+              <div className="flex items-center justify-end gap-2 text-[10px] font-bold font-mono">
+                <button
+                  onClick={() => setUndoConfirmId(null)}
+                  className="h-8 px-3 rounded-sm border border-transparent bg-transparent text-foreground-subtle hover:text-foreground hover:bg-background-subtle/50 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleUndo(undoConfirmId)}
+                  className="h-8 px-4 rounded-sm border border-warning/30 bg-warning/10 text-warning hover:bg-warning/20 font-mono text-[11px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                >
+                  Confirm Undo
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Batch Action Bar ── */}
+        {batchSelectedIds.length > 0 && (
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 w-full max-w-lg px-4 animate-in fade-in slide-in-from-bottom-4 duration-250 select-none">
+            <div className="flex items-center justify-between gap-4 px-4 py-3 rounded-lg border border-accent/20 bg-background-panel/90 backdrop-blur-md shadow-md text-foreground">
+              <div className="flex items-center gap-2">
+                <div className="h-5 w-5 rounded bg-accent/15 border border-accent/25 text-accent text-[9px] font-bold font-mono flex items-center justify-center">
+                  {batchSelectedIds.length}
+                </div>
+                <span className="font-mono text-[11px] font-semibold text-foreground-muted">
+                  {batchSelectedIds.length} request{batchSelectedIds.length !== 1 ? "s" : ""} selected
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    setConfirmModal({ show: true, taskId: [...batchSelectedIds], action: "REJECT", batch: true });
+                    setConfirmReason("");
+                    setConfirmError(null);
+                  }}
+                  className="h-7 px-2.5 rounded-sm border border-destructive/25 text-destructive bg-destructive/5 hover:bg-destructive/15 text-[9px] font-bold uppercase font-mono transition-all cursor-pointer"
+                >
+                  Reject All
+                </button>
+                <button
+                  onClick={() => {
+                    setConfirmModal({ show: true, taskId: [...batchSelectedIds], action: "APPROVE", batch: true });
+                    setConfirmReason("");
+                    setConfirmError(null);
+                  }}
+                  className="h-7 px-2.5 rounded-sm border border-success/25 text-success bg-success/5 hover:bg-success/15 text-[9px] font-bold uppercase font-mono transition-all cursor-pointer"
+                >
+                  Approve All
+                </button>
+                <span className="h-4 w-px bg-border/30" />
+                <button
+                  onClick={() => setBatchSelectedIds([])}
+                  className="h-6 w-6 rounded flex items-center justify-center hover:bg-background-subtle/40 border border-transparent hover:border-border text-foreground-subtle hover:text-foreground transition-all cursor-pointer"
+                >
+                  <X size={11} />
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -692,6 +1188,7 @@ export default function FileExplorerPage() {
                           "inline-block px-1.5 py-0.5 rounded-sm text-[9px] font-bold tracking-wider font-mono uppercase border",
                           file.classification === "RAHSIA" && "bg-destructive/15 text-destructive border-destructive/25",
                           file.classification === "SULIT" && "bg-warning/15 text-warning border-warning/25",
+                          file.classification === "TERHAD" && "bg-info/15 text-info border-info/25",
                           file.classification === "TERBUKA" && "bg-background-muted/40 text-foreground-subtle border-border/40"
                         )}>{file.classification}</span>
                       </td>
@@ -770,6 +1267,7 @@ export default function FileExplorerPage() {
                         "inline-block px-1.5 py-0.5 rounded-sm text-[9px] font-bold tracking-wider font-mono uppercase border",
                         file.classification === "RAHSIA" && "bg-destructive/15 text-destructive border-destructive/25",
                         file.classification === "SULIT" && "bg-warning/15 text-warning border-warning/25",
+                        file.classification === "TERHAD" && "bg-info/15 text-info border-info/25",
                         file.classification === "TERBUKA" && "bg-background-muted/40 text-foreground-subtle border-border/40"
                       )}>{file.classification}</span>
                     </td>
@@ -899,6 +1397,7 @@ export default function FileExplorerPage() {
                           "inline-block px-1.5 py-0.5 rounded-sm text-[9px] font-bold tracking-wider font-mono uppercase border",
                           file.classification === "RAHSIA" && "bg-destructive/15 text-destructive border-destructive/25",
                           file.classification === "SULIT" && "bg-warning/15 text-warning border-warning/25",
+                          file.classification === "TERHAD" && "bg-info/15 text-info border-info/25",
                           file.classification === "TERBUKA" && "bg-background-muted/40 text-foreground-subtle border-border/40"
                         )}>{file.classification}</span>
                       </td>
@@ -1103,6 +1602,7 @@ export default function FileExplorerPage() {
                           "inline-block px-1.5 py-0.5 rounded-sm text-[9px] font-bold tracking-wider font-mono uppercase border",
                           file.classification === "RAHSIA" && "bg-destructive/15 text-destructive border-destructive/25",
                           file.classification === "SULIT" && "bg-warning/15 text-warning border-warning/25",
+                          file.classification === "TERHAD" && "bg-info/15 text-info border-info/25",
                           file.classification === "TERBUKA" && "bg-background-muted/40 text-foreground-subtle border-border/40"
                         )}>{file.classification}</span>
                       </td>
@@ -1256,10 +1756,11 @@ export default function FileExplorerPage() {
                   <select
                     id={classificationInputId}
                     value={uploadClassification}
-                    onChange={(e) => setUploadClassification(e.target.value as "RAHSIA" | "SULIT" | "TERBUKA")}
+                    onChange={(e) => setUploadClassification(e.target.value as "RAHSIA" | "SULIT" | "TERHAD" | "TERBUKA")}
                     className="h-8 w-full px-2 rounded-sm border border-border bg-background text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent"
                   >
                     <option value="TERBUKA">TERBUKA (Unrestricted)</option>
+                    <option value="TERHAD">TERHAD (Limited Access)</option>
                     <option value="SULIT">SULIT (Restricted C-Suite)</option>
                     <option value="RAHSIA">RAHSIA (Highest Protocol)</option>
                   </select>

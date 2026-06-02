@@ -1,20 +1,16 @@
-use crate::{
+﻿use crate::{
     app_middleware::admin::AdminUser,
     errors::AppError,
     models::user::{self, User, UserProfile},
     utils::{jwt, password},
+    AppConfig,
 };
-use actix_web::{web, HttpResponse};
+use actix_web::{web, HttpRequest, HttpResponse};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use uuid::Uuid;
 
-// ── Hardcoded admin credentials ──────────────────────────────────────────────
-
-const ADMIN_USERNAME: &str = "mirza";
-const ADMIN_PASSWORD: &str = "396500Ja!";
-
-// ── Request / Response shapes ────────────────────────────────────────────────
+// â”€â”€ Request / Response shapes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[derive(Debug, Deserialize)]
 pub struct AdminLoginRequest {
@@ -48,10 +44,13 @@ pub struct UpdateUserRequest {
     pub storage_quota_bytes: Option<i64>,
 }
 
-// ── POST /api/admin/login ────────────────────────────────────────────────────
+// â”€â”€ POST /api/admin/login â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-pub async fn admin_login(body: web::Json<AdminLoginRequest>) -> Result<HttpResponse, AppError> {
-    if body.username != ADMIN_USERNAME || body.password != ADMIN_PASSWORD {
+pub async fn admin_login(
+    config: web::Data<AppConfig>,
+    body: web::Json<AdminLoginRequest>,
+) -> Result<HttpResponse, AppError> {
+    if body.username != config.admin_username || body.password != config.admin_password {
         return Err(AppError::Unauthorized);
     }
 
@@ -64,7 +63,7 @@ pub async fn admin_login(body: web::Json<AdminLoginRequest>) -> Result<HttpRespo
     }))
 }
 
-// ── GET /api/admin/users ─────────────────────────────────────────────────────
+// â”€â”€ GET /api/admin/users â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 pub async fn list_users(
     pool: web::Data<PgPool>,
@@ -85,7 +84,7 @@ pub async fn list_users(
     Ok(HttpResponse::Ok().json(users))
 }
 
-// ── POST /api/admin/users ────────────────────────────────────────────────────
+// â”€â”€ POST /api/admin/users â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 pub async fn create_user(
     pool: web::Data<PgPool>,
@@ -136,7 +135,7 @@ pub async fn create_user(
     })?;
 
     tracing::info!(
-        admin = %ADMIN_USERNAME,
+        admin = "admin",
         user_id = %user.id,
         email = %email,
         role = %role,
@@ -147,7 +146,7 @@ pub async fn create_user(
     Ok(HttpResponse::Created().json(profile))
 }
 
-// ── PUT /api/admin/users/{id} ────────────────────────────────────────────────
+// â”€â”€ PUT /api/admin/users/{id} â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 pub async fn update_user(
     pool: web::Data<PgPool>,
@@ -201,7 +200,7 @@ pub async fn update_user(
 
     // Storage quota: explicit `null` clears it (use default), absent keeps existing
     let new_quota = if body.storage_quota_bytes.is_some() {
-        body.storage_quota_bytes // can be Some(null) → explicitly set to None
+        body.storage_quota_bytes // can be Some(null) â†’ explicitly set to None
     } else {
         existing.storage_quota_bytes
     };
@@ -222,7 +221,7 @@ pub async fn update_user(
     .map_err(AppError::Database)?;
 
     tracing::info!(
-        admin = %ADMIN_USERNAME,
+        admin = "admin",
         user_id = %user.id,
         "Admin updated user"
     );
@@ -231,7 +230,7 @@ pub async fn update_user(
     Ok(HttpResponse::Ok().json(profile))
 }
 
-// ── DELETE /api/admin/users/{id} ─────────────────────────────────────────────
+// â”€â”€ DELETE /api/admin/users/{id} â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 pub async fn delete_user(
     pool: web::Data<PgPool>,
@@ -274,7 +273,7 @@ pub async fn delete_user(
     }
 
     tracing::info!(
-        admin = %ADMIN_USERNAME,
+        admin = "admin",
         user_id = %user_id,
         "Admin deleted user"
     );
@@ -282,7 +281,7 @@ pub async fn delete_user(
     Ok(HttpResponse::NoContent().finish())
 }
 
-// ── Tier 1: GET /api/admin/dashboard ────────────────────────────────────────
+// â”€â”€ Tier 1: GET /api/admin/dashboard â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -355,7 +354,7 @@ pub async fn dashboard(
     }))
 }
 
-// ── Tier 1: GET /api/admin/users/{id}/files ─────────────────────────────────
+// â”€â”€ Tier 1: GET /api/admin/users/{id}/files â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 pub async fn user_files(
     pool: web::Data<PgPool>,
@@ -366,7 +365,7 @@ pub async fn user_files(
 
     let files: Vec<crate::models::file::FileNode> = sqlx::query_as(
         "SELECT id, parent_id, owner_id, name, is_folder,
-                size_bytes, mime_type, classification, created_at, updated_at, locked_by, locked_at
+                size_bytes, mime_type, classification, created_at, updated_at, locked_by, locked_at, lock_reason
          FROM files WHERE owner_id = $1 AND deleted_at IS NULL
          ORDER BY is_folder DESC, name ASC LIMIT 500",
     )
@@ -378,7 +377,7 @@ pub async fn user_files(
     Ok(HttpResponse::Ok().json(files))
 }
 
-// ── Tier 1: POST /api/admin/users/{id}/reset-password ───────────────────────
+// â”€â”€ Tier 1: POST /api/admin/users/{id}/reset-password â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -411,7 +410,7 @@ pub async fn reset_user_password(
     Ok(HttpResponse::Ok().json(serde_json::json!({ "status": "ok" })))
 }
 
-// ── Tier 1: POST /api/admin/users/{id}/toggle-active ────────────────────────
+// â”€â”€ Tier 1: POST /api/admin/users/{id}/toggle-active â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 pub async fn toggle_user_active(
     pool: web::Data<PgPool>,
@@ -450,13 +449,13 @@ pub async fn toggle_user_active(
     if currently_active {
         let _ = crate::utils::redis::revoke_user_tokens_async(&redis_client, &user_id.to_string())
             .await;
-        tracing::info!(user_id = %user_id, "User deactivated — tokens revoked");
+        tracing::info!(user_id = %user_id, "User deactivated â€” tokens revoked");
     }
 
     Ok(HttpResponse::Ok().json(serde_json::json!({ "status": "ok" })))
 }
 
-// ── Tier 1: DELETE /api/admin/files/{id}/force ──────────────────────────────
+// â”€â”€ Tier 1: DELETE /api/admin/files/{id}/force â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 pub async fn force_delete_file(
     pool: web::Data<PgPool>,
@@ -472,13 +471,13 @@ pub async fn force_delete_file(
     if deleted.rows_affected() == 0 {
         return Err(AppError::NotFound);
     }
-    tracing::warn!(admin = %ADMIN_USERNAME, file_id = %file_id, "Admin force-deleted file");
+    tracing::warn!(admin = "admin", file_id = %file_id, "Admin force-deleted file");
     Ok(HttpResponse::NoContent().finish())
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // Tier 2: System Configuration
-// ═════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 #[derive(serde::Serialize, sqlx::FromRow)]
 struct ConfigRow {
@@ -519,31 +518,99 @@ pub async fn update_config(
     Ok(HttpResponse::Ok().json(serde_json::json!({ "status": "ok" })))
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // Tier 2: Governance Admin
-// ═════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct AdminGovernanceQuery {
+    pub page: Option<i64>,
+    pub per_page: Option<i64>,
+    pub status: Option<String>,
+    #[serde(alias = "type")]
+    pub r#type: Option<String>,
+}
 
 pub async fn admin_governance_list(
     pool: web::Data<PgPool>,
     _admin: AdminUser,
+    query: web::Query<AdminGovernanceQuery>,
 ) -> Result<HttpResponse, AppError> {
-    let requests: Vec<crate::models::governance::GovernanceRequestResponse> = sqlx::query_as(
-        "SELECT gr.id, gr.type, gr.title, gr.description, gr.status, gr.requested_by,
-                u1.full_name AS requested_by_name, u1.email AS requested_by_email,
+    let page = query.page.unwrap_or(1).max(1);
+    let per_page = query.per_page.unwrap_or(20).clamp(1, 100);
+    let offset = (page - 1) * per_page;
+
+    // Validate status filter if provided
+    if let Some(ref status) = query.status {
+        if !["PENDING", "APPROVED", "REJECTED"].contains(&status.as_str()) {
+            return Err(AppError::BadRequest("Invalid status filter. Must be PENDING, APPROVED, or REJECTED".into()));
+        }
+    }
+
+    // Validate type filter if provided
+    if let Some(ref r#type) = query.r#type {
+        if !["FILE_LOCK", "FILE_UNLOCK", "CLASSIFICATION_UPGRADE", "CLASSIFICATION_DOWNGRADE", "FILE_MOVE", "FILE_DELETE"].contains(&r#type.as_str()) {
+            return Err(AppError::BadRequest("Invalid type filter".into()));
+        }
+    }
+
+    let status_clause = query.status.as_ref().map(|s| format!("AND gr.status = '{}'", s)).unwrap_or_default();
+    let type_clause = query.r#type.as_ref().map(|t| format!("AND gr.type = '{}'", t)).unwrap_or_default();
+
+    let sql = format!(
+        "SELECT gr.id, gr.type, gr.title, gr.description, gr.status,
+                gr.requested_by, u1.full_name AS requested_by_name, u1.email AS requested_by_email,
                 gr.reviewed_by, u2.full_name AS reviewed_by_name,
                 gr.target_file_id, f.name AS target_file_name,
-                gr.metadata, gr.created_at, gr.updated_at
+                gr.metadata, gr.review_note, gr.created_at, gr.updated_at
          FROM governance_requests gr
          JOIN users u1 ON u1.id = gr.requested_by
          LEFT JOIN users u2 ON u2.id = gr.reviewed_by
          LEFT JOIN files f ON f.id = gr.target_file_id
+         WHERE 1=1
+         {status_clause}
+         {type_clause}
          ORDER BY CASE gr.status WHEN 'PENDING' THEN 0 ELSE 1 END, gr.created_at DESC
-         LIMIT 500",
-    )
-    .fetch_all(pool.get_ref())
-    .await
-    .map_err(AppError::Database)?;
-    Ok(HttpResponse::Ok().json(requests))
+         LIMIT {per_page} OFFSET {offset}",
+        status_clause = status_clause,
+        type_clause = type_clause,
+        per_page = per_page,
+        offset = offset,
+    );
+
+    let count_sql = format!(
+        "SELECT COUNT(*) FROM governance_requests gr
+         WHERE 1=1
+         {status_clause}
+         {type_clause}",
+        status_clause = status_clause,
+        type_clause = type_clause,
+    );
+
+    let requests: Vec<crate::models::governance::GovernanceRequestResponse> = sqlx::query_as(&sql)
+        .fetch_all(pool.get_ref())
+        .await
+        .map_err(AppError::Database)?;
+
+    let total: i64 = sqlx::query_scalar(&count_sql)
+        .fetch_one(pool.get_ref())
+        .await
+        .map_err(AppError::Database)?;
+
+    let total_pages = if per_page > 0 {
+        (total + per_page - 1) / per_page
+    } else {
+        0
+    };
+
+    Ok(HttpResponse::Ok().json(crate::models::governance::GovernanceListResponse {
+        requests,
+        total,
+        page,
+        per_page,
+        total_pages,
+    }))
 }
 
 #[derive(Deserialize)]
@@ -555,6 +622,7 @@ pub(crate) struct ForceApproveRequest {
 pub async fn force_approve(
     pool: web::Data<PgPool>,
     _admin: AdminUser,
+    req: HttpRequest,
     path: web::Path<Uuid>,
     body: web::Json<ForceApproveRequest>,
 ) -> Result<HttpResponse, AppError> {
@@ -581,32 +649,110 @@ pub async fn force_approve(
             .await
             .map_err(AppError::Database)?
             .flatten();
+    let metadata: Option<serde_json::Value> =
+        sqlx::query_scalar("SELECT metadata FROM governance_requests WHERE id = $1")
+            .bind(request_id)
+            .fetch_optional(pool.get_ref())
+            .await
+            .map_err(AppError::Database)?
+            .flatten();
     if let (Some(fid), Some(rt)) = (file_id, req_type) {
         match rt.as_str() {
             "FILE_LOCK" => {
-                sqlx::query("UPDATE files SET locked_by = (SELECT requested_by FROM governance_requests WHERE id = $1), locked_at = NOW() WHERE id = $2")
+                let title: Option<String> =
+                    sqlx::query_scalar("SELECT title FROM governance_requests WHERE id = $1")
+                        .bind(request_id)
+                        .fetch_optional(pool.get_ref())
+                        .await
+                        .map_err(AppError::Database)?
+                        .flatten();
+                sqlx::query("UPDATE files SET locked_by = (SELECT requested_by FROM governance_requests WHERE id = $1), locked_at = NOW(), lock_reason = $2 WHERE id = $3")
                     .bind(request_id)
+                    .bind(title.as_deref())
                     .bind(fid)
                     .execute(pool.get_ref())
                     .await
                     .map_err(AppError::Database)?;
             }
             "FILE_UNLOCK" => {
-                sqlx::query("UPDATE files SET locked_by = NULL, locked_at = NULL WHERE id = $1")
+                sqlx::query("UPDATE files SET locked_by = NULL, locked_at = NULL, lock_reason = NULL WHERE id = $1")
                     .bind(fid)
                     .execute(pool.get_ref())
                     .await
                     .map_err(AppError::Database)?;
             }
+            "CLASSIFICATION_UPGRADE" | "CLASSIFICATION_DOWNGRADE" => {
+                let meta = metadata.as_ref();
+                if let Some(ref meta) = meta {
+                    if let Some(new_class) = meta.get("newClassification").and_then(|v| v.as_str()) {
+                        if crate::models::file::VALID_CLASSIFICATIONS.contains(&new_class) {
+                            let _ = sqlx::query("UPDATE files SET classification = $1 WHERE id = $2")
+                                .bind(new_class)
+                                .bind(fid)
+                                .execute(pool.get_ref())
+                                .await;
+                        }
+                    }
+                }
+            }
+            "FILE_MOVE" => {
+                if let Some(ref meta) = metadata {
+                    if let Some(target_folder_id) = meta.get("targetFolderId").and_then(|v| v.as_str()) {
+                        if let Ok(folder_uuid) = uuid::Uuid::parse_str(target_folder_id) {
+                            let _ = sqlx::query("UPDATE files SET parent_id = $1 WHERE id = $2")
+                                .bind(folder_uuid)
+                                .bind(fid)
+                                .execute(pool.get_ref())
+                                .await;
+                        }
+                    }
+                }
+            }
+            "FILE_DELETE" => {
+                let _ = sqlx::query("UPDATE files SET deleted_at = NOW() WHERE id = $1")
+                    .bind(fid)
+                    .execute(pool.get_ref())
+                    .await;
+            }
             _ => {}
         }
     }
+
+    // ── Audit log ──────────────────────────────────────────────────────────────
+    let ip = req.peer_addr().map(|a| a.to_string()).unwrap_or_default();
+    let _ = crate::handlers::files::write_audit_log_internal(
+        pool.get_ref(),
+        body.reviewer_id,
+        "GOVERNANCE_FORCE_APPROVE",
+        &request_id.to_string(),
+        &ip,
+    )
+    .await;
+
+    // ── Emit notification ──────────────────────────────────────────────────
+    let req_title: Option<String> =
+        sqlx::query_scalar("SELECT title FROM governance_requests WHERE id = $1")
+            .bind(request_id)
+            .fetch_optional(pool.get_ref())
+            .await
+            .map_err(AppError::Database)?
+            .flatten();
+    if let Some(ref title) = req_title {
+        crate::handlers::notifications::emit_notification(
+            crate::models::notification::NotificationEvent::GovernanceUpdate {
+                request_id: request_id.to_string(),
+                status: "APPROVED".into(),
+                title: title.clone(),
+            },
+        );
+    }
+
     Ok(HttpResponse::Ok().json(serde_json::json!({ "status": "approved" })))
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // Tier 2: Storage Breakdown
-// ═════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 #[derive(serde::Serialize, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
@@ -637,9 +783,9 @@ pub async fn storage_breakdown(
     Ok(HttpResponse::Ok().json(rows))
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // Tier 2: Bulk User Operations
-// ═════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -720,3 +866,4 @@ pub async fn bulk_role_update(
     }
     Ok(HttpResponse::Ok().json(serde_json::json!({ "updated": updated })))
 }
+

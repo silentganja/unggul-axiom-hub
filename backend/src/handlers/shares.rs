@@ -4,6 +4,7 @@ use crate::{
     models::share::{
         FileShareEntry, FileShareRow, ShareFileRequest, SharedFileNode, SharedFileRow,
     },
+    models::user,
 };
 use actix_web::{web, HttpRequest, HttpResponse};
 use sqlx::PgPool;
@@ -85,6 +86,24 @@ pub async fn share_file(
             .await
             .map_err(AppError::Database)?
             .ok_or(AppError::NotFound)?;
+
+    // ── Enforce lock: hierarchical — must be the locker or have >= role level ──
+    let lock_info: Option<(Uuid, String)> = sqlx::query_as(
+        "SELECT f.locked_by, u.role FROM files f JOIN users u ON u.id = f.locked_by WHERE f.id = $1",
+    )
+    .bind(file_id)
+    .fetch_optional(pool.get_ref())
+    .await
+    .map_err(AppError::Database)?
+    .map(|(id, role): (Uuid, String)| (id, role));
+
+    if let Some((locker, locker_role)) = lock_info {
+        if locker != user.id && user::role_level(&user.role) < user::role_level(&locker_role) {
+            return Err(AppError::Conflict(
+                "This file is locked by a higher authority and cannot be shared".into(),
+            ));
+        }
+    }
 
     // Find the recipient user by email
     let recipient_id: Option<Uuid> = sqlx::query_scalar("SELECT id FROM users WHERE email = $1")

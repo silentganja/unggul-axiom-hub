@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { governanceApi, GovernanceRequest, formatTimestamp } from "@/lib/api";
+import { governanceApi, GovernanceRequest, formatTimestamp, ListGovernanceParams } from "@/lib/api";
 
 // ── Frontend-facing task shape ──────────────────────────────────────────────
 
@@ -58,9 +58,21 @@ interface OperationsState {
   isLoading: boolean;
   error: string | null;
 
-  fetchTasks: () => Promise<void>;
-  approveTask: (id: string) => Promise<void>;
-  rejectTask: (id: string) => Promise<void>;
+  // Pagination
+  page: number;
+  totalPages: number;
+  total: number;
+  perPage: number;
+
+  setPage: (page: number) => void;
+  setPerPage: (perPage: number) => void;
+
+  fetchTasks: (params?: ListGovernanceParams) => Promise<void>;
+  approveTask: (id: string, reason?: string) => Promise<void>;
+  rejectTask: (id: string, reason?: string) => Promise<void>;
+  batchApproveTasks: (ids: string[], reason?: string) => Promise<void>;
+  batchRejectTasks: (ids: string[], reason?: string) => Promise<void>;
+  undoTask: (id: string) => Promise<void>;
   submitRequest: (payload: {
     type: string;
     title: string;
@@ -77,14 +89,43 @@ export const useOperationsStore = create<OperationsState>((set, get) => ({
   isLoading: false,
   error: null,
 
-  fetchTasks: async () => {
+  page: 1,
+  totalPages: 1,
+  total: 0,
+  perPage: 20,
+
+  setPage: (page: number) => {
+    set({ page });
+    get().fetchTasks({ page, perPage: get().perPage, status: "PENDING" });
+  },
+
+  setPerPage: (perPage: number) => {
+    set({ perPage, page: 1 });
+    get().fetchTasks({ page: 1, perPage, status: "PENDING" });
+  },
+
+  fetchTasks: async (params?: ListGovernanceParams) => {
     set({ isLoading: true, error: null });
     try {
-      const requests = await governanceApi.list();
-      set({
-        tasks: requests.map(transformRequest),
-        isLoading: false,
-      });
+      const result = await governanceApi.list(params);
+      // Check if result is paginated or flat array
+      if (Array.isArray(result)) {
+        set({
+          tasks: result.map(transformRequest),
+          isLoading: false,
+          total: result.length,
+          totalPages: 1,
+          page: 1,
+        });
+      } else {
+        set({
+          tasks: result.requests.map(transformRequest),
+          total: result.total,
+          totalPages: result.totalPages,
+          page: result.page,
+          isLoading: false,
+        });
+      }
     } catch (err) {
       set({
         isLoading: false,
@@ -93,23 +134,53 @@ export const useOperationsStore = create<OperationsState>((set, get) => ({
     }
   },
 
-  approveTask: async (id: string) => {
+  approveTask: async (id: string, reason?: string) => {
     set({ error: null });
     try {
-      await governanceApi.approve(id);
-      await get().fetchTasks();
+      await governanceApi.approve(id, reason);
+      await get().fetchTasks({ page: get().page, perPage: get().perPage, status: "PENDING" });
     } catch (err) {
       set({ error: err instanceof Error ? err.message : "Failed to approve" });
     }
   },
 
-  rejectTask: async (id: string) => {
+  rejectTask: async (id: string, reason?: string) => {
     set({ error: null });
     try {
-      await governanceApi.reject(id);
-      await get().fetchTasks();
+      await governanceApi.reject(id, reason);
+      await get().fetchTasks({ page: get().page, perPage: get().perPage, status: "PENDING" });
     } catch (err) {
       set({ error: err instanceof Error ? err.message : "Failed to reject" });
+    }
+  },
+
+  batchApproveTasks: async (ids: string[], reason?: string) => {
+    set({ error: null });
+    try {
+      await governanceApi.batchApprove(ids, reason);
+      await get().fetchTasks({ page: get().page, perPage: get().perPage, status: "PENDING" });
+    } catch (err) {
+      set({ error: err instanceof Error ? err.message : "Failed to batch approve" });
+    }
+  },
+
+  batchRejectTasks: async (ids: string[], reason?: string) => {
+    set({ error: null });
+    try {
+      await governanceApi.batchReject(ids, reason);
+      await get().fetchTasks({ page: get().page, perPage: get().perPage, status: "PENDING" });
+    } catch (err) {
+      set({ error: err instanceof Error ? err.message : "Failed to batch reject" });
+    }
+  },
+
+  undoTask: async (id: string) => {
+    set({ error: null });
+    try {
+      await governanceApi.undo(id);
+      await get().fetchTasks();
+    } catch (err) {
+      set({ error: err instanceof Error ? err.message : "Failed to undo" });
     }
   },
 
@@ -123,7 +194,7 @@ export const useOperationsStore = create<OperationsState>((set, get) => ({
         targetFileId: payload.targetFileId,
         metadata: payload.metadata,
       });
-      await get().fetchTasks();
+      await get().fetchTasks({ page: 1, perPage: get().perPage, status: "PENDING" });
     } catch (err) {
       set({ error: err instanceof Error ? err.message : "Failed to submit request" });
       throw err; // Re-throw so the modal can show the error too

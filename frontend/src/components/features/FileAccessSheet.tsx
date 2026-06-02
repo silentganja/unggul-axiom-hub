@@ -15,7 +15,7 @@ import {
   CheckCircle,
 } from "lucide-react";
 import { useFileStore, FileNode, Collaborator } from "@/store/useFileStore";
-import { filesApi } from "@/lib/api";
+import { filesApi, formatTimestamp } from "@/lib/api";
 
 export default function FileAccessSheet() {
   const addPersonEmailId = useId();
@@ -209,6 +209,33 @@ export default function FileAccessSheet() {
             <p className="text-[10px] text-foreground-subtle leading-relaxed">
               * Classification changes are audited. For restricted files, use the Governance Board.
             </p>
+          </div>
+
+          {/* Lock Status Section */}
+          <div className="space-y-2.5 border-t border-border/20 pt-5">
+            <h4 className="text-[10px] font-bold tracking-wider font-mono text-foreground-subtle uppercase flex items-center gap-1.5">
+              <Lock size={12} className={activeFile.lockedBy ? "text-warning" : "text-success"} />
+              Lock Status
+            </h4>
+            {activeFile.lockedBy ? (
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <Lock size={14} className="text-warning" />
+                  <span className="text-xs font-semibold text-foreground">Locked by {activeFile.lockedBy}</span>
+                </div>
+                {activeFile.lockReason && (
+                  <p className="text-[10px] font-mono text-foreground-subtle ml-6">Reason: {activeFile.lockReason}</p>
+                )}
+                {activeFile.lockedAt && (
+                  <p className="text-[10px] font-mono text-foreground-subtle ml-6">Locked at: {formatTimestamp(activeFile.lockedAt)}</p>
+                )}
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <Lock size={14} className="text-success" />
+                <span className="text-xs font-mono text-success font-bold">Unrestricted</span>
+              </div>
+            )}
           </div>
 
           {/* Add People Section */}

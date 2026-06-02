@@ -205,6 +205,39 @@ pub async fn run_migrations(pool: &PgPool) {
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS storage_quota_bytes BIGINT",
             ],
         ),
+        // 9014 — Soft-delete TTL cleanup (runtime enforcement in cleanup.rs)
+        (
+            "9014",
+            "Auto: Soft-delete TTL — expired trash cleanup policy (30-day retention)",
+            vec!["SELECT 1 AS migration_documentation"],
+        ),
+        // 9015 — Full-text search via tsvector on files.name
+        (
+            "9015",
+            "Auto: Full-text search — tsvector column + GIN index on files",
+            vec![
+                "ALTER TABLE files ADD COLUMN IF NOT EXISTS search_vector tsvector",
+                "CREATE INDEX IF NOT EXISTS idx_files_search_vector ON files USING GIN (search_vector)",
+                // Backfill existing rows
+                "UPDATE files SET search_vector = to_tsvector('english', COALESCE(name, '')) WHERE search_vector IS NULL",
+            ],
+        ),
+        // 9016 — Governance review_note column
+        (
+            "9016",
+            "Auto: Governance — review_note column on governance_requests",
+            vec![
+                "ALTER TABLE governance_requests ADD COLUMN IF NOT EXISTS review_note TEXT",
+            ],
+        ),
+        // 9017 — lock_reason column on files
+        (
+            "9017",
+            "Auto: Files — lock_reason column",
+            vec![
+                "ALTER TABLE files ADD COLUMN IF NOT EXISTS lock_reason TEXT",
+            ],
+        ),
         // 9012 — Audit logs table
         (
             "9012",

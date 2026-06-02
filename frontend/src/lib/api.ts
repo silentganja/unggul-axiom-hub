@@ -373,6 +373,7 @@ export interface BackendFileNode {
   updatedAt: string;
   lockedBy: string | null; // UUID of locking user
   lockedAt: string | null;
+  lockReason?: string | null;
 }
 
 export interface FileListResponse {
@@ -581,8 +582,32 @@ export interface CreateGovernancePayload {
   metadata?: Record<string, unknown>;
 }
 
+export interface ListGovernanceParams {
+  page?: number;
+  perPage?: number;
+  status?: string;
+  type?: string;
+}
+
+export interface GovernanceListResponse {
+  requests: GovernanceRequest[];
+  total: number;
+  page: number;
+  perPage: number;
+  totalPages: number;
+}
+
 export const governanceApi = {
-  list(): Promise<GovernanceRequest[]> {
+  list(params?: ListGovernanceParams): Promise<GovernanceListResponse | GovernanceRequest[]> {
+    if (params) {
+      const qs = new URLSearchParams();
+      if (params.page) qs.set("page", String(params.page));
+      if (params.perPage) qs.set("perPage", String(params.perPage));
+      if (params.status) qs.set("status", params.status);
+      if (params.type) qs.set("type", params.type);
+      const str = qs.toString();
+      return apiFetch("/api/governance/requests" + (str ? "?" + str : ""));
+    }
     return apiFetch("/api/governance/requests");
   },
 
@@ -593,12 +618,38 @@ export const governanceApi = {
     });
   },
 
-  approve(id: string): Promise<{ status: string }> {
-    return apiFetch(`/api/governance/requests/${id}/approve`, { method: "POST" });
+  approve(id: string, reason?: string): Promise<{ status: string }> {
+    return apiFetch(`/api/governance/requests/${id}/approve`, {
+      method: "POST",
+      body: JSON.stringify(reason ? { reason } : {}),
+    });
   },
 
-  reject(id: string): Promise<{ status: string }> {
-    return apiFetch(`/api/governance/requests/${id}/reject`, { method: "POST" });
+  reject(id: string, reason?: string): Promise<{ status: string }> {
+    return apiFetch(`/api/governance/requests/${id}/reject`, {
+      method: "POST",
+      body: JSON.stringify(reason ? { reason } : {}),
+    });
+  },
+
+  batchApprove(ids: string[], reason?: string): Promise<{ status: string; approved: number }> {
+    return apiFetch("/api/governance/requests/batch/approve", {
+      method: "POST",
+      body: JSON.stringify(reason ? { ids, reason } : { ids }),
+    });
+  },
+
+  batchReject(ids: string[], reason?: string): Promise<{ status: string; rejected: number }> {
+    return apiFetch("/api/governance/requests/batch/reject", {
+      method: "POST",
+      body: JSON.stringify(reason ? { ids, reason } : { ids }),
+    });
+  },
+
+  undo(id: string): Promise<{ status: string }> {
+    return apiFetch(`/api/governance/requests/${id}/undo`, {
+      method: "POST",
+    });
   },
 };
 

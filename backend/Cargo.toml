@@ -37,6 +37,8 @@ lettre             = { version = "0.11", features = ["tokio1-native-tls", "build
 # ── SSE / Storage ────────────────────────────────────────────
 tokio-stream       = { version = "0.1", features = ["sync"] }
 async-trait        = "0.1"
+# ── AES-256-GCM File Encryption ──────────────────────────────
+aes-gcm            = "0.10"
 
 [profile.release]
 opt-level     = 3

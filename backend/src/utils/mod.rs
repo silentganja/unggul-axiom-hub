@@ -1,4 +1,6 @@
 // utils/mod.rs — re-export utility modules
+pub mod cleanup;
+pub mod crypto;
 pub mod email;
 pub mod jwt;
 pub mod migrations;

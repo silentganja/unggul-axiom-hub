@@ -21,6 +21,7 @@ pub struct FileNode {
     pub updated_at: DateTime<Utc>,
     pub locked_by: Option<Uuid>,
     pub locked_at: Option<DateTime<Utc>>,
+    pub lock_reason: Option<String>,
 }
 
 // ─── Request Payloads ────────────────────────────────────────────────────────

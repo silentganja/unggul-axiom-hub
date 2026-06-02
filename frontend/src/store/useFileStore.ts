@@ -2,6 +2,7 @@ import { create } from "zustand";
 import {
   filesApi,
   sharesApi,
+  favoritesApi,
   BackendFileNode,
   FileListResponse,
   SharedFileNode,
@@ -33,6 +34,7 @@ export interface FileNode {
   parentId: string | null;
   lockedBy?: string | null;
   lockReason?: string | null;
+  lockedAt?: string | null;
   mimeType?: string | null;
 }
 
@@ -73,7 +75,8 @@ function transformFile(bf: BackendFileNode): FileNode {
     parentId: bf.parentId,
     mimeType: bf.mimeType,
     lockedBy: bf.lockedBy ? "Governance Lock" : null,
-    lockReason: bf.lockedBy ? "Approved governance lock" : null,
+    lockReason: bf.lockReason || "Governance lock",
+    lockedAt: bf.lockedAt || null,
   };
 }
 
@@ -162,6 +165,7 @@ interface FileState {
 
   // ── Data fetching ─────────────────────────────────────────────────────────
   fetchFiles: () => Promise<void>;
+  fetchFavorites: () => Promise<void>;
   fetchSharedFiles: () => Promise<void>;
   fetchTrash: () => Promise<void>;
   fetchFileDetail: (id: string) => Promise<FileNode | null>;
@@ -277,6 +281,19 @@ export const useFileStore = create<FileState>((set, get) => ({
     const { currentFolderId, searchQuery, page, perPage, sort, order } = get();
     set({ isLoading: true, error: null });
     try {
+      // Load favorites from backend first so transformFile uses latest data
+      try {
+        const favs = await favoritesApi.list();
+        const backendIds = new Set(favs.map((f) => f.id));
+        const localIds = loadFavorites();
+        localIds.forEach((id) => backendIds.add(id));
+        favoriteIds.clear();
+        backendIds.forEach((id) => favoriteIds.add(id));
+        saveFavorites(favoriteIds);
+      } catch {
+        // Use existing localStorage favorites as fallback
+      }
+
       const res: FileListResponse = await filesApi.list({
         parentId: currentFolderId,
         q: searchQuery || undefined,
@@ -297,6 +314,27 @@ export const useFileStore = create<FileState>((set, get) => ({
         isLoading: false,
         error: err instanceof Error ? err.message : "Failed to fetch files",
       });
+    }
+  },
+
+  fetchFavorites: async () => {
+    try {
+      const favs = await favoritesApi.list();
+      const backendIds = new Set(favs.map((f) => f.id));
+      const localIds = loadFavorites();
+      localIds.forEach((id) => backendIds.add(id));
+      favoriteIds.clear();
+      backendIds.forEach((id) => favoriteIds.add(id));
+      saveFavorites(favoriteIds);
+      // Update files in store with new favorite status
+      set((state) => ({
+        files: state.files.map((f) => ({
+          ...f,
+          isFavorite: favoriteIds.has(f.id),
+        })),
+      }));
+    } catch {
+      // Use localStorage only as fallback
     }
   },
 
@@ -591,7 +629,15 @@ export const useFileStore = create<FileState>((set, get) => ({
     set((state) => {
       const file = state.files.find((f) => f.id === id);
       const newValue = !file?.isFavorite;
-      // Persist to localStorage
+
+      // Call backend API (fire and forget — local state updates immediately)
+      if (newValue) {
+        favoritesApi.add(id).catch(() => {});
+      } else {
+        favoritesApi.remove(id).catch(() => {});
+      }
+
+      // Persist to localStorage (fallback cache)
       if (newValue) {
         favoriteIds.add(id);
       } else {

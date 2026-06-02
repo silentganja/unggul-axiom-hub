@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import StorageQuotaWidget from "@/components/features/StorageQuotaWidget";
+import NotificationBell from "@/components/features/NotificationBell";
 import { useFileStore } from "@/store/useFileStore";
 import { useAuthStore } from "@/store/useAuthStore";
 import { cn } from "@/lib/utils";
@@ -366,6 +367,9 @@ export default function DashboardLayout({
 
             {/* Theme Switcher */}
             <ThemeToggle />
+
+            {/* Notification Bell */}
+            <NotificationBell />
 
             {/* User Profile Dropdown Trigger */}
             <div className="relative">

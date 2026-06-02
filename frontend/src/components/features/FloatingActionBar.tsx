@@ -2,7 +2,18 @@
 
 import { useState } from "react";
 import { useFileStore } from "@/store/useFileStore";
-import { Trash2, Download, FolderInput, X, Folder, ArrowLeft, Loader2 } from "lucide-react";
+import { useOperationsStore } from "@/store/useOperationsStore";
+import { Trash2, Download, FolderInput, X, Folder, ArrowLeft, Loader2, Shield, AlertCircle } from "lucide-react";
+
+// ── Classification hierarchy ─────────────────────────────────────────────────
+const CLASSIFICATION_LEVELS: Record<string, number> = {
+  TERBUKA: 0,
+  TERHAD: 1,
+  SULIT: 2,
+  RAHSIA: 3,
+};
+
+const VALID_CLASSIFICATIONS = ["TERBUKA", "TERHAD", "SULIT", "RAHSIA"] as const;
 
 export default function FloatingActionBar() {
   const selectedIds = useFileStore((state) => state.selectedIds);
@@ -12,10 +23,23 @@ export default function FloatingActionBar() {
   const files = useFileStore((state) => state.files);
   const currentFolderId = useFileStore((state) => state.currentFolderId);
 
+  const submitRequest = useOperationsStore((state) => state.submitRequest);
+
   const [isMoveOpen, setIsMoveOpen] = useState(false);
   const [moveTargetId, setMoveTargetId] = useState<string | null>(currentFolderId);
   const [isMoving, setIsMoving] = useState(false);
   const [moveError, setMoveError] = useState<string | null>(null);
+
+  // ── Governance modal state ────────────────────────────────────────────────
+  const [isGovModalOpen, setIsGovModalOpen] = useState(false);
+  const [govType, setGovType] = useState("FILE_LOCK");
+  const [govTitle, setGovTitle] = useState("");
+  const [govDescription, setGovDescription] = useState("");
+  const [govLoading, setGovLoading] = useState(false);
+  const [govError, setGovError] = useState<string | null>(null);
+  const [govClassificationTarget, setGovClassificationTarget] = useState("SULIT");
+
+  const selectedFiles = files.filter((f) => selectedIds.includes(f.id));
 
   if (selectedIds.length === 0) return null;
 
@@ -84,6 +108,10 @@ export default function FloatingActionBar() {
               <FolderInput size={11} className="text-accent" />
               <span className="hidden sm:inline">Move To</span>
             </button>
+            <button onClick={() => setIsGovModalOpen(true)} className="h-8 px-2.5 rounded border border-border bg-background hover:bg-background-subtle/50 text-[10px] font-bold tracking-wider uppercase font-mono text-foreground-subtle hover:text-foreground flex items-center gap-1.5 transition-colors">
+              <Shield size={11} className="text-accent" />
+              <span className="hidden sm:inline">Governance</span>
+            </button>
             <span className="h-4 w-px bg-border/30" />
             <button onClick={deleteSelected} className="h-8 px-2.5 rounded border border-destructive/35 bg-destructive/5 hover:bg-destructive/15 text-[10px] font-bold tracking-wider uppercase font-mono text-destructive flex items-center gap-1.5 transition-colors">
               <Trash2 size={11} />
@@ -96,6 +124,146 @@ export default function FloatingActionBar() {
           </div>
         </div>
       </div>
+
+      {/* ── Governance Request Modal ── */}
+      {isGovModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-sm rounded-sm border border-border/80 bg-background-panel shadow-none p-5 space-y-4">
+            <div className="space-y-1">
+              <h3 className="text-sm font-semibold text-foreground font-serif">Batch Governance Request</h3>
+              <p className="text-[10px] text-foreground-subtle font-mono">
+                Submit a governance request for {selectedFiles.length} selected file{selectedFiles.length !== 1 ? "s" : ""}.
+              </p>
+            </div>
+
+            {govError && (
+              <div className="flex items-start gap-2 rounded border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+                <AlertCircle size={12} className="mt-0.5 shrink-0" /><span>{govError}</span>
+              </div>
+            )}
+
+            {/* Selected files list */}
+            <div className="max-h-[100px] overflow-y-auto border border-border/20 rounded-sm bg-background/30 divide-y divide-border/10">
+              {selectedFiles.map((f) => (
+                <div key={f.id} className="px-3 py-1.5 text-[10px] font-mono text-foreground-muted truncate">
+                  {f.name}
+                </div>
+              ))}
+            </div>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!govTitle.trim()) {
+                  setGovError("Title is required.");
+                  return;
+                }
+                setGovLoading(true);
+                setGovError(null);
+                try {
+                  // Submit one request per selected file
+                  for (const f of selectedFiles) {
+                    await submitRequest({
+                      type: govType,
+                      title: govTitle.trim(),
+                      description: govDescription.trim() || undefined,
+                      targetFileId: f.id,
+                      metadata:
+                        govType === "CLASSIFICATION_UPGRADE" || govType === "CLASSIFICATION_DOWNGRADE"
+                          ? { newClassification: govClassificationTarget }
+                          : govType === "FILE_LOCK"
+                            ? { lockReason: govDescription || "Governance review required" }
+                            : undefined,
+                    });
+                  }
+                  setIsGovModalOpen(false);
+                  setGovTitle("");
+                  setGovDescription("");
+                  setGovClassificationTarget("SULIT");
+                } catch (err) {
+                  setGovError(err instanceof Error ? err.message : "Failed to submit request");
+                } finally {
+                  setGovLoading(false);
+                }
+              }}
+              className="space-y-3"
+            >
+              <div>
+                <label className="block text-[9px] font-bold font-mono uppercase text-foreground-subtle mb-1">Request Type</label>
+                <select
+                  value={govType}
+                  onChange={(e) => { setGovType(e.target.value); setGovClassificationTarget("SULIT"); }}
+                  className="h-8 w-full px-2 rounded-sm border border-border bg-background text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+                >
+                  <option value="FILE_LOCK">File Lock</option>
+                  <option value="FILE_UNLOCK">File Unlock</option>
+                  <option value="CLASSIFICATION_UPGRADE">Classification Upgrade</option>
+                  <option value="CLASSIFICATION_DOWNGRADE">Classification Downgrade</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-[9px] font-bold font-mono uppercase text-foreground-subtle mb-1">Title</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Batch lock Q3 reports"
+                  value={govTitle}
+                  onChange={(e) => setGovTitle(e.target.value)}
+                  className="h-8 w-full px-2.5 rounded-sm border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+                />
+              </div>
+              <div>
+                <label className="block text-[9px] font-bold font-mono uppercase text-foreground-subtle mb-1">Description / Reason</label>
+                <textarea
+                  rows={3}
+                  placeholder="Explain why this request is needed..."
+                  value={govDescription}
+                  onChange={(e) => setGovDescription(e.target.value)}
+                  className="w-full px-2.5 py-1.5 rounded-sm border border-border bg-background text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-accent resize-none"
+                />
+              </div>
+
+              {/* Classification target dropdown for upgrade/downgrade */}
+              {(govType === "CLASSIFICATION_UPGRADE" || govType === "CLASSIFICATION_DOWNGRADE") && (
+                <div>
+                  <label className="block text-[9px] font-bold font-mono uppercase text-foreground-subtle mb-1">
+                    Target Classification
+                    <span className="text-foreground-muted font-normal normal-case ml-1">
+                      ({govType === "CLASSIFICATION_UPGRADE" ? "upgrade" : "downgrade"})
+                    </span>
+                  </label>
+                  <select
+                    value={govClassificationTarget}
+                    onChange={(e) => setGovClassificationTarget(e.target.value)}
+                    className="h-8 w-full px-2 rounded-sm border border-border bg-background text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+                  >
+                    {(() => {
+                      if (govType === "CLASSIFICATION_UPGRADE") {
+                        const minLevel = Math.min(...selectedFiles.map(f => CLASSIFICATION_LEVELS[f.classification] ?? 0));
+                        return VALID_CLASSIFICATIONS.filter(c => CLASSIFICATION_LEVELS[c] > minLevel);
+                      }
+                      if (govType === "CLASSIFICATION_DOWNGRADE") {
+                        const maxLevel = Math.max(...selectedFiles.map(f => CLASSIFICATION_LEVELS[f.classification] ?? 0));
+                        return VALID_CLASSIFICATIONS.filter(c => CLASSIFICATION_LEVELS[c] < maxLevel);
+                      }
+                      return [];
+                    })().map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2 text-[10px] font-bold font-mono pt-2">
+                <button type="button" onClick={() => setIsGovModalOpen(false)} className="h-8 px-3 rounded-sm border border-transparent bg-transparent text-foreground-subtle hover:text-foreground hover:bg-background-subtle/50 transition-colors">Cancel</button>
+                <button type="submit" disabled={govLoading} className="btn-shimmer h-8 px-4 rounded-sm font-mono text-[11px] font-bold uppercase tracking-wider text-accent-foreground disabled:opacity-50">
+                  {govLoading ? <Loader2 size={12} className="animate-spin" /> : `Submit (${selectedFiles.length})`}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Move folder picker dialog */}
       {isMoveOpen && (

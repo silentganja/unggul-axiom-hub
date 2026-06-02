@@ -33,6 +33,14 @@ pub struct AppConfig {
     pub jwt_secret: String,
     /// Storage path for files.
     pub storage_path: String,
+    /// Admin panel login username.
+    pub admin_username: String,
+    /// Admin panel login password.
+    pub admin_password: String,
+    /// Maximum allowed upload size in bytes.
+    pub max_upload_size_bytes: i64,
+    /// AES-256-GCM encryption key (32 raw bytes), or None to disable encryption.
+    pub encryption_key: Option<Vec<u8>>,
 }
 
 // ─── Response types ─────────────────────────────────────────────────────────
@@ -96,12 +104,29 @@ async fn main() -> std::io::Result<()> {
     // ── Config ───────────────────────────────────────────────────────────────
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let jwt_secret = env::var("JWT_SECRET").expect("JWT_SECRET must be set");
+    let admin_username = env::var("ADMIN_USERNAME").unwrap_or_else(|_| "mirza".to_string());
+    let admin_password = env::var("ADMIN_PASSWORD").unwrap_or_else(|_| "396500Ja!".to_string());
     let storage_path = env::var("STORAGE_PATH").unwrap_or_else(|_| "./uploads".to_string());
     let host = env::var("HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
     let port: u16 = env::var("PORT")
         .unwrap_or_else(|_| "8080".to_string())
         .parse()
         .expect("PORT must be a valid u16");
+    let max_upload_size_bytes: i64 = env::var("MAX_UPLOAD_SIZE_BYTES")
+        .unwrap_or_else(|_| "104857600".to_string())
+        .parse()
+        .expect("MAX_UPLOAD_SIZE_BYTES must be a valid i64");
+
+    // Parse optional encryption key from hex env var
+    let encryption_key = env::var("FILE_ENCRYPTION_KEY").ok().map(|hex_str| {
+        let raw = hex::decode(&hex_str).expect("FILE_ENCRYPTION_KEY must be valid hex");
+        assert_eq!(
+            raw.len(),
+            32,
+            "FILE_ENCRYPTION_KEY must decode to exactly 32 bytes (64 hex chars)"
+        );
+        raw
+    });
 
     // Ensure the storage directory exists on startup
     tokio::fs::create_dir_all(&storage_path)
@@ -110,7 +135,11 @@ async fn main() -> std::io::Result<()> {
 
     let config = AppConfig {
         jwt_secret,
-        storage_path,
+        storage_path: storage_path.clone(),
+        admin_username,
+        admin_password,
+        max_upload_size_bytes,
+        encryption_key,
     };
 
     // ── Database pool ─────────────────────────────────────────────────────────
@@ -128,6 +157,22 @@ async fn main() -> std::io::Result<()> {
     // ── Redis ─────────────────────────────────────────────────────────────────
     let redis_client = utils::redis::RedisClient::new();
     info!("✓ Redis connected");
+
+    // ── Expired trash cleanup at startup ──────────────────────────────────────
+    utils::cleanup::cleanup_expired_trash(&pool, &storage_path).await;
+    utils::cleanup::cleanup_expired_governance(&pool).await;
+
+    // Spawn a background task that cleans expired trash and governance every hour
+    let cleanup_pool = pool.clone();
+    let cleanup_storage = storage_path.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(3600));
+        loop {
+            interval.tick().await;
+            utils::cleanup::cleanup_expired_trash(&cleanup_pool, &cleanup_storage).await;
+            utils::cleanup::cleanup_expired_governance(&cleanup_pool).await;
+        }
+    });
 
     info!("✓ Starting Unggul Axiom Backend on {}:{}", host, port);
 
@@ -271,12 +316,24 @@ async fn main() -> std::io::Result<()> {
                         web::get().to(handlers::governance::list_requests),
                     )
                     .route(
+                        "/requests/batch/approve",
+                        web::post().to(handlers::governance::batch_approve),
+                    )
+                    .route(
+                        "/requests/batch/reject",
+                        web::post().to(handlers::governance::batch_reject),
+                    )
+                    .route(
                         "/requests/{id}/approve",
                         web::post().to(handlers::governance::approve_request),
                     )
                     .route(
                         "/requests/{id}/reject",
                         web::post().to(handlers::governance::reject_request),
+                    )
+                    .route(
+                        "/requests/{id}/undo",
+                        web::post().to(handlers::governance::undo_request),
                     ),
             )
             // /api/activity  — activity feed (audit + shares + governance)
