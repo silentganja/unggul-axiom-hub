@@ -31,6 +31,9 @@ export const metadata: Metadata = {
     "Sovereign enterprise-grade cloud storage and collaboration platform. Restricted access.",
   keywords: ["enterprise", "secure", "cloud", "storage", "collaboration"],
   robots: "noindex, nofollow",
+  icons: {
+    icon: "/favicon.png",
+  },
 };
 
 export default function RootLayout({
