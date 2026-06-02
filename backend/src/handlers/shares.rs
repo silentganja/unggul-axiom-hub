@@ -88,20 +88,30 @@ pub async fn share_file(
             .ok_or(AppError::NotFound)?;
 
     // ── Enforce lock: hierarchical — must be the locker or have >= role level ──
-    let lock_info: Option<(Uuid, String)> = sqlx::query_as(
-        "SELECT f.locked_by, u.role FROM files f JOIN users u ON u.id = f.locked_by WHERE f.id = $1",
+    let lock_info: Option<(Option<Uuid>, Option<String>)> = sqlx::query_as(
+        "SELECT f.locked_by, u.role FROM files f LEFT JOIN users u ON u.id = f.locked_by WHERE f.id = $1",
     )
     .bind(file_id)
     .fetch_optional(pool.get_ref())
     .await
-    .map_err(AppError::Database)?
-    .map(|(id, role): (Uuid, String)| (id, role));
+    .map_err(AppError::Database)?;
 
     if let Some((locker, locker_role)) = lock_info {
-        if locker != user.id && user::role_level(&user.role) < user::role_level(&locker_role) {
-            return Err(AppError::Conflict(
-                "This file is locked by a higher authority and cannot be shared".into(),
-            ));
+        if let Some(locker_id) = locker {
+            match locker_role {
+                Some(role) => {
+                    if locker_id != user.id && user::role_level(&user.role) < user::role_level(&role) {
+                        return Err(AppError::Conflict(
+                            "This file is locked by a higher authority and cannot be shared".into(),
+                        ));
+                    }
+                }
+                None => {
+                    return Err(AppError::Conflict(
+                        "File is locked by a deleted user. Contact an administrator.".into(),
+                    ));
+                }
+            }
         }
     }
 
@@ -136,6 +146,26 @@ pub async fn share_file(
     .execute(pool.get_ref())
     .await
     .map_err(AppError::Database)?;
+
+    // ── Emit notification ────────────────────────────────────────────────────
+    let file_name: String = sqlx::query_scalar("SELECT name FROM files WHERE id = $1")
+        .bind(file_id)
+        .fetch_optional(pool.get_ref())
+        .await
+        .map_err(AppError::Database)?
+        .unwrap_or_default();
+    let shared_by_name: String = sqlx::query_scalar("SELECT full_name FROM users WHERE id = $1")
+        .bind(user.id)
+        .fetch_optional(pool.get_ref())
+        .await
+        .map_err(AppError::Database)?
+        .unwrap_or_default();
+    crate::handlers::notifications::emit_notification(
+        crate::models::notification::NotificationEvent::ShareAdded {
+            file_name,
+            shared_by: shared_by_name,
+        },
+    );
 
     // ── Audit log ─────────────────────────────────────────────────────────────
     let ip = req.peer_addr().map(|a| a.to_string()).unwrap_or_default();

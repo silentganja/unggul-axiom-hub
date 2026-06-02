@@ -32,7 +32,7 @@ const ADMIN_TOKEN_EXPIRY_HOURS: i64 = 8;
 
 // ── Public API ───────────────────────────────────────────────────────────────
 
-/// Generate a signed HS256 access JWT (15-minute expiry).
+/// Generate a signed HS256 access JWT (60-minute expiry).
 pub fn generate_token(user_id: Uuid, role: &str) -> Result<String, AppError> {
     let secret = jwt_secret();
 

@@ -7,7 +7,7 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
 // ── Token management ─────────────────────────────────────────────────────────
 
-function getToken(): string | null {
+export function getToken(): string | null {
   if (typeof window === "undefined") return null;
   return localStorage.getItem("auth-token");
 }
@@ -29,6 +29,7 @@ export function clearToken(): void {
   localStorage.removeItem("auth-token");
   localStorage.removeItem("auth-refresh-token");
   localStorage.removeItem("auth-user");
+  localStorage.removeItem("unggul-favorites");
 }
 
 // ── Token refresh logic ──────────────────────────────────────────────────────
@@ -41,7 +42,7 @@ let refreshPromise: Promise<boolean> | null = null;
  * Returns true if refresh succeeded, false otherwise.
  * Deduplicates concurrent refresh attempts.
  */
-async function attemptTokenRefresh(): Promise<boolean> {
+export async function attemptTokenRefresh(): Promise<boolean> {
   // If already refreshing, wait for the existing attempt
   if (isRefreshing && refreshPromise) {
     return refreshPromise;
@@ -536,29 +537,18 @@ export const filesApi = {
 
   /** Fetch file content with auth + auto-refresh (no token in URL). */
   async getContent(id: string): Promise<{ data: ArrayBuffer; mimeType: string }> {
-    const token = localStorage.getItem("auth-token");
+    const token = getToken();
     let res = await fetch(`${API_BASE}/api/files/${id}/content`, {
       headers: { Authorization: `Bearer ${token}` },
     });
 
-    // If 401, try refreshing the token first
+    // If 401, try refreshing the token first (uses shared attemptTokenRefresh)
     if (res.status === 401) {
-      const rt = localStorage.getItem("auth-refresh-token");
-      if (rt) {
-        const refreshRes = await fetch(`${API_BASE}/api/auth/refresh`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ refreshToken: rt }),
+      const refreshed = await attemptTokenRefresh();
+      if (refreshed) {
+        res = await fetch(`${API_BASE}/api/files/${id}/content`, {
+          headers: { Authorization: `Bearer ${getToken()}` },
         });
-        if (refreshRes.ok) {
-          const data = await refreshRes.json();
-          setToken(data.token);
-          setRefreshToken(data.refreshToken);
-          // Retry with new token
-          res = await fetch(`${API_BASE}/api/files/${id}/content`, {
-            headers: { Authorization: `Bearer ${data.token}` },
-          });
-        }
       }
     }
 
@@ -570,7 +560,8 @@ export const filesApi = {
 
   /** Download a file with auth header and trigger browser save dialog. */
   async downloadFile(id: string, filename: string): Promise<void> {
-    const token = localStorage.getItem("auth-token");
+    const token = getToken();
+    if (!token) throw new Error("Not authenticated");
     const res = await fetch(`${API_BASE}/api/files/${id}/download`, {
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -678,7 +669,7 @@ export interface GovernanceListResponse {
 }
 
 export const governanceApi = {
-  list(params?: ListGovernanceParams): Promise<GovernanceListResponse | GovernanceRequest[]> {
+  list(params?: ListGovernanceParams): Promise<GovernanceListResponse> {
     if (params) {
       const qs = new URLSearchParams();
       if (params.page) qs.set("page", String(params.page));
@@ -910,7 +901,7 @@ export const adminApi = {
     return apiFetch("/api/admin/config", { method: "PUT", body: JSON.stringify({ key, value }) }, true);
   },
 
-  getAdminGovernance(): Promise<GovernanceRequest[]> {
+  getAdminGovernance(): Promise<GovernanceListResponse> {
     return apiFetch("/api/admin/governance", {}, true);
   },
 
@@ -1006,8 +997,8 @@ export interface AllSharesRow {
 
 export interface StorageAnalytics {
   byClassification: Array<{ classification: string; bytes: number; fileCount: number }>;
-  topFiles: Array<{ id: string; name: string; ownerName: string; sizeBytes: number }>;
-  trend: Array<{ date: string; bytes: number }>;
+  largestFiles: Array<{ id: string; name: string; ownerName: string; sizeBytes: number }>;
+  storageTrend: Array<{ date: string; bytes: number }>;
   overQuotaUsers: Array<{ userId: string; fullName: string; email: string; usedBytes: number; quotaBytes: number }>;
 }
 
@@ -1104,10 +1095,21 @@ export interface NotificationEvent {
   sizeBytes?: number;
 }
 
+/**
+ * Subscribe to server-sent events for real-time notifications.
+ *
+ * NOTE: EventSource does not support custom headers, so the JWT is passed
+ * as a query parameter. This is a known limitation:
+ *   - The token is visible in server access logs and browser devtools.
+ *   - The token is never refreshed during an SSE connection. If the token
+ *     expires before the connection drops, reconnection will fail.
+ * Future improvement: use short-lived SSE-only tokens or a WebSocket with
+ * proper header-based auth.
+ */
 export function subscribeToNotifications(
   onEvent: (event: NotificationEvent) => void
 ): () => void {
-  const token = localStorage.getItem("auth-token");
+  const token = getToken();
   if (!token) return () => {};
 
   const eventSource = new EventSource(
@@ -1141,11 +1143,18 @@ export function formatFileSize(bytes: number): string {
   return `${i === 0 ? val.toFixed(0) : val.toFixed(1)} ${units[i]}`;
 }
 
-/** Format ISO 8601 timestamp to "YYYY-MM-DD HH:MM" display format. */
+/** Format ISO 8601 timestamp to locale-aware display format. */
 export function formatTimestamp(iso: string): string {
   try {
     const d = new Date(iso);
-    return d.toISOString().slice(0, 16).replace("T", " ");
+    return d.toLocaleString("en-GB", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
   } catch {
     return iso;
   }

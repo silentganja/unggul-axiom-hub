@@ -46,8 +46,8 @@ export default function StorageTab({ storageRows, setStorageRows, storageLoading
 
   const totalBytes = storageRows.reduce((s, r) => s + r.totalBytes, 0);
   const maxClassBytes = analytics ? Math.max(...analytics.byClassification.map(c => c.bytes), 1) : 1;
-  const maxTrend = analytics ? Math.max(...analytics.trend.map(t => t.bytes), 1) : 1;
-  const maxTopFile = analytics ? Math.max(...analytics.topFiles.map(f => f.sizeBytes), 1) : 1;
+  const maxTrend = analytics ? Math.max(...analytics.storageTrend.map(t => t.bytes), 1) : 1;
+  const maxTopFile = analytics ? Math.max(...analytics.largestFiles.map(f => f.sizeBytes), 1) : 1;
 
   const handleExportStorage = () => {
     const headers = ["User", "Role", "Files", "Storage", "% of Total"];
@@ -121,7 +121,7 @@ export default function StorageTab({ storageRows, setStorageRows, storageLoading
               <div className="border border-border/30 rounded-sm bg-background-panel/35 p-4">
                 <span className="font-mono text-[8px] font-bold uppercase tracking-widest text-foreground-subtle">Top 10 Largest Files</span>
                 <div className="mt-3 space-y-2">
-                  {analytics.topFiles.slice(0, 10).map((f) => {
+                  {analytics.largestFiles.slice(0, 10).map((f) => {
                     const pct = (f.sizeBytes / maxTopFile) * 100;
                     return (
                       <div key={f.id} className="space-y-0.5">
@@ -142,7 +142,7 @@ export default function StorageTab({ storageRows, setStorageRows, storageLoading
               {/* Storage Trend (30 days) */}
               <div className="border border-border/30 rounded-sm bg-background-panel/35 p-4">
                 <span className="font-mono text-[8px] font-bold uppercase tracking-widest text-foreground-subtle">Storage Trend (30 days)</span>
-                {analytics.trend.length > 1 ? (
+                {analytics.storageTrend.length > 1 ? (
                   <div className="mt-3">
                     <svg viewBox="0 0 300 80" className="w-full h-20" preserveAspectRatio="none">
                       <polyline
@@ -152,8 +152,8 @@ export default function StorageTab({ storageRows, setStorageRows, storageLoading
                         strokeLinecap="round"
                         strokeLinejoin="round"
                         vectorEffect="non-scaling-stroke"
-                        points={analytics.trend.map((t, i) => {
-                          const x = (i / (analytics.trend.length - 1)) * 290 + 5;
+                        points={analytics.storageTrend.map((t, i) => {
+                          const x = (i / (analytics.storageTrend.length - 1)) * 290 + 5;
                           const y = 70 - (t.bytes / maxTrend) * 60;
                           return `${x},${y}`;
                         }).join(" ")}
@@ -162,8 +162,8 @@ export default function StorageTab({ storageRows, setStorageRows, storageLoading
                         fill="var(--color-accent, #cd7f32)"
                         fillOpacity="0.08"
                         points={
-                          analytics.trend.map((t, i) => {
-                            const x = (i / (analytics.trend.length - 1)) * 290 + 5;
+                          analytics.storageTrend.map((t, i) => {
+                            const x = (i / (analytics.storageTrend.length - 1)) * 290 + 5;
                             const y = 70 - (t.bytes / maxTrend) * 60;
                             return `${x},${y}`;
                           }).join(" ") +
@@ -172,8 +172,8 @@ export default function StorageTab({ storageRows, setStorageRows, storageLoading
                       />
                     </svg>
                     <div className="flex justify-between text-[7px] font-mono text-foreground-subtle mt-1">
-                      <span>{analytics.trend[0]?.date?.slice(5) || ""}</span>
-                      <span>{analytics.trend[analytics.trend.length - 1]?.date?.slice(5) || ""}</span>
+                      <span>{analytics.storageTrend[0]?.date?.slice(5) || ""}</span>
+                      <span>{analytics.storageTrend[analytics.storageTrend.length - 1]?.date?.slice(5) || ""}</span>
                     </div>
                   </div>
                 ) : (

@@ -170,25 +170,29 @@ pub async fn list_requests(
         }
     }
 
-    // Build WHERE clauses
-    let status_clause = query
-        .status
-        .as_ref()
-        .map(|s| format!("AND gr.status = '{}'", s))
-        .unwrap_or_default();
-    let type_clause = query
-        .r#type
-        .as_ref()
-        .map(|t| format!("AND gr.type = '{}'", t))
-        .unwrap_or_default();
-    let user_clause = if user::can_govern(&user.role) {
+    // Build WHERE clauses using parameterized bind parameters
+    let admin_mode = user::can_govern(&user.role);
+    let mut param_idx = if admin_mode { 0u32 } else { 1u32 }; // $1 = user_id for non-admin
+
+    let user_clause = if admin_mode {
         String::new()
     } else {
         "AND gr.requested_by = $1".to_string()
     };
 
-    // Determine whether we need to bind user.id for non-admin users
-    let admin_mode = user::can_govern(&user.role);
+    let status_clause = if let Some(ref status) = query.status {
+        param_idx += 1;
+        format!("AND gr.status = ${}", param_idx)
+    } else {
+        String::new()
+    };
+
+    let type_clause = if let Some(ref _type) = query.r#type {
+        param_idx += 1;
+        format!("AND gr.type = ${}", param_idx)
+    } else {
+        String::new()
+    };
 
     let sql = format!(
         "SELECT
@@ -231,31 +235,34 @@ pub async fn list_requests(
         type_clause = type_clause,
     );
 
-    let requests: Vec<GovernanceRequestResponse> = if admin_mode {
-        sqlx::query_as::<_, GovernanceRequestResponse>(&sql)
-            .fetch_all(pool.get_ref())
-            .await
-            .map_err(AppError::Database)?
-    } else {
-        sqlx::query_as::<_, GovernanceRequestResponse>(&sql)
-            .bind(user.id)
-            .fetch_all(pool.get_ref())
-            .await
-            .map_err(AppError::Database)?
-    };
+    // Build and bind queries based on admin_mode and filters
+    let mut requests_query = sqlx::query_as::<_, GovernanceRequestResponse>(&sql);
+    let mut count_query = sqlx::query_scalar::<_, i64>(&count_sql);
 
-    let total: i64 = if admin_mode {
-        sqlx::query_scalar(&count_sql)
-            .fetch_one(pool.get_ref())
-            .await
-            .map_err(AppError::Database)?
-    } else {
-        sqlx::query_scalar(&count_sql)
-            .bind(user.id)
-            .fetch_one(pool.get_ref())
-            .await
-            .map_err(AppError::Database)?
-    };
+    if !admin_mode {
+        requests_query = requests_query.bind(user.id);
+        count_query = count_query.bind(user.id);
+    }
+
+    if let Some(ref status) = query.status {
+        requests_query = requests_query.bind(status);
+        count_query = count_query.bind(status);
+    }
+
+    if let Some(ref r#type) = query.r#type {
+        requests_query = requests_query.bind(r#type);
+        count_query = count_query.bind(r#type);
+    }
+
+    let requests: Vec<GovernanceRequestResponse> = requests_query
+        .fetch_all(pool.get_ref())
+        .await
+        .map_err(AppError::Database)?;
+
+    let total: i64 = count_query
+        .fetch_one(pool.get_ref())
+        .await
+        .map_err(AppError::Database)?;
 
     let total_pages = if per_page > 0 {
         (total + per_page - 1) / per_page
@@ -298,44 +305,25 @@ pub async fn approve_request(
 
     let request_id = path.into_inner();
 
-    // Fetch the pending request
-    let req_type: Option<String> = sqlx::query_scalar(
-        "SELECT type FROM governance_requests WHERE id = $1 AND status = 'PENDING'",
-    )
-    .bind(request_id)
-    .fetch_optional(pool.get_ref())
-    .await
-    .map_err(AppError::Database)?
-    .ok_or(AppError::NotFound)?;
+    // Fetch the pending request info (type, target_file_id, metadata, title) in one query
+    let request_info: Option<(String, Option<Uuid>, Option<serde_json::Value>, String)> =
+        sqlx::query_as(
+            "SELECT type, target_file_id, metadata, title
+             FROM governance_requests
+             WHERE id = $1 AND status = 'PENDING'",
+        )
+        .bind(request_id)
+        .fetch_optional(pool.get_ref())
+        .await
+        .map_err(AppError::Database)?;
 
-    let target_file_id: Option<Uuid> =
-        sqlx::query_scalar("SELECT target_file_id FROM governance_requests WHERE id = $1")
-            .bind(request_id)
-            .fetch_optional(pool.get_ref())
-            .await
-            .map_err(AppError::Database)?
-            .flatten();
-
-    let metadata: Option<serde_json::Value> =
-        sqlx::query_scalar("SELECT metadata FROM governance_requests WHERE id = $1")
-            .bind(request_id)
-            .fetch_optional(pool.get_ref())
-            .await
-            .map_err(AppError::Database)?
-            .flatten();
-
-    let req_title: Option<String> =
-        sqlx::query_scalar("SELECT title FROM governance_requests WHERE id = $1")
-            .bind(request_id)
-            .fetch_optional(pool.get_ref())
-            .await
-            .map_err(AppError::Database)?
-            .flatten();
+    let (req_type, target_file_id, metadata, req_title) =
+        request_info.ok_or(AppError::NotFound)?;
 
     // Classification changes require director+ authority
     if matches!(
-        req_type.as_deref(),
-        Some("CLASSIFICATION_UPGRADE" | "CLASSIFICATION_DOWNGRADE")
+        req_type.as_str(),
+        "CLASSIFICATION_UPGRADE" | "CLASSIFICATION_DOWNGRADE"
     ) && !user::can_govern_classified(&user.role)
     {
         return Err(AppError::Unauthorized);
@@ -343,19 +331,43 @@ pub async fn approve_request(
 
     // Execute the action on the target file
     if let Some(file_id) = target_file_id {
-        match req_type.as_deref() {
-            Some("FILE_LOCK") => {
+        match req_type.as_str() {
+            "FILE_LOCK" => {
                 sqlx::query(
                     "UPDATE files SET locked_by = (SELECT requested_by FROM governance_requests WHERE id = $1), locked_at = NOW(), lock_reason = $2 WHERE id = $3"
                 )
                     .bind(request_id)
-                    .bind(req_title.as_deref())
+                    .bind(&req_title)
                     .bind(file_id)
                     .execute(pool.get_ref())
                     .await
                     .map_err(AppError::Database)?;
+                // Emit FileLocked notification
+                let file_name: String = sqlx::query_scalar(
+                    "SELECT name FROM files WHERE id = $1",
+                )
+                .bind(file_id)
+                .fetch_optional(pool.get_ref())
+                .await
+                .map_err(AppError::Database)?
+                .unwrap_or_default();
+                let locked_by_id: String = sqlx::query_scalar(
+                    "SELECT requested_by::text FROM governance_requests WHERE id = $1",
+                )
+                .bind(request_id)
+                .fetch_optional(pool.get_ref())
+                .await
+                .map_err(AppError::Database)?
+                .unwrap_or_default();
+                crate::handlers::notifications::emit_notification(
+                    crate::models::notification::NotificationEvent::FileLocked {
+                        file_id: file_id.to_string(),
+                        file_name,
+                        locked_by: locked_by_id,
+                    },
+                );
             }
-            Some("FILE_UNLOCK") => {
+            "FILE_UNLOCK" => {
                 sqlx::query(
                     "UPDATE files SET locked_by = NULL, locked_at = NULL, lock_reason = NULL WHERE id = $1",
                 )
@@ -363,8 +375,23 @@ pub async fn approve_request(
                     .execute(pool.get_ref())
                     .await
                     .map_err(AppError::Database)?;
+                // Emit FileUnlocked notification
+                let file_name: String = sqlx::query_scalar(
+                    "SELECT name FROM files WHERE id = $1",
+                )
+                .bind(file_id)
+                .fetch_optional(pool.get_ref())
+                .await
+                .map_err(AppError::Database)?
+                .unwrap_or_default();
+                crate::handlers::notifications::emit_notification(
+                    crate::models::notification::NotificationEvent::FileUnlocked {
+                        file_id: file_id.to_string(),
+                        file_name,
+                    },
+                );
             }
-            Some("CLASSIFICATION_UPGRADE") | Some("CLASSIFICATION_DOWNGRADE") => {
+            "CLASSIFICATION_UPGRADE" | "CLASSIFICATION_DOWNGRADE" => {
                 if let Some(ref meta) = metadata {
                     if let Some(new_class) = meta.get("newClassification").and_then(|v| v.as_str())
                     {
@@ -389,8 +416,7 @@ pub async fn approve_request(
                                 .iter()
                                 .position(|&c| c == new_class);
                             if let (Some(ci), Some(ni)) = (cur_idx, new_idx) {
-                                let is_upgrade =
-                                    req_type.as_deref() == Some("CLASSIFICATION_UPGRADE");
+                                let is_upgrade = req_type.as_str() == "CLASSIFICATION_UPGRADE";
                                 if is_upgrade && ci <= ni {
                                     return Err(AppError::BadRequest(format!(
                                         "Cannot upgrade: {} is not higher than {}",
@@ -415,7 +441,7 @@ pub async fn approve_request(
                     }
                 }
             }
-            Some("FILE_MOVE") => {
+            "FILE_MOVE" => {
                 if let Some(ref meta) = metadata {
                     let has_target = meta
                         .get("targetFolderId")
@@ -430,17 +456,44 @@ pub async fn approve_request(
                         meta.get("targetFolderId").and_then(|v| v.as_str())
                     {
                         if let Ok(folder_uuid) = uuid::Uuid::parse_str(target_folder_id) {
+                            // Store original parent_id in metadata for undo support
+                            let original_parent_id: Option<Uuid> = sqlx::query_scalar(
+                                "SELECT parent_id FROM files WHERE id = $1",
+                            )
+                            .bind(file_id)
+                            .fetch_optional(pool.get_ref())
+                            .await
+                            .map_err(AppError::Database)?
+                            .flatten();
+
+                            let mut updated_meta = meta.clone();
+                            if let Some(orig_pid) = original_parent_id {
+                                updated_meta["original_parent_id"] =
+                                    serde_json::Value::String(orig_pid.to_string());
+                            }
+
                             sqlx::query("UPDATE files SET parent_id = $1 WHERE id = $2")
                                 .bind(folder_uuid)
                                 .bind(file_id)
                                 .execute(pool.get_ref())
                                 .await
                                 .map_err(AppError::Database)?;
+
+                            // Update metadata with original parent for undo
+                            if let Some(orig_pid) = original_parent_id {
+                                let _ = sqlx::query(
+                                    "UPDATE governance_requests SET metadata = $1 WHERE id = $2",
+                                )
+                                .bind(&updated_meta)
+                                .bind(request_id)
+                                .execute(pool.get_ref())
+                                .await;
+                            }
                         }
                     }
                 }
             }
-            Some("FILE_DELETE") => {
+            "FILE_DELETE" => {
                 sqlx::query("UPDATE files SET deleted_at = NOW() WHERE id = $1")
                     .bind(file_id)
                     .execute(pool.get_ref())
@@ -451,10 +504,20 @@ pub async fn approve_request(
         }
     }
 
-    // Mark as approved
-    sqlx::query(
-        "UPDATE governance_requests SET status = 'APPROVED', reviewed_by = $1, review_note = $2, updated_at = NOW() WHERE id = $3",
+    // Mark as approved (with PENDING guard to prevent double-execution)
+    let updated = sqlx::query(
+        "UPDATE governance_requests SET status = 'APPROVED', reviewed_by = $1, review_note = $2, updated_at = NOW() WHERE id = $3 AND status = 'PENDING'",
     )
+    .bind(user.id)
+    .bind(&body.reason)
+    .bind(request_id)
+    .execute(pool.get_ref())
+    .await
+    .map_err(AppError::Database)?;
+
+    if updated.rows_affected() == 0 {
+        return Err(AppError::NotFound);
+    }
     .bind(user.id)
     .bind(&body.reason)
     .bind(request_id)
@@ -595,6 +658,9 @@ pub async fn batch_approve(
     let mut failed = 0usize;
     let mut errors: Vec<String> = Vec::new();
 
+    // Wrap the entire batch in a database transaction for atomicity
+    let mut tx = pool.begin().await.map_err(AppError::Database)?;
+
     for request_id in &body.ids {
         processed += 1;
 
@@ -603,7 +669,7 @@ pub async fn batch_approve(
             "SELECT type FROM governance_requests WHERE id = $1 AND status = 'PENDING'",
         )
         .bind(request_id)
-        .fetch_optional(pool.get_ref())
+        .fetch_optional(&mut *tx)
         .await
         {
             Ok(Some(t)) => Some(t),
@@ -646,7 +712,7 @@ pub async fn batch_approve(
             "SELECT target_file_id FROM governance_requests WHERE id = $1",
         )
         .bind(request_id)
-        .fetch_optional(pool.get_ref())
+        .fetch_optional(&mut *tx)
         .await
         {
             Ok(v) => v.flatten(),
@@ -661,7 +727,7 @@ pub async fn batch_approve(
             let metadata: Option<serde_json::Value> =
                 match sqlx::query_scalar("SELECT metadata FROM governance_requests WHERE id = $1")
                     .bind(request_id)
-                    .fetch_optional(pool.get_ref())
+                    .fetch_optional(&mut *tx)
                     .await
                 {
                     Ok(v) => v.flatten(),
@@ -671,7 +737,7 @@ pub async fn batch_approve(
             let title: Option<String> =
                 match sqlx::query_scalar("SELECT title FROM governance_requests WHERE id = $1")
                     .bind(request_id)
-                    .fetch_optional(pool.get_ref())
+                    .fetch_optional(&mut *tx)
                     .await
                 {
                     Ok(v) => v.flatten(),
@@ -686,7 +752,7 @@ pub async fn batch_approve(
                     .bind(request_id)
                     .bind(title.as_deref())
                     .bind(file_id)
-                    .execute(pool.get_ref())
+                    .execute(&mut *tx)
                     .await
                     {
                         errors.push(format!("{}: {}", request_id, e));
@@ -699,7 +765,7 @@ pub async fn batch_approve(
                         "UPDATE files SET locked_by = NULL, locked_at = NULL, lock_reason = NULL WHERE id = $1",
                     )
                     .bind(file_id)
-                    .execute(pool.get_ref())
+                    .execute(&mut *tx)
                     .await
                     {
                         errors.push(format!("{}: {}", request_id, e));
@@ -723,7 +789,7 @@ pub async fn batch_approve(
                             )
                                 .bind(new_class)
                                 .bind(file_id)
-                                .execute(pool.get_ref())
+                                .execute(&mut *tx)
                                 .await
                             {
                                 errors.push(format!("{}: {}", request_id, e));
@@ -745,7 +811,7 @@ pub async fn batch_approve(
                                 )
                                     .bind(folder_uuid)
                                     .bind(file_id)
-                                    .execute(pool.get_ref())
+                                    .execute(&mut *tx)
                                     .await
                                 {
                                     errors.push(format!("{}: {}", request_id, e));
@@ -773,7 +839,7 @@ pub async fn batch_approve(
                 "FILE_DELETE" => {
                     if let Err(e) = sqlx::query("UPDATE files SET deleted_at = NOW() WHERE id = $1")
                         .bind(file_id)
-                        .execute(pool.get_ref())
+                        .execute(&mut *tx)
                         .await
                     {
                         errors.push(format!("{}: {}", request_id, e));
@@ -792,7 +858,7 @@ pub async fn batch_approve(
         .bind(user.id)
         .bind(&body.reason)
         .bind(request_id)
-        .execute(pool.get_ref())
+        .execute(&mut *tx)
         .await
         {
             errors.push(format!("{}: {}", request_id, e));
@@ -833,6 +899,9 @@ pub async fn batch_approve(
         succeeded += 1;
     }
 
+    // Commit the transaction
+    tx.commit().await.map_err(AppError::Database)?;
+
     tracing::info!(
         admin = %user.id,
         processed = %processed,
@@ -870,6 +939,9 @@ pub async fn batch_reject(
     let mut failed = 0usize;
     let mut errors: Vec<String> = Vec::new();
 
+    // Wrap the entire batch in a database transaction for atomicity
+    let mut tx = pool.begin().await.map_err(AppError::Database)?;
+
     for request_id in &body.ids {
         processed += 1;
 
@@ -880,7 +952,7 @@ pub async fn batch_reject(
         .bind(user.id)
         .bind(&body.reason)
         .bind(request_id)
-        .execute(pool.get_ref())
+        .execute(&mut *tx)
         .await
         {
             Ok(r) if r.rows_affected() > 0 => {}
@@ -896,7 +968,7 @@ pub async fn batch_reject(
             }
         }
 
-        // Audit log
+        // Audit log (fire-and-forget, keep on pool)
         let _ = crate::handlers::files::write_audit_log_internal(
             pool.get_ref(),
             user.id,
@@ -910,7 +982,7 @@ pub async fn batch_reject(
         let req_title: Option<String> =
             match sqlx::query_scalar("SELECT title FROM governance_requests WHERE id = $1")
                 .bind(request_id)
-                .fetch_optional(pool.get_ref())
+                .fetch_optional(&mut *tx)
                 .await
             {
                 Ok(v) => v.flatten(),
@@ -928,6 +1000,9 @@ pub async fn batch_reject(
 
         succeeded += 1;
     }
+
+    // Commit the transaction
+    tx.commit().await.map_err(AppError::Database)?;
 
     tracing::info!(
         admin = %user.id,
@@ -1111,8 +1186,19 @@ pub async fn undo_request(
                             .map_err(AppError::Database)?;
                     }
                     "FILE_MOVE" => {
-                        // Inverse of FILE_MOVE: no-op since we don't track original parent_id
-                        // The inverse request is created for audit trail purposes only
+                        // Read original_parent_id from the APPROVED request's metadata
+                        if let Some(ref meta) = existing.metadata {
+                            if let Some(orig_pid_str) = meta.get("original_parent_id").and_then(|v| v.as_str()) {
+                                if let Ok(orig_pid) = uuid::Uuid::parse_str(orig_pid_str) {
+                                    sqlx::query("UPDATE files SET parent_id = $1 WHERE id = $2")
+                                        .bind(orig_pid)
+                                        .bind(file_id)
+                                        .execute(pool.get_ref())
+                                        .await
+                                        .map_err(AppError::Database)?;
+                                }
+                            }
+                        }
                     }
                     _ => {}
                 }

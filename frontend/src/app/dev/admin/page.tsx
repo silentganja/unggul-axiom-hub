@@ -192,7 +192,7 @@ function AdminDashboardView() {
     const unsub = useNotificationStore.getState().subscribe();
     useNotificationStore.getState().setOnGovernanceUpdate(() => {
       // Auto-refresh governance data
-      adminApi.getAdminGovernance().then(setGovRequests).catch(() => {});
+      adminApi.getAdminGovernance().then(r => setGovRequests(r.requests)).catch(() => {});
       fetchDashboard();
       setSseToast({ message: "Governance data refreshed", type: "info" });
       setTimeout(() => setSseToast(null), 3000);

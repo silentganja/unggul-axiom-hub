@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
   X,
   Download,
@@ -28,14 +28,20 @@ export default function FilePreviewOverlay() {
 
   const [zoom, setZoom] = useState(100);
   const [rotation, setRotation] = useState(0);
-  const [content, setContent] = useState<{ data: ArrayBuffer; mimeType: string } | null>(null);
+  const [content, setContent] = useState<{ data: ArrayBuffer; mimeType: string; blobUrl?: string } | null>(null);
   const [contentLoading, setContentLoading] = useState(false);
   const [contentError, setContentError] = useState<string | null>(null);
+  const prevBlobUrlRef = useRef<string | null>(null);
 
   // Fetch real content when preview opens (with abort on unmount/change)
   useEffect(() => {
     if (!file || file.type === "folder") return;
     let cancelled = false;
+    // Clean up previous blob URL
+    if (prevBlobUrlRef.current) {
+      URL.revokeObjectURL(prevBlobUrlRef.current);
+      prevBlobUrlRef.current = null;
+    }
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setContentLoading(true);
     setContentError(null);
@@ -44,7 +50,12 @@ export default function FilePreviewOverlay() {
       .getContent(file.id)
       .then((c) => {
         if (!cancelled) {
-          setContent(c);
+          // Create blob URL for media types so it's available on the same render
+          const mt = c.mimeType || file.mimeType || "";
+          const isMedia = mt.startsWith("image/") || mt.startsWith("video/") || mt.startsWith("audio/");
+          const blobUrl = isMedia ? URL.createObjectURL(new Blob([c.data], { type: mt })) : undefined;
+          if (blobUrl) prevBlobUrlRef.current = blobUrl;
+          setContent({ ...c, blobUrl });
           setContentLoading(false);
         }
       })
@@ -54,8 +65,14 @@ export default function FilePreviewOverlay() {
           setContentLoading(false);
         }
       });
-    return () => { cancelled = true; };
-  }, [previewFileId]); // eslint-disable-line react-hooks/exhaustive-deps
+    return () => {
+      cancelled = true;
+      if (prevBlobUrlRef.current) {
+        URL.revokeObjectURL(prevBlobUrlRef.current);
+        prevBlobUrlRef.current = null;
+      }
+    };
+  }, [previewFileId, file]);
 
   // Esc keyboard listener
   useEffect(() => {
@@ -77,14 +94,8 @@ export default function FilePreviewOverlay() {
   const isAudio = mimeType.startsWith("audio/");
   const isOfficeDoc = ["doc", "docx", "xls", "xlsx", "ppt", "pptx"].includes(ext);
 
-  // Auth-token-embedded content URL for iframe-based previews
-  const authToken = typeof window !== "undefined" ? localStorage.getItem("auth-token") : null;
-  const authContentUrl = authToken
-    ? `${filesApi.contentUrl(file.id)}?token=${encodeURIComponent(authToken)}`
-    : filesApi.contentUrl(file.id);
-  const googleViewerUrl = isOfficeDoc
-    ? `https://docs.google.com/gview?url=${encodeURIComponent(authContentUrl)}&embedded=true`
-    : "";
+  // Content URL for iframe-based previews (no auth token in URL)
+  const contentUrl = filesApi.contentUrl(file.id);
 
   const handleDownload = async () => {
     try {
@@ -157,33 +168,33 @@ export default function FilePreviewOverlay() {
                     <p className="text-xs text-foreground-subtle">Preview unavailable</p>
                     <button onClick={handleDownload} className="text-[10px] font-bold text-accent font-mono uppercase tracking-wider hover:underline cursor-pointer">Download instead</button>
                   </div>
-                ) : isImage && content ? (
+                ) : isImage && content?.blobUrl ? (
                   <div className="flex items-center justify-center p-4">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
-                      src={URL.createObjectURL(new Blob([content.data], { type: mimeType }))}
+                      src={content.blobUrl}
                       alt={file.name}
                       className="max-w-full max-h-[55vh] object-contain"
                     />
                   </div>
                 ) : isText && textContent ? (
                   <pre className="p-5 text-[11px] font-mono text-foreground whitespace-pre-wrap break-all leading-relaxed max-h-[55vh] overflow-auto select-text">{textContent}</pre>
-                ) : isVideo && content ? (
+                ) : isVideo && content?.blobUrl ? (
                   <div className="flex items-center justify-center p-4">
                     <video
                       controls
                       className="max-w-full max-h-[55vh] rounded-sm shadow-lg"
-                      src={URL.createObjectURL(new Blob([content.data], { type: mimeType }))}
+                      src={content.blobUrl}
                     >
                       Your browser does not support video playback.
                     </video>
                   </div>
-                ) : isAudio && content ? (
+                ) : isAudio && content?.blobUrl ? (
                   <div className="flex items-center justify-center p-8">
                     <audio
                       controls
                       className="w-full max-w-md"
-                      src={URL.createObjectURL(new Blob([content.data], { type: mimeType }))}
+                      src={content.blobUrl}
                     >
                       Your browser does not support audio playback.
                     </audio>
@@ -191,25 +202,20 @@ export default function FilePreviewOverlay() {
                 ) : isPDF ? (
                   <div className="flex items-center justify-center p-0 w-full h-full min-h-[55vh]">
                     <iframe
-                      src={authContentUrl}
+                      src={contentUrl}
                       className="w-full h-[55vh] border-0"
                       title={file.name}
                     />
                   </div>
                 ) : isOfficeDoc ? (
-                  <div className="flex flex-col items-center justify-center p-6 gap-4">
-                    <div className="w-full h-[50vh] border border-border/20 rounded-sm overflow-hidden">
-                      <iframe
-                        src={googleViewerUrl}
-                        className="w-full h-full border-0"
-                        title={file.name}
-                      />
-                    </div>
-                    <p className="text-[9px] text-foreground-subtle font-mono text-center">
-                      If the document does not load,{" "}
-                      <button onClick={handleDownload} className="text-accent hover:underline cursor-pointer">download it</button>{" "}
-                      to view locally.
+                  <div className="flex flex-col items-center justify-center p-8 gap-4">
+                    <File size={36} className="text-foreground-subtle/40 mx-auto" />
+                    <p className="text-xs text-foreground text-center max-w-xs">
+                      Preview not available for Office documents. Please download to view.
                     </p>
+                    <button onClick={handleDownload} className="btn-shimmer h-9 px-5 rounded-sm font-mono text-[11px] font-bold uppercase tracking-wider inline-flex items-center gap-2">
+                      <Download size={12} /> Download to View
+                    </button>
                   </div>
                 ) : (
                   <div className="p-10 text-center space-y-4">

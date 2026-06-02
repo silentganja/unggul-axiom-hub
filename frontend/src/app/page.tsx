@@ -17,9 +17,9 @@ export default function HomePage() {
       
       {/* ── Background Aesthetics (Ambient Glowing Mesh) ── */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
-        <div className="absolute -top-[10%] -left-[5%] w-[50%] h-[50%] rounded-full bg-accent/10 blur-[130px] ambient-glow-1" />
-        <div className="absolute top-[30%] -right-[10%] w-[45%] h-[45%] rounded-full bg-info/8 blur-[110px] ambient-glow-2" />
-        <div className="absolute -bottom-[10%] left-[15%] w-[40%] h-[40%] rounded-full bg-accent-hover/8 blur-[100px] ambient-glow-3" />
+        <div className="absolute -top-[10%] -left-[5%] w-[50%] h-[50%] rounded-full bg-accent/10 blur-[130px] ambient-glow-1 hidden md:block" />
+        <div className="absolute top-[30%] -right-[10%] w-[45%] h-[45%] rounded-full bg-info/8 blur-[110px] ambient-glow-2 hidden md:block" />
+        <div className="absolute -bottom-[10%] left-[15%] w-[40%] h-[40%] rounded-full bg-accent-hover/8 blur-[100px] ambient-glow-3 hidden md:block" />
         <div className="absolute inset-0 scan-grid opacity-[0.015] dark:opacity-[0.035]" />
       </div>
 

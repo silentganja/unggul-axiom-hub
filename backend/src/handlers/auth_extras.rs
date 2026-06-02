@@ -342,13 +342,13 @@ struct WebauthnRegisterBeginResponse {
 
 pub async fn webauthn_register_begin(
     redis_client: web::Data<RedisClient>,
-    _user: AuthUser,
+    user: AuthUser,
 ) -> Result<HttpResponse, AppError> {
     let mut challenge = [0u8; 32];
     OsRng.fill_bytes(&mut challenge);
     let challenge_b64 = base64_url(&challenge);
 
-    let key = format!("webauthn:register:{}", _user.id);
+    let key = format!("webauthn:register:{}", user.id);
     let _ =
         redis::redis_setex_async(&redis_client, &key, &challenge_b64, WEBAUTHN_CHALLENGE_TTL).await;
 
@@ -356,8 +356,8 @@ pub async fn webauthn_register_begin(
         challenge: challenge_b64,
         rp_id: "localhost".into(),
         rp_name: "Unggul Axiom Hub".into(),
-        user_id: base64_url(_user.id.as_bytes()),
-        user_name: _user.id.to_string(),
+        user_id: base64_url(user.id.as_bytes()),
+        user_name: user.id.to_string(),
         user_display_name: "User".into(),
     }))
 }
@@ -395,7 +395,6 @@ pub async fn webauthn_register_complete(
         .ok_or(AppError::BadRequest("Missing credential id".into()))?;
     let public_key = body["response"]["publicKey"]
         .as_str()
-        .or_else(|| body["response"]["publicKey"].as_str())
         .unwrap_or("");
     let pubkey_str = if public_key.is_empty() {
         body.to_string()
@@ -448,8 +447,7 @@ pub async fn webauthn_login_complete(
         .ok_or(AppError::BadRequest("Missing credential id".into()))?;
 
     let session_id = body["sessionId"]
-        .as_str()
-        .or_else(|| body.get("sessionId").and_then(|v| v.as_str()));
+        .as_str();
 
     if let Some(sid) = session_id {
         let key = format!("webauthn:login:{}", sid);

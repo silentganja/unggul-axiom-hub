@@ -38,7 +38,36 @@ pub async fn get_file(
     .await
     .map_err(AppError::Database)?;
 
-    let file = file.ok_or(AppError::NotFound)?;
+    let file = match file {
+        Some(f) => f,
+        None => {
+            // Check if file is shared with the user
+            let is_shared: bool = sqlx::query_scalar(
+                "SELECT EXISTS(SELECT 1 FROM file_shares WHERE file_id = $1 AND user_id = $2)",
+            )
+            .bind(file_id)
+            .bind(user.id)
+            .fetch_one(pool.get_ref())
+            .await
+            .map_err(AppError::Database)?;
+
+            if is_shared {
+                sqlx::query_as::<_, FileNode>(
+                    "SELECT id, parent_id, owner_id, name, is_folder,
+                            size_bytes, mime_type, classification, created_at, updated_at, locked_by, locked_at, lock_reason
+                     FROM files
+                     WHERE id = $1 AND deleted_at IS NULL",
+                )
+                .bind(file_id)
+                .fetch_optional(pool.get_ref())
+                .await
+                .map_err(AppError::Database)?
+                .ok_or(AppError::NotFound)?
+            } else {
+                return Err(AppError::NotFound);
+            }
+        }
+    };
 
     Ok(HttpResponse::Ok().json(file))
 }
@@ -98,17 +127,22 @@ pub async fn list_files(
     } else {
         "AND f.parent_id IS NULL"
     };
-    let (search_clause, search_param): (&str, fn(&str) -> String) = if !search.is_empty() {
+    // Search parameter index: $2 when no parent_id, $3 when parent_id is present
+    let search_param_idx = if query.parent_id.is_some() { 3 } else { 2 };
+    let (search_clause, search_param): (String, fn(&str) -> String) = if !search.is_empty() {
         if has_tsvector {
             (
-                "AND f.search_vector @@ plainto_tsquery('english', $3)",
+                format!("AND f.search_vector @@ plainto_tsquery('english', ${})", search_param_idx),
                 |s: &str| s.to_string(),
             )
         } else {
-            ("AND f.name ILIKE $3", |s: &str| format!("%{}%", s))
+            (
+                format!("AND f.name ILIKE ${}", search_param_idx),
+                |s: &str| format!("%{}%", s),
+            )
         }
     } else {
-        ("", |_: &str| String::new())
+        (String::new(), |_: &str| String::new())
     };
 
     // Verify parent if scoped
@@ -132,10 +166,18 @@ pub async fn list_files(
         parent = parent_clause,
         search = search_clause,
     );
-    let total: i64 = if !search.is_empty() {
+    let total: i64 = if !search.is_empty() && query.parent_id.is_some() {
         sqlx::query_scalar(&count_sql)
             .bind(user.id)
             .bind(query.parent_id.unwrap_or_default())
+            .bind(search_param(search))
+            .fetch_one(pool.get_ref())
+            .await
+            .map_err(AppError::Database)?
+    } else if !search.is_empty() {
+        // No parent_id, SQL has $1 (owner_id) and $2 (search)
+        sqlx::query_scalar(&count_sql)
+            .bind(user.id)
             .bind(search_param(search))
             .fetch_one(pool.get_ref())
             .await
@@ -172,10 +214,18 @@ pub async fn list_files(
         offset = offset,
     );
 
-    let files: Vec<FileNode> = if !search.is_empty() {
+    let files: Vec<FileNode> = if !search.is_empty() && query.parent_id.is_some() {
         sqlx::query_as::<_, FileNode>(&data_sql)
             .bind(user.id)
             .bind(query.parent_id.unwrap_or_default())
+            .bind(search_param(search))
+            .fetch_all(pool.get_ref())
+            .await
+            .map_err(AppError::Database)?
+    } else if !search.is_empty() {
+        // No parent_id, SQL has $1 (owner_id) and $2 (search)
+        sqlx::query_as::<_, FileNode>(&data_sql)
+            .bind(user.id)
             .bind(search_param(search))
             .fetch_all(pool.get_ref())
             .await
@@ -322,21 +372,31 @@ pub async fn update_classification(
     }
 
     // ── Enforce lock: hierarchical — must be the locker or have >= role level ──
-    let lock_info: Option<(Uuid, String)> = sqlx::query_as(
-        "SELECT f.locked_by, u.role FROM files f JOIN users u ON u.id = f.locked_by WHERE f.id = $1 AND f.owner_id = $2",
+    let lock_info: Option<(Option<Uuid>, Option<String>)> = sqlx::query_as(
+        "SELECT f.locked_by, u.role FROM files f LEFT JOIN users u ON u.id = f.locked_by WHERE f.id = $1 AND f.owner_id = $2",
     )
     .bind(file_id)
     .bind(user.id)
     .fetch_optional(pool.get_ref())
     .await
-    .map_err(AppError::Database)?
-    .map(|(id, role): (Uuid, String)| (id, role));
+    .map_err(AppError::Database)?;
 
     if let Some((locker, locker_role)) = lock_info {
-        if locker != user.id && user::role_level(&user.role) < user::role_level(&locker_role) {
-            return Err(AppError::Conflict(
-                "This file is locked by a higher authority and cannot change classification".into(),
-            ));
+        if let Some(locker_id) = locker {
+            match locker_role {
+                Some(role) => {
+                    if locker_id != user.id && user::role_level(&user.role) < user::role_level(&role) {
+                        return Err(AppError::Conflict(
+                            "This file is locked by a higher authority and cannot change classification".into(),
+                        ));
+                    }
+                }
+                None => {
+                    return Err(AppError::Conflict(
+                        "File is locked by a deleted user. Contact an administrator.".into(),
+                    ));
+                }
+            }
         }
     }
 
@@ -396,21 +456,31 @@ pub async fn rename_file(
     let new_name = body.new_name.trim().to_string();
 
     // ── Enforce lock: hierarchical — must be the locker or have >= role level ──
-    let lock_info: Option<(Uuid, String)> = sqlx::query_as(
-        "SELECT f.locked_by, u.role FROM files f JOIN users u ON u.id = f.locked_by WHERE f.id = $1 AND f.owner_id = $2",
+    let lock_info: Option<(Option<Uuid>, Option<String>)> = sqlx::query_as(
+        "SELECT f.locked_by, u.role FROM files f LEFT JOIN users u ON u.id = f.locked_by WHERE f.id = $1 AND f.owner_id = $2",
     )
     .bind(file_id)
     .bind(user.id)
     .fetch_optional(pool.get_ref())
     .await
-    .map_err(AppError::Database)?
-    .map(|(id, role): (Uuid, String)| (id, role));
+    .map_err(AppError::Database)?;
 
     if let Some((locker, locker_role)) = lock_info {
-        if locker != user.id && user::role_level(&user.role) < user::role_level(&locker_role) {
-            return Err(AppError::Conflict(
-                "This file is locked by a higher authority and cannot be renamed".into(),
-            ));
+        if let Some(locker_id) = locker {
+            match locker_role {
+                Some(role) => {
+                    if locker_id != user.id && user::role_level(&user.role) < user::role_level(&role) {
+                        return Err(AppError::Conflict(
+                            "This file is locked by a higher authority and cannot be renamed".into(),
+                        ));
+                    }
+                }
+                None => {
+                    return Err(AppError::Conflict(
+                        "File is locked by a deleted user. Contact an administrator.".into(),
+                    ));
+                }
+            }
         }
     }
 
@@ -740,21 +810,31 @@ pub async fn move_files(
 
     // ── Enforce lock: hierarchical — must be the locker or have >= role level ──
     for file_id in &body.file_ids {
-        let lock_info: Option<(Uuid, String)> = sqlx::query_as(
-            "SELECT f.locked_by, u.role FROM files f JOIN users u ON u.id = f.locked_by WHERE f.id = $1 AND f.owner_id = $2",
+        let lock_info: Option<(Option<Uuid>, Option<String>)> = sqlx::query_as(
+            "SELECT f.locked_by, u.role FROM files f LEFT JOIN users u ON u.id = f.locked_by WHERE f.id = $1 AND f.owner_id = $2",
         )
         .bind(file_id)
         .bind(user.id)
         .fetch_optional(pool.get_ref())
         .await
-        .map_err(AppError::Database)?
-        .map(|(id, role): (Uuid, String)| (id, role));
+        .map_err(AppError::Database)?;
 
         if let Some((locker, locker_role)) = lock_info {
-            if locker != user.id && user::role_level(&user.role) < user::role_level(&locker_role) {
-                return Err(AppError::Conflict(
-                    "This file is locked by a higher authority and cannot be moved".into(),
-                ));
+            if let Some(locker_id) = locker {
+                match locker_role {
+                    Some(role) => {
+                        if locker_id != user.id && user::role_level(&user.role) < user::role_level(&role) {
+                            return Err(AppError::Conflict(
+                                "This file is locked by a higher authority and cannot be moved".into(),
+                            ));
+                        }
+                    }
+                    None => {
+                        return Err(AppError::Conflict(
+                            "File is locked by a deleted user. Contact an administrator.".into(),
+                        ));
+                    }
+                }
             }
         }
     }
@@ -848,6 +928,7 @@ pub async fn download_file(
     pool: web::Data<PgPool>,
     user: AuthUser,
     config: web::Data<AppConfig>,
+    req: HttpRequest,
     path: web::Path<Uuid>,
 ) -> Result<HttpResponse, AppError> {
     let file_id = path.into_inner();
@@ -882,6 +963,17 @@ pub async fn download_file(
         encrypted
     };
 
+    // ── Audit log ─────────────────────────────────────────────────────────────
+    let ip = req.peer_addr().map(|a| a.to_string()).unwrap_or_default();
+    let _ = write_audit_log_internal(
+        pool.get_ref(),
+        user.id,
+        "DOWNLOAD",
+        &file_id.to_string(),
+        &ip,
+    )
+    .await;
+
     let mime = file
         .mime_type
         .as_deref()
@@ -907,6 +999,7 @@ pub async fn get_file_content(
     pool: web::Data<PgPool>,
     user: AuthUser,
     config: web::Data<AppConfig>,
+    req: HttpRequest,
     path: web::Path<Uuid>,
 ) -> Result<HttpResponse, AppError> {
     let file_id = path.into_inner();
@@ -927,7 +1020,7 @@ pub async fn get_file_content(
     let filepath = std::path::Path::new(&config.storage_path).join(file_id.to_string());
 
     if !filepath.exists() {
-        // Return empty content for files without stored data (folders, etc.)
+        // Return empty content for files without stored data
         return Ok(HttpResponse::Ok()
             .insert_header(("Content-Type", "text/plain"))
             .body(Vec::new()));
@@ -943,6 +1036,17 @@ pub async fn get_file_content(
     } else {
         encrypted
     };
+
+    // ── Audit log ─────────────────────────────────────────────────────────────
+    let ip = req.peer_addr().map(|a| a.to_string()).unwrap_or_default();
+    let _ = write_audit_log_internal(
+        pool.get_ref(),
+        user.id,
+        "PREVIEW",
+        &file_id.to_string(),
+        &ip,
+    )
+    .await;
 
     let mime = file
         .mime_type
@@ -1153,6 +1257,47 @@ pub async fn upload_file(
         return Err(e);
     }
 
+    // ── Storage quota enforcement ─────────────────────────────────────────────
+    let used_bytes: i64 = sqlx::query_scalar(
+        "SELECT COALESCE(SUM(size_bytes), 0) FROM files WHERE owner_id = $1 AND deleted_at IS NULL",
+    )
+    .bind(user.id)
+    .fetch_one(pool.get_ref())
+    .await
+    .map_err(AppError::Database)?;
+
+    let user_quota: Option<i64> =
+        sqlx::query_scalar("SELECT storage_quota_bytes FROM users WHERE id = $1")
+            .bind(user.id)
+            .fetch_optional(pool.get_ref())
+            .await
+            .map_err(AppError::Database)?
+            .flatten();
+
+    let quota_bytes = user_quota.filter(|&q| q > 0).unwrap_or(100 * 1024 * 1024 * 1024); // 100 GB default
+
+    if used_bytes + size_bytes > quota_bytes {
+        let _ = tokio::fs::remove_file(&temp_filepath).await;
+        return Err(AppError::BadRequest("Storage quota exceeded".into()));
+    }
+
+    // ── Re-validate parent_id (TOCTOU guard) ────────────────────────────────
+    if let Some(pid) = parent_id {
+        let parent_still_exists: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM files WHERE id = $1 AND owner_id = $2 AND is_folder = TRUE)",
+        )
+        .bind(pid)
+        .bind(user.id)
+        .fetch_one(pool.get_ref())
+        .await
+        .map_err(AppError::Database)?;
+
+        if !parent_still_exists {
+            let _ = tokio::fs::remove_file(&temp_filepath).await;
+            return Err(AppError::NotFound);
+        }
+    }
+
     // ── Insert file record into database ──────────────────────────────────────
     let insert_res = sqlx::query_as::<_, FileNode>(
         "INSERT INTO files
@@ -1182,7 +1327,7 @@ pub async fn upload_file(
 
     // ── File versioning — save as version 1 ──────────────────────────────────
     let version_path = temp_filepath.to_string_lossy().to_string();
-    let _ = sqlx::query(
+    if let Err(e) = sqlx::query(
         "INSERT INTO file_versions (file_id, version_number, size_bytes, storage_path, uploaded_by)
          VALUES ($1, 1, $2, $3, $4)
          ON CONFLICT (file_id, version_number) DO NOTHING",
@@ -1192,7 +1337,10 @@ pub async fn upload_file(
     .bind(&version_path)
     .bind(user.id)
     .execute(pool.get_ref())
-    .await;
+    .await
+    {
+        tracing::warn!(file_id = %file_node.id, error = %e, "Failed to create initial file version");
+    }
 
     // ── Audit log ─────────────────────────────────────────────────────────────
     let ip = req.peer_addr().map(|a| a.to_string()).unwrap_or_default();

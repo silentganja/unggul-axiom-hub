@@ -67,7 +67,8 @@ pub async fn list_audit_logs(
     let mut conditions: Vec<String> = Vec::new();
     let mut param_idx = 1u32;
 
-    if !can_see_all {
+    if !can_see_all && query.user_id.is_none() {
+        // Non-admin without specific user filter: scope to own entries only
         conditions.push(format!("user_id = ${}", param_idx));
         param_idx += 1;
     }
@@ -112,7 +113,7 @@ pub async fn list_audit_logs(
     let mut count_query = sqlx::query_scalar::<_, i64>(&count_sql);
     let mut data_query = sqlx::query_as::<_, AuditLogEntry>(&sql);
 
-    if !can_see_all {
+    if !can_see_all && query.user_id.is_none() {
         count_query = count_query.bind(user.id);
         data_query = data_query.bind(user.id);
     }
@@ -188,11 +189,16 @@ pub async fn list_audit_logs(
     }))
 }
 
-/// Escape a value for CSV: wrap in quotes if it contains commas, quotes, or newlines.
+/// Escape a value for CSV: prefix formula injections and wrap in quotes if needed.
 fn escape_csv(s: &str) -> String {
-    if s.contains(',') || s.contains('"') || s.contains('\n') {
-        format!("\"{}\"", s.replace('"', "\"\""))
+    let escaped = if s.starts_with('=') || s.starts_with('+') || s.starts_with('-') || s.starts_with('@') {
+        format!("'{}", s)
     } else {
         s.to_string()
+    };
+    if escaped.contains(',') || escaped.contains('"') || escaped.contains('\n') {
+        format!("\"{}\"", escaped.replace('"', "\"\""))
+    } else {
+        escaped
     }
 }

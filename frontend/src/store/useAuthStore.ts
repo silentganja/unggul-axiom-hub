@@ -6,6 +6,7 @@ import {
   setRefreshToken,
   clearToken,
 } from "@/lib/api";
+import { resetFavoriteIds } from "@/store/useFileStore";
 
 interface AuthState {
   user: UserProfile | null;
@@ -68,6 +69,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
 
     clearToken();
+    resetFavoriteIds();
     set({
       token: null,
       refreshToken: null,

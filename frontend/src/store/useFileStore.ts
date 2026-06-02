@@ -9,6 +9,8 @@ import {
   FileShareEntry,
   formatFileSize,
   formatTimestamp,
+  getToken,
+  attemptTokenRefresh,
 } from "@/lib/api";
 
 // ── Frontend FileNode (UI-facing shape) ──────────────────────────────────────
@@ -54,6 +56,12 @@ function loadFavorites(): Set<string> {
 
 function saveFavorites(ids: Set<string>): void {
   localStorage.setItem(FAVORITES_KEY, JSON.stringify([...ids]));
+}
+
+/** Called on logout to clear cross-user cached favorites */
+export function resetFavoriteIds(): void {
+  favoriteIds.clear();
+  saveFavorites(favoriteIds);
 }
 
 const favoriteIds = loadFavorites();
@@ -498,11 +506,15 @@ export const useFileStore = create<FileState>((set, get) => ({
 
     set({ uploadProgress: 0, uploadFileName: file.name, error: null });
 
+    // Proactively refresh token to avoid 401 mid-upload
+    await attemptTokenRefresh();
+
     await new Promise<void>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
       xhr.open("POST", `${apiBase}/api/files/upload`);
-      xhr.setRequestHeader("Authorization", `Bearer ${localStorage.getItem("auth-token")}`);
+      const token = getToken() || "";
+      xhr.setRequestHeader("Authorization", `Bearer ${token}`);
 
       xhr.upload.onprogress = (e) => {
         if (e.lengthComputable) {
@@ -515,6 +527,40 @@ export const useFileStore = create<FileState>((set, get) => ({
         if (xhr.status >= 200 && xhr.status < 300) {
           await fetchFiles();
           resolve();
+        } else if (xhr.status === 401) {
+          // Token expired during upload — try refreshing and retry
+          const refreshed = await attemptTokenRefresh();
+          if (refreshed) {
+            const newToken = getToken() || "";
+            const retryXhr = new XMLHttpRequest();
+            retryXhr.open("POST", `${apiBase}/api/files/upload`);
+            retryXhr.setRequestHeader("Authorization", `Bearer ${newToken}`);
+            retryXhr.upload.onprogress = (e) => {
+              if (e.lengthComputable) {
+                set({ uploadProgress: Math.round((e.loaded / e.total) * 100) });
+              }
+            };
+            retryXhr.onload = () => {
+              set({ uploadProgress: null, uploadFileName: null });
+              if (retryXhr.status >= 200 && retryXhr.status < 300) {
+                fetchFiles().then(resolve).catch(reject);
+              } else {
+                try {
+                  const body = JSON.parse(retryXhr.responseText);
+                  reject(new Error(body.error || "Upload failed"));
+                } catch {
+                  reject(new Error("Upload failed"));
+                }
+              }
+            };
+            retryXhr.onerror = () => {
+              set({ uploadProgress: null, uploadFileName: null });
+              reject(new Error("Network error during upload"));
+            };
+            retryXhr.send(formData);
+          } else {
+            reject(new Error("Session expired"));
+          }
         } else {
           try {
             const body = JSON.parse(xhr.responseText);
@@ -625,38 +671,59 @@ export const useFileStore = create<FileState>((set, get) => ({
 
   // ── Client-side extras (no backend support yet) ───────────────────────────
 
-  toggleFavorite: (id) =>
-    set((state) => {
-      const file = state.files.find((f) => f.id === id);
-      const newValue = !file?.isFavorite;
+  toggleFavorite: async (id) => {
+    const state = get();
+    const file = state.files.find((f) => f.id === id);
+    const newValue = !file?.isFavorite;
 
-      // Call backend API (fire and forget — local state updates immediately)
-      if (newValue) {
-        favoritesApi.add(id).catch(() => {});
-      } else {
-        favoritesApi.remove(id).catch(() => {});
-      }
-
-      // Persist to localStorage (fallback cache)
-      if (newValue) {
-        favoriteIds.add(id);
-      } else {
-        favoriteIds.delete(id);
-      }
+    // Optimistic update
+    set((s) => {
+      if (newValue) favoriteIds.add(id);
+      else favoriteIds.delete(id);
       saveFavorites(favoriteIds);
       return {
-        files: state.files.map((f) =>
+        files: s.files.map((f) =>
           f.id === id ? { ...f, isFavorite: newValue } : f
         ),
-        sharedFiles: state.sharedFiles.map((f) =>
+        sharedFiles: s.sharedFiles.map((f) =>
           f.id === id ? { ...f, isFavorite: newValue } : f
         ),
         activeFile:
-          state.activeFile?.id === id
-            ? { ...state.activeFile, isFavorite: newValue }
-            : state.activeFile,
+          s.activeFile?.id === id
+            ? { ...s.activeFile, isFavorite: newValue }
+            : s.activeFile,
       };
-    }),
+    });
+
+    // Call backend API
+    try {
+      if (newValue) {
+        await favoritesApi.add(id);
+      } else {
+        await favoritesApi.remove(id);
+      }
+    } catch (err) {
+      // Revert optimistic update on API error
+      set((s) => {
+        if (!newValue) favoriteIds.add(id);
+        else favoriteIds.delete(id);
+        saveFavorites(favoriteIds);
+        return {
+          files: s.files.map((f) =>
+            f.id === id ? { ...f, isFavorite: !newValue } : f
+          ),
+          sharedFiles: s.sharedFiles.map((f) =>
+            f.id === id ? { ...f, isFavorite: !newValue } : f
+          ),
+          activeFile:
+            s.activeFile?.id === id
+              ? { ...s.activeFile, isFavorite: !newValue }
+              : s.activeFile,
+        };
+      });
+      console.error("Failed to toggle favorite:", err);
+    }
+  },
 
   updateFileClassification: (id, classification) =>
     set((state) => ({
@@ -672,47 +739,34 @@ export const useFileStore = create<FileState>((set, get) => ({
   addCollaborator: (fileId, name, email, role) =>
     set((state) => {
       const newCollaborator: Collaborator = {
-        id: `col-${Date.now()}`,
+        id: `col-${Date.now()}-${Math.random().toString(36).slice(2)}`,
         name,
         email,
         role,
       };
+      // Build updated files array first, then derive activeFile from it
+      const updatedFiles = state.files.map((file) => {
+        if (file.id !== fileId) return file;
+        const exists = file.collaborators.some(
+          (c) => c.email.toLowerCase() === email.toLowerCase()
+        );
+        return {
+          ...file,
+          collaborators: exists
+            ? file.collaborators.map((c) =>
+                c.email.toLowerCase() === email.toLowerCase()
+                  ? { ...c, role }
+                  : c
+              )
+            : [...file.collaborators, newCollaborator],
+        };
+      });
+      const updatedFile = updatedFiles.find((f) => f.id === fileId);
       return {
-        files: state.files.map((file) => {
-          if (file.id !== fileId) return file;
-          const exists = file.collaborators.some(
-            (c) => c.email.toLowerCase() === email.toLowerCase()
-          );
-          return {
-            ...file,
-            collaborators: exists
-              ? file.collaborators.map((c) =>
-                  c.email.toLowerCase() === email.toLowerCase()
-                    ? { ...c, role }
-                    : c
-                )
-              : [...file.collaborators, newCollaborator],
-          };
-        }),
+        files: updatedFiles,
         activeFile:
-          state.activeFile?.id === fileId
-            ? {
-                ...state.activeFile,
-                collaborators: (() => {
-                  const file = state.files.find((f) => f.id === fileId);
-                  if (!file) return state.activeFile.collaborators;
-                  const exists = file.collaborators.some(
-                    (c) => c.email.toLowerCase() === email.toLowerCase()
-                  );
-                  return exists
-                    ? file.collaborators.map((c) =>
-                        c.email.toLowerCase() === email.toLowerCase()
-                          ? { ...c, role }
-                          : c
-                      )
-                    : [...file.collaborators, newCollaborator];
-                })(),
-              }
+          state.activeFile?.id === fileId && updatedFile
+            ? { ...state.activeFile, collaborators: updatedFile.collaborators }
             : state.activeFile,
       };
     }),
@@ -763,7 +817,9 @@ export const useFileStore = create<FileState>((set, get) => ({
           : state.activeFile,
     })),
 
-  lockFile: (id, user, reason) =>
+  /** UI-only lock — does NOT persist to backend. Use governance API for real locking. */
+  lockFile: (id, user, reason) => {
+    console.warn("lockFile is UI-only — use governanceApi.create for real locking");
     set((state) => ({
       files: state.files.map((f) =>
         f.id === id ? { ...f, lockedBy: user, lockReason: reason } : f
@@ -772,9 +828,12 @@ export const useFileStore = create<FileState>((set, get) => ({
         state.activeFile?.id === id
           ? { ...state.activeFile, lockedBy: user, lockReason: reason }
           : state.activeFile,
-    })),
+    }));
+  },
 
-  unlockFile: (id) =>
+  /** UI-only unlock — does NOT persist to backend. Use governance API for real unlocking. */
+  unlockFile: (id) => {
+    console.warn("unlockFile is UI-only — use governanceApi.create for real unlocking");
     set((state) => ({
       files: state.files.map((f) =>
         f.id === id ? { ...f, lockedBy: null, lockReason: null } : f
@@ -783,5 +842,6 @@ export const useFileStore = create<FileState>((set, get) => ({
         state.activeFile?.id === id
           ? { ...state.activeFile, lockedBy: null, lockReason: null }
           : state.activeFile,
-    })),
+    }));
+  },
 }));

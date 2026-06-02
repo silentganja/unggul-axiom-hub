@@ -63,10 +63,16 @@ function RowDropdownMenu({
   const [pos, setPos] = useState({ top: 0, left: 0 });
   const menuRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number>(0);
+  const anchorRef = useRef<HTMLElement | null>(anchorEl);
+  // Keep the ref in sync so recalc never captures a stale value
+  useEffect(() => {
+    anchorRef.current = anchorEl;
+  }, [anchorEl]);
 
   const recalc = useCallback(() => {
-    if (!anchorEl) return;
-    const rect = anchorEl.getBoundingClientRect();
+    const el = anchorRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
     const mw = 176; // w-44
     let left = rect.right - mw;
     if (left < 8) left = 8;
@@ -76,7 +82,7 @@ function RowDropdownMenu({
     const finalTop =
       top + mh > window.innerHeight - 8 ? rect.top - mh - 4 : top;
     setPos({ top: finalTop, left });
-  }, [anchorEl]);
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -180,8 +186,9 @@ export default function FileExplorerPage() {
 
   // ── Fetch files on mount and when folder changes ───────────────────────────
   useEffect(() => {
+    if (activeView !== "files") return;
     fetchFiles();
-  }, [currentFolderId, fetchFiles]);
+  }, [currentFolderId, fetchFiles, activeView]);
 
   // ── Fetch shared files when switching to shared view ───────────────────────
   useEffect(() => {
@@ -620,9 +627,11 @@ export default function FileExplorerPage() {
                           <div className="flex items-center gap-2">
                             <span className={cn(
                               "px-1.5 py-0.5 rounded-sm text-[8px] font-bold tracking-wider font-mono uppercase border",
-                              task.type === "FILE_LOCK" && "bg-destructive/10 text-destructive border-destructive/20",
-                              task.type === "FILE_UNLOCK" && "bg-success/10 text-success border-success/20",
-                              task.type === "CLASSIFICATION" && "bg-warning/10 text-warning border-warning/20"
+                              task.type === "FILE_LOCK" && "bg-destructive/15 text-destructive border-destructive/25",
+                              task.type === "FILE_UNLOCK" && "bg-success/15 text-success border-success/25",
+                              task.type === "CLASSIFICATION" && "bg-warning/15 text-warning border-warning/25",
+                              task.type === "FILE_MOVE" && "bg-info/15 text-info border-info/25",
+                              task.type === "FILE_DELETE" && "bg-destructive/15 text-destructive border-destructive/25"
                             )}>{task.type.replace("_", " ")}</span>
                             <span className="font-mono text-[9px] text-foreground-subtle">{task.timestamp}</span>
                           </div>
@@ -1502,6 +1511,7 @@ export default function FileExplorerPage() {
                             Restore
                           </button>
                           <button
+                            // NOTE: window.confirm is synchronous and blocks React — ideally replace with a custom modal
                             onClick={() => { if (confirm(`Permanently delete "${file.name}"? This cannot be undone.`)) permanentDelete(file.id); }}
                             className="h-7 px-2.5 rounded-sm border border-destructive/20 text-destructive bg-destructive/5 hover:bg-destructive/15 text-[9px] font-bold tracking-wider uppercase font-mono transition-all cursor-pointer"
                           >

@@ -204,8 +204,8 @@ function LoginForm() {
 
       {/* ── Background Aesthetics (Ambient Glow Elements) ── */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
-        <div className="absolute -top-[15%] -left-[10%] w-[55%] h-[55%] rounded-full bg-accent/10 blur-[130px] ambient-glow-1" />
-        <div className="absolute top-[25%] -right-[15%] w-[45%] h-[45%] rounded-full bg-info/5 blur-[120px] ambient-glow-2" />
+        <div className="absolute -top-[15%] -left-[10%] w-[55%] h-[55%] rounded-full bg-accent/10 blur-[130px] ambient-glow-1 hidden md:block" />
+        <div className="absolute top-[25%] -right-[15%] w-[45%] h-[45%] rounded-full bg-info/5 blur-[120px] ambient-glow-2 hidden md:block" />
         <div className="absolute inset-0 scan-grid opacity-[0.01] dark:opacity-[0.02]" />
       </div>
 

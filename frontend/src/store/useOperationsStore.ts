@@ -108,24 +108,13 @@ export const useOperationsStore = create<OperationsState>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const result = await governanceApi.list(params);
-      // Check if result is paginated or flat array
-      if (Array.isArray(result)) {
-        set({
-          tasks: result.map(transformRequest),
-          isLoading: false,
-          total: result.length,
-          totalPages: 1,
-          page: 1,
-        });
-      } else {
-        set({
-          tasks: result.requests.map(transformRequest),
-          total: result.total,
-          totalPages: result.totalPages,
-          page: result.page,
-          isLoading: false,
-        });
-      }
+      set({
+        tasks: result.requests.map(transformRequest),
+        total: result.total,
+        totalPages: result.totalPages,
+        page: result.page,
+        isLoading: false,
+      });
     } catch (err) {
       set({
         isLoading: false,
@@ -196,8 +185,7 @@ export const useOperationsStore = create<OperationsState>((set, get) => ({
       });
       await get().fetchTasks({ page: 1, perPage: get().perPage, status: "PENDING" });
     } catch (err) {
-      set({ error: err instanceof Error ? err.message : "Failed to submit request" });
-      throw err; // Re-throw so the modal can show the error too
+      throw err; // Let callers handle the error display
     }
   },
 }));

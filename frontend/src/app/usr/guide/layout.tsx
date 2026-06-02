@@ -34,8 +34,8 @@ export default function GuideLayout({ children }: { children: React.ReactNode })
     <div className="min-h-dvh bg-background text-foreground font-sans selection:bg-accent selection:text-accent-foreground relative flex flex-col">
       {/* Background Gradients */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
-        <div className="absolute -top-[10%] -left-[5%] w-[45%] h-[45%] rounded-full bg-accent/5 blur-[120px] ambient-glow-1" />
-        <div className="absolute top-[40%] right-[5%] w-[40%] h-[40%] rounded-full bg-accent/4 blur-[130px] ambient-glow-2" />
+        <div className="absolute -top-[10%] -left-[5%] w-[45%] h-[45%] rounded-full bg-accent/5 blur-[120px] ambient-glow-1 hidden md:block" />
+        <div className="absolute top-[40%] right-[5%] w-[40%] h-[40%] rounded-full bg-accent/4 blur-[130px] ambient-glow-2 hidden md:block" />
         <div className="absolute inset-0 scan-grid opacity-[0.015] dark:opacity-[0.03]" />
       </div>
 

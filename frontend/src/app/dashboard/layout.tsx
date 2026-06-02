@@ -69,6 +69,11 @@ export default function DashboardLayout({
 
   useEffect(() => {
     hydrate();
+    // Periodic re-hydration every 5 minutes to keep session state fresh
+    const interval = setInterval(() => {
+      hydrate();
+    }, 5 * 60 * 1000);
+    return () => clearInterval(interval);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Timeout: if auth check takes >10s, force-show login
@@ -163,8 +168,8 @@ export default function DashboardLayout({
 
       {/* ── Background Scan Grid Overlay ── */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
-        <div className="absolute top-[10%] left-[20%] w-[35%] h-[35%] rounded-full bg-accent/5 blur-[120px]" />
-        <div className="absolute bottom-[10%] right-[10%] w-[30%] h-[30%] rounded-full bg-info/5 blur-[100px]" />
+        <div className="absolute top-[10%] left-[20%] w-[35%] h-[35%] rounded-full bg-accent/5 blur-[120px] hidden md:block" />
+        <div className="absolute bottom-[10%] right-[10%] w-[30%] h-[30%] rounded-full bg-info/5 blur-[100px] hidden md:block" />
         <div className="absolute inset-0 scan-grid opacity-[0.015] dark:opacity-[0.03]" />
       </div>
 

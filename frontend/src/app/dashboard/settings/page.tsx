@@ -281,8 +281,13 @@ export default function ProfileSettingsPage() {
     const updated = { ...notifRules, [key]: !notifRules[key] };
     setNotifRules(updated);
     localStorage.setItem("user-notif-rules", JSON.stringify(updated));
-    // Sync to backend (fire-and-forget, fallback to localStorage on failure)
-    authApi.updateNotificationPrefs(updated).catch(() => {});
+    // Sync to backend — revert on failure
+    authApi.updateNotificationPrefs(updated).catch(() => {
+      const reverted = { ...updated, [key]: !updated[key] };
+      setNotifRules(reverted);
+      localStorage.setItem("user-notif-rules", JSON.stringify(reverted));
+      setError("Failed to sync notification preference. Please try again.");
+    });
   };
 
   // ── Session Revocation ─────────────────────────────────────────────────────

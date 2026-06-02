@@ -88,13 +88,17 @@ pub async fn restore_version(
     let version = version.ok_or(AppError::NotFound)?;
 
     // Get current file info
-    let (_file_name, current_storage_path): (String, String) =
-        sqlx::query_as("SELECT name, COALESCE($2 || '/' || id::text, '') FROM files WHERE id = $1")
-            .bind(file_id)
-            .bind(&config.storage_path)
-            .fetch_one(pool.get_ref())
-            .await
-            .map_err(AppError::Database)?;
+    let _file_name: String = sqlx::query_scalar("SELECT name FROM files WHERE id = $1")
+        .bind(file_id)
+        .fetch_optional(pool.get_ref())
+        .await
+        .map_err(AppError::Database)?
+        .ok_or(AppError::NotFound)?;
+
+    let current_storage_path = std::path::Path::new(&config.storage_path)
+        .join(file_id.to_string())
+        .to_string_lossy()
+        .to_string();
 
     // Get next version number
     let next_version: i32 = sqlx::query_scalar(
@@ -124,26 +128,28 @@ pub async fn restore_version(
     let source_path = std::path::Path::new(&version.storage_path);
     let dest_path = std::path::Path::new(&current_storage_path);
 
-    if source_path.exists() {
-        tokio::fs::copy(&source_path, &dest_path)
-            .await
-            .map_err(|e| {
-                tracing::error!("Failed to restore file version: {:?}", e);
-                AppError::Internal(anyhow::anyhow!("Failed to restore file version"))
-            })?;
-
-        let new_size = tokio::fs::metadata(&dest_path)
-            .await
-            .map(|m| m.len() as i64)
-            .unwrap_or(version.size_bytes);
-
-        sqlx::query("UPDATE files SET size_bytes = $1, updated_at = NOW() WHERE id = $2")
-            .bind(new_size)
-            .bind(file_id)
-            .execute(pool.get_ref())
-            .await
-            .map_err(AppError::Database)?;
+    if !source_path.exists() {
+        return Err(AppError::NotFound);
     }
+
+    tokio::fs::copy(&source_path, &dest_path)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to restore file version: {:?}", e);
+            AppError::Internal(anyhow::anyhow!("Failed to restore file version"))
+        })?;
+
+    let new_size = tokio::fs::metadata(&dest_path)
+        .await
+        .map(|m| m.len() as i64)
+        .unwrap_or(version.size_bytes);
+
+    sqlx::query("UPDATE files SET size_bytes = $1, updated_at = NOW() WHERE id = $2")
+        .bind(new_size)
+        .bind(file_id)
+        .execute(pool.get_ref())
+        .await
+        .map_err(AppError::Database)?;
 
     tracing::info!(
         user_id = %user.id,

@@ -81,8 +81,18 @@ pub async fn login(
     )
     .await?;
 
+    // ── Audit log: LOGIN ──────────────────────────────────────────────────────
+    let _ = crate::handlers::files::write_audit_log_internal(
+        pool.get_ref(),
+        user.id,
+        "LOGIN",
+        &user.id.to_string(),
+        &ip,
+    )
+    .await;
+
     // Track the session
-    let token_prefix = refresh_token[..16].to_string();
+    let token_prefix = refresh_token.get(..16).unwrap_or(&refresh_token).to_string();
     let user_agent = req
         .headers()
         .get("User-Agent")

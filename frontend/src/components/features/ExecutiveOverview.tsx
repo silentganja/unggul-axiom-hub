@@ -37,8 +37,8 @@ export default function ExecutiveOverview() {
   const user = useAuthStore((state) => state.user);
 
   const [activityEntries, setActivityEntries] = useState<ActivityEntry[]>([]);
-  const [animatingId] = useState<string | null>(null);
-  const [now] = useState(() => Date.now());
+  // eslint-disable-next-line react-hooks/purity
+  const now = Date.now();
 
   // ── Confirm/reason modal state ──────────────────────────────────────────────
   const [confirmModal, setConfirmModal] = useState<{
@@ -51,7 +51,11 @@ export default function ExecutiveOverview() {
   const [confirmLoading, setConfirmLoading] = useState(false);
 
   useEffect(() => {
-    activityApi.getFeed().then(setActivityEntries).catch(() => {});
+    let cancelled = false;
+    activityApi.getFeed().then((entries) => {
+      if (!cancelled) setActivityEntries(entries);
+    }).catch(() => {});
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
@@ -91,6 +95,8 @@ export default function ExecutiveOverview() {
     FILE_LOCK: "bg-destructive/60",
     FILE_UNLOCK: "bg-success/60",
     CLASSIFICATION: "bg-warning/60",
+    FILE_MOVE: "bg-info/60",
+    FILE_DELETE: "bg-destructive/60",
   };
   tasks.forEach((t) => {
     const key = t.type;
@@ -405,24 +411,22 @@ export default function ExecutiveOverview() {
             ) : (
               <div className="space-y-2.5 max-h-[300px] overflow-y-auto pr-1">
                 {pendingTasks.map((task) => {
-                  const isAnimating = animatingId === task.id;
                   return (
                     <div
                       key={task.id}
-                      className={cn(
-                        "p-3 rounded-sm border border-border/30 bg-background-panel/40 backdrop-blur-sm transition-all duration-300 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3",
-                        isAnimating && "opacity-0 scale-95 pointer-events-none translate-x-4"
-                      )}
+                      className="p-3 rounded-sm border border-border/30 bg-background-panel/40 backdrop-blur-sm transition-all duration-300 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
                     >
                       <div className="space-y-1.5 flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <span className={cn(
                             "px-1.5 py-0.5 rounded-sm text-[8px] font-bold tracking-wider font-mono uppercase border",
-                            task.type === "FINANCE" && "bg-warning/15 text-warning border-warning/25",
-                            task.type === "BLUEPRINT" && "bg-info/15 text-info border-info/25",
-                            task.type === "HR_OPS" && "bg-background-muted/40 text-foreground-subtle border-border/40"
+                            task.type === "FILE_LOCK" && "bg-destructive/15 text-destructive border-destructive/25",
+                            task.type === "FILE_UNLOCK" && "bg-success/15 text-success border-success/25",
+                            task.type === "CLASSIFICATION" && "bg-warning/15 text-warning border-warning/25",
+                            task.type === "FILE_MOVE" && "bg-info/15 text-info border-info/25",
+                            task.type === "FILE_DELETE" && "bg-destructive/15 text-destructive border-destructive/25"
                           )}>
-                            {task.type}
+                            {task.type.replace("_", " ")}
                           </span>
                           <span className="font-mono text-[9px] text-foreground-subtle">{task.timestamp}</span>
                         </div>

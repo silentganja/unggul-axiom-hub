@@ -45,10 +45,10 @@ export default function FloatingActionBar() {
   if (selectedIds.length === 0) return null;
 
   const handleDownloadAll = () => {
-    const selectedFiles = files.filter((f) => selectedIds.includes(f.id) && f.type === "file");
-    if (selectedFiles.length === 0) return;
+    const filesToDownload = files.filter((f) => selectedIds.includes(f.id) && f.type === "file");
+    if (filesToDownload.length === 0) return;
     // Download sequentially with a small delay to avoid browser blocking
-    selectedFiles.forEach((f, i) => {
+    filesToDownload.forEach((f, i) => {
       setTimeout(() => {
         const store = useFileStore.getState();
         store.downloadFile(f.id);

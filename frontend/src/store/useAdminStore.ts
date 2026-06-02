@@ -66,7 +66,9 @@ export const useAdminStore = create<AdminAuthState>((set) => ({
         const { username } = JSON.parse(cached);
         set({ token, username, isAuthenticated: true });
       } catch {
-        // Corrupt cache — don't clear the token, just skip
+        // Corrupt cache — clear and continue with token-only auth
+        localStorage.removeItem("admin-user");
+        set({ token, isAuthenticated: true, username: "admin" });
       }
     } else {
       // No cache but token exists — still authenticate

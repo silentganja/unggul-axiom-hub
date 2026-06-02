@@ -69,6 +69,7 @@ pub async fn list_users(
     pool: web::Data<PgPool>,
     _admin: AdminUser,
 ) -> Result<HttpResponse, AppError> {
+    // #[allow(dead_code)] — selects 7 of 12 columns; User struct has more fields
     let users: Vec<UserProfile> = sqlx::query_as::<_, User>(
         "SELECT id, email, password_hash, full_name, role, active, created_at
          FROM users
@@ -260,6 +261,19 @@ pub async fn delete_user(
                 ));
             }
         }
+    }
+
+    // Prevent deletion of users who own files
+    let file_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM files WHERE owner_id = $1")
+        .bind(user_id)
+        .fetch_one(pool.get_ref())
+        .await
+        .map_err(AppError::Database)?;
+
+    if file_count > 0 {
+        return Err(AppError::Conflict(
+            "User owns files. Delete or transfer files first.".into(),
+        ));
     }
 
     let deleted = sqlx::query("DELETE FROM users WHERE id = $1")
@@ -469,9 +483,9 @@ pub async fn list_all_shares(
         file_name: String,
         owner_id: Uuid,
         owner_name: String,
-        user_id: Uuid,
-        user_name: String,
-        user_email: String,
+        shared_with_id: Uuid,
+        shared_with_name: String,
+        shared_with_email: String,
         role: String,
         shared_by_id: Uuid,
         shared_by_name: String,
@@ -485,9 +499,9 @@ pub async fn list_all_shares(
             f.name AS file_name,
             f.owner_id,
             u_owner.full_name AS owner_name,
-            fs.user_id,
-            u_user.full_name AS user_name,
-            u_user.email AS user_email,
+            fs.user_id AS shared_with_id,
+            u_user.full_name AS shared_with_name,
+            u_user.email AS shared_with_email,
             fs.role,
             fs.shared_by AS shared_by_id,
             u_shared.full_name AS shared_by_name,
@@ -590,9 +604,23 @@ pub async fn transfer_ownership(
 pub async fn force_delete_file(
     pool: web::Data<PgPool>,
     _admin: AdminUser,
+    config: web::Data<AppConfig>,
     path: web::Path<Uuid>,
 ) -> Result<HttpResponse, AppError> {
     let file_id = path.into_inner();
+    // Read the file record first to verify it exists
+    let file_exists: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM files WHERE id = $1)",
+    )
+    .bind(file_id)
+    .fetch_one(pool.get_ref())
+    .await
+    .map_err(AppError::Database)?;
+
+    if !file_exists {
+        return Err(AppError::NotFound);
+    }
+
     let deleted = sqlx::query("DELETE FROM files WHERE id = $1")
         .bind(file_id)
         .execute(pool.get_ref())
@@ -601,6 +629,13 @@ pub async fn force_delete_file(
     if deleted.rows_affected() == 0 {
         return Err(AppError::NotFound);
     }
+
+    // Remove the physical file from disk
+    let filepath = std::path::Path::new(&config.storage_path).join(file_id.to_string());
+    if filepath.exists() {
+        let _ = tokio::fs::remove_file(&filepath).await;
+    }
+
     tracing::warn!(admin = "admin", file_id = %file_id, "Admin force-deleted file");
     Ok(HttpResponse::NoContent().finish())
 }
@@ -698,16 +733,21 @@ pub async fn admin_governance_list(
         }
     }
 
-    let status_clause = query
-        .status
-        .as_ref()
-        .map(|s| format!("AND gr.status = '{}'", s))
-        .unwrap_or_default();
-    let type_clause = query
-        .r#type
-        .as_ref()
-        .map(|t| format!("AND gr.type = '{}'", t))
-        .unwrap_or_default();
+    let mut param_idx = 0u32;
+
+    let status_clause = if let Some(ref status) = query.status {
+        param_idx += 1;
+        format!("AND gr.status = ${}", param_idx)
+    } else {
+        String::new()
+    };
+
+    let type_clause = if let Some(ref _type) = query.r#type {
+        param_idx += 1;
+        format!("AND gr.type = ${}", param_idx)
+    } else {
+        String::new()
+    };
 
     let sql = format!(
         "SELECT gr.id, gr.type, gr.title, gr.description, gr.status,
@@ -739,12 +779,25 @@ pub async fn admin_governance_list(
         type_clause = type_clause,
     );
 
-    let requests: Vec<crate::models::governance::GovernanceRequestResponse> = sqlx::query_as(&sql)
+    let mut requests_query = sqlx::query_as::<_, crate::models::governance::GovernanceRequestResponse>(&sql);
+    let mut count_query = sqlx::query_scalar::<_, i64>(&count_sql);
+
+    if let Some(ref status) = query.status {
+        requests_query = requests_query.bind(status);
+        count_query = count_query.bind(status);
+    }
+
+    if let Some(ref r#type) = query.r#type {
+        requests_query = requests_query.bind(r#type);
+        count_query = count_query.bind(r#type);
+    }
+
+    let requests = requests_query
         .fetch_all(pool.get_ref())
         .await
         .map_err(AppError::Database)?;
 
-    let total: i64 = sqlx::query_scalar(&count_sql)
+    let total: i64 = count_query
         .fetch_one(pool.get_ref())
         .await
         .map_err(AppError::Database)?;
@@ -780,9 +833,30 @@ pub async fn force_approve(
     body: web::Json<ForceApproveRequest>,
 ) -> Result<HttpResponse, AppError> {
     let request_id = path.into_inner();
+
+    // Check current status first — only proceed if PENDING
+    let current_status: Option<String> =
+        sqlx::query_scalar("SELECT status FROM governance_requests WHERE id = $1")
+            .bind(request_id)
+            .fetch_optional(pool.get_ref())
+            .await
+            .map_err(AppError::Database)?
+            .flatten();
+
+    match current_status.as_deref() {
+        Some("PENDING") => {} // OK to proceed
+        Some(other) => {
+            return Err(AppError::Conflict(format!(
+                "Request is already {} and cannot be force-approved",
+                other
+            )));
+        }
+        None => return Err(AppError::NotFound),
+    }
+
     // Mark as approved by the given reviewer
     sqlx::query(
-        "UPDATE governance_requests SET status = 'APPROVED', reviewed_by = $1, updated_at = NOW() WHERE id = $2",
+        "UPDATE governance_requests SET status = 'APPROVED', reviewed_by = $1, updated_at = NOW() WHERE id = $2 AND status = 'PENDING'",
     )
     .bind(body.reviewer_id)
         .bind(request_id)
@@ -952,8 +1026,8 @@ pub async fn storage_breakdown(
 #[serde(rename_all = "camelCase")]
 struct ClassificationBreakdown {
     classification: String,
-    count: i64,
-    total_bytes: i64,
+    file_count: i64,
+    bytes: i64,
 }
 
 #[derive(serde::Serialize, sqlx::FromRow)]
@@ -970,15 +1044,15 @@ struct LargestFileEntry {
 #[serde(rename_all = "camelCase")]
 struct StorageTrendEntry {
     date: String,
-    total_bytes: i64,
+    bytes: i64,
     file_count: i64,
 }
 
 #[derive(serde::Serialize, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
 struct OverQuotaUser {
-    id: Uuid,
-    name: String,
+    user_id: Uuid,
+    full_name: String,
     email: String,
     used_bytes: i64,
     quota_bytes: i64,
@@ -988,8 +1062,8 @@ struct OverQuotaUser {
 #[serde(rename_all = "camelCase")]
 struct StorageAnalyticsResponse {
     by_classification: Vec<ClassificationBreakdown>,
-    largest_files: Vec<LargestFileEntry>,
-    storage_trend: Vec<StorageTrendEntry>,
+    top_files: Vec<LargestFileEntry>,
+    trend: Vec<StorageTrendEntry>,
     over_quota_users: Vec<OverQuotaUser>,
 }
 
@@ -998,10 +1072,10 @@ pub async fn storage_analytics(
     _admin: AdminUser,
 ) -> Result<HttpResponse, AppError> {
     let by_classification: Vec<ClassificationBreakdown> = sqlx::query_as(
-        "SELECT classification, COUNT(*) AS count, COALESCE(SUM(size_bytes), 0) AS total_bytes
+        "SELECT classification, COUNT(*) AS file_count, COALESCE(SUM(size_bytes), 0) AS bytes
          FROM files WHERE deleted_at IS NULL
          GROUP BY classification
-         ORDER BY total_bytes DESC",
+         ORDER BY bytes DESC",
     )
     .fetch_all(pool.get_ref())
     .await
@@ -1022,7 +1096,7 @@ pub async fn storage_analytics(
     let storage_trend: Vec<StorageTrendEntry> = sqlx::query_as(
         "SELECT
             d.date::TEXT AS date,
-            COALESCE(SUM(f.size_bytes), 0) AS total_bytes,
+            COALESCE(SUM(f.size_bytes), 0) AS bytes,
             COUNT(f.id) AS file_count
          FROM generate_series(
             CURRENT_DATE - INTERVAL '29 days',
@@ -1039,8 +1113,8 @@ pub async fn storage_analytics(
 
     let over_quota_users: Vec<OverQuotaUser> = sqlx::query_as(
         "SELECT
-            u.id,
-            u.full_name AS name,
+            u.id AS user_id,
+            u.full_name AS full_name,
             u.email,
             COALESCE(SUM(f.size_bytes), 0) AS used_bytes,
             u.storage_quota_bytes AS quota_bytes
@@ -1057,27 +1131,21 @@ pub async fn storage_analytics(
 
     Ok(HttpResponse::Ok().json(StorageAnalyticsResponse {
         by_classification,
-        largest_files,
-        storage_trend,
+        top_files: largest_files,
+        trend: storage_trend,
         over_quota_users,
     }))
 }
 
 // ===== Tier 2: User Detail =====
 
-#[derive(serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-struct UserDetailGovernanceCounts {
-    total: i64,
-    pending: i64,
-}
-
 #[derive(serde::Serialize, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
 struct RecentActivityEntry {
+    id: Uuid,
     action: String,
-    target: Option<String>,
-    timestamp: chrono::DateTime<chrono::Utc>,
+    target_resource: Option<String>,
+    created_at: chrono::DateTime<chrono::Utc>,
 }
 
 #[derive(serde::Serialize)]
@@ -1090,13 +1158,14 @@ struct UserDetailResponse {
     active: bool,
     storage_quota_bytes: Option<i64>,
     created_at: chrono::DateTime<chrono::Utc>,
-    storage_used: i64,
+    storage_used_bytes: i64,
     file_count: i64,
     folder_count: i64,
     shared_with_count: i64,
-    last_login: Option<chrono::DateTime<chrono::Utc>>,
+    last_login_at: Option<chrono::DateTime<chrono::Utc>>,
     recent_activity: Vec<RecentActivityEntry>,
-    governance_requests: UserDetailGovernanceCounts,
+    governance_total: i64,
+    governance_pending: i64,
 }
 
 pub async fn user_detail(
@@ -1160,7 +1229,7 @@ pub async fn user_detail(
     .flatten();
 
     let recent_activity: Vec<RecentActivityEntry> = sqlx::query_as(
-        "SELECT action, target_resource AS target, created_at AS timestamp
+        "SELECT id, action, target_resource, created_at
          FROM audit_logs
          WHERE user_id = $1
          ORDER BY created_at DESC
@@ -1194,16 +1263,14 @@ pub async fn user_detail(
         active: user.active,
         storage_quota_bytes: user.storage_quota_bytes,
         created_at: user.created_at,
-        storage_used,
+        storage_used_bytes: storage_used,
         file_count,
         folder_count,
         shared_with_count,
-        last_login,
+        last_login_at: last_login,
         recent_activity,
-        governance_requests: UserDetailGovernanceCounts {
-            total: governance_total,
-            pending: governance_pending,
-        },
+        governance_total,
+        governance_pending,
     }))
 }
 
@@ -1241,7 +1308,13 @@ pub async fn bulk_create_users(
             errors.push(format!("{}: invalid role", u.email));
             continue;
         }
-        let hash = password::hash_password(&u.password)?;
+        let hash = match password::hash_password(&u.password) {
+            Ok(h) => h,
+            Err(e) => {
+                errors.push(format!("{}: password hash error: {}", u.email, e));
+                continue;
+            }
+        };
         let result = sqlx::query(
             "INSERT INTO users (email, password_hash, full_name, role) VALUES ($1, $2, $3, $4)",
         )
@@ -1278,14 +1351,29 @@ pub async fn bulk_role_update(
         return Err(AppError::BadRequest("user_ids required".into()));
     }
     let mut updated = 0u32;
+    let mut tx = pool.begin().await.map_err(AppError::Database)?;
     for uid in &body.user_ids {
         let r = sqlx::query("UPDATE users SET role = $1 WHERE id = $2")
             .bind(&body.new_role)
             .bind(uid)
-            .execute(pool.get_ref())
+            .execute(&mut *tx)
             .await
             .map_err(AppError::Database)?;
         updated += r.rows_affected() as u32;
     }
+    tx.commit().await.map_err(AppError::Database)?;
     Ok(HttpResponse::Ok().json(serde_json::json!({ "updated": updated })))
+}
+
+pub async fn admin_audit_logs(
+    pool: web::Data<PgPool>,
+    _admin: AdminUser,
+    query: web::Query<crate::handlers::audit::AuditLogQuery>,
+) -> Result<HttpResponse, AppError> {
+    // Create an AuthUser with officer role to see all audit logs
+    let admin_auth = crate::app_middleware::auth::AuthUser {
+        id: Uuid::nil(),
+        role: "officer".to_string(),
+    };
+    crate::handlers::audit::list_audit_logs(pool, admin_auth, query).await
 }

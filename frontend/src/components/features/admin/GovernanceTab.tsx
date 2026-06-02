@@ -83,16 +83,11 @@ export default function GovernanceTab({ govRequests, setGovRequests, govLoading,
         adminApi.getAdminGovernance(),
         adminApi.listUsers(),
       ]);
-      setGovRequests(g);
+      setGovRequests(g.requests);
       setUsers(u);
-
-      // Apply client-side pagination/filtering
-      const filtered = filterRequests(g, statusFilter, typeFilter);
-      const totalItems = filtered.length;
-      const totalPgs = Math.max(1, Math.ceil(totalItems / perPage));
-      setTotal(totalItems);
-      setTotalPages(totalPgs);
-      if (pg > totalPgs) setPage(totalPgs);
+      setTotal(g.total);
+      setTotalPages(g.totalPages);
+      if (pg > g.totalPages) setPage(g.totalPages);
     } catch {}
     finally { setGovLoading(false); }
   }, [statusFilter, typeFilter, perPage]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -129,7 +124,7 @@ export default function GovernanceTab({ govRequests, setGovRequests, govLoading,
     try {
       await governanceApi.undo(reqId);
       const g = await adminApi.getAdminGovernance();
-      setGovRequests(g);
+      setGovRequests(g.requests);
     } catch { alert("Undo failed"); }
   };
 

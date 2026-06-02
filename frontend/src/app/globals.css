@@ -283,18 +283,20 @@ body {
   }
 }
 
-.ambient-glow-1 {
-  animation: ambient-pulse 12s infinite ease-in-out;
-}
+@media (min-width: 768px) {
+  .ambient-glow-1 {
+    animation: ambient-pulse 12s infinite ease-in-out;
+  }
 
-.ambient-glow-2 {
-  animation: ambient-pulse 18s infinite ease-in-out;
-  animation-delay: -4s;
-}
+  .ambient-glow-2 {
+    animation: ambient-pulse 18s infinite ease-in-out;
+    animation-delay: -4s;
+  }
 
-.ambient-glow-3 {
-  animation: ambient-pulse 15s infinite ease-in-out;
-  animation-delay: -8s;
+  .ambient-glow-3 {
+    animation: ambient-pulse 15s infinite ease-in-out;
+    animation-delay: -8s;
+  }
 }
 
 /* SVG Line Draw Animation */

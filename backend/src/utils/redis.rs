@@ -32,7 +32,7 @@ impl RedisClient {
         &self,
         f: impl FnOnce(&mut redis::Connection) -> redis::RedisResult<T>,
     ) -> redis::RedisResult<T> {
-        let mut conn = self.conn.lock().unwrap();
+        let mut conn = self.conn.lock().unwrap_or_else(|e| e.into_inner());
         f(&mut conn)
     }
 
