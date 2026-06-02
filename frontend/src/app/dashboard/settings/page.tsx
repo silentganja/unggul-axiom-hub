@@ -28,7 +28,7 @@ type SettingsTab = "profile" | "security" | "notifications" | "sessions";
 
 export default function ProfileSettingsPage() {
   const router = useRouter();
-  const { user, hydrate } = useAuthStore();
+  const { user, hydrate, isAuthenticated, isLoading: authLoading } = useAuthStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fullNameId = useId();
@@ -74,7 +74,8 @@ export default function ProfileSettingsPage() {
   // ── Hydrate auth on mount ──────────────────────────────────────────────────
   useEffect(() => {
     hydrate();
-  }, [hydrate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Sync local state and fetch data on user change ──────────────────────────
   useEffect(() => {
@@ -126,10 +127,25 @@ export default function ProfileSettingsPage() {
     return () => { cancelled = true; };
   }, [user]);
 
-  if (!user) {
+  if (authLoading) {
     return (
       <div className="flex items-center justify-center py-20">
         <Loader2 size={20} className="animate-spin text-accent" />
+      </div>
+    );
+  }
+
+  if (!user || !isAuthenticated) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 gap-4">
+        <AlertCircle size={32} className="text-destructive/60" />
+        <p className="text-sm text-foreground-muted font-mono">Session expired or not authenticated.</p>
+        <button
+          onClick={() => router.push("/login")}
+          className="btn-shimmer h-8 px-4 rounded-sm font-mono text-[11px] font-bold uppercase tracking-wider"
+        >
+          Return to Login
+        </button>
       </div>
     );
   }
