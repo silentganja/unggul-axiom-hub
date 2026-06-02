@@ -25,29 +25,38 @@ export default function InfoDatabasePage() {
           <span className="block font-bold text-foreground text-sm sm:text-base font-sans border-b border-border/20 pb-1.5">1. Users &amp; Files Tables DDL</span>
           <pre className="p-4 rounded border border-border/20 bg-background/80 leading-relaxed overflow-x-auto whitespace-pre select-all shadow-inner text-[10px] sm:text-xs">
 {`CREATE TABLE users (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    email VARCHAR(255) UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
-    full_name VARCHAR(100) NOT NULL,
-    role VARCHAR(20) NOT NULL CHECK (role IN ('staff', 'officer', 'director', 'chief')),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    id                  UUID         PRIMARY KEY DEFAULT uuid_generate_v4(),
+    email               VARCHAR(320) NOT NULL UNIQUE,
+    password_hash       VARCHAR(512) NOT NULL,
+    full_name           VARCHAR(255) NOT NULL,
+    role                VARCHAR(16)  NOT NULL DEFAULT 'staff'
+                                     CHECK (role IN ('chief', 'director', 'officer', 'staff')),
+    active              BOOLEAN      NOT NULL DEFAULT TRUE,
+    storage_quota_bytes BIGINT,
+    avatar_data         TEXT,
+    department          VARCHAR(255),
+    supervisor_id       UUID         REFERENCES users(id),
+    notification_prefs  JSONB        DEFAULT '{}',
+    created_at          TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE files (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name VARCHAR(255) NOT NULL,
-    type VARCHAR(10) NOT NULL CHECK (type IN ('file', 'folder')),
-    parent_id UUID REFERENCES files(id) ON DELETE CASCADE,
-    owner_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    classification VARCHAR(20) NOT NULL CHECK (classification IN ('TERBUKA', 'TERHAD', 'SULIT', 'RAHSIA')),
-    locked_by UUID REFERENCES users(id) ON DELETE SET NULL,
-    locked_at TIMESTAMP WITH TIME ZONE,
-    lock_reason VARCHAR(255),
-    size_bytes BIGINT DEFAULT 0,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    deleted_at TIMESTAMP WITH TIME ZONE
+    id             UUID         PRIMARY KEY DEFAULT uuid_generate_v4(),
+    parent_id      UUID         REFERENCES files (id) ON DELETE CASCADE,
+    owner_id       UUID         NOT NULL REFERENCES users (id) ON DELETE RESTRICT,
+    name           VARCHAR(512) NOT NULL,
+    is_folder      BOOLEAN      NOT NULL DEFAULT FALSE,
+    size_bytes     BIGINT       NOT NULL DEFAULT 0,
+    mime_type      VARCHAR(255),
+    classification VARCHAR(16)  NOT NULL DEFAULT 'TERBUKA'
+                                CHECK (classification IN ('RAHSIA', 'SULIT', 'TERHAD', 'TERBUKA')),
+    created_at     TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    updated_at     TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    deleted_at     TIMESTAMPTZ,
+    locked_by      UUID,
+    locked_at      TIMESTAMPTZ,
+    lock_reason    TEXT,
+    search_vector  tsvector
 );`}
           </pre>
         </div>
@@ -56,32 +65,34 @@ CREATE TABLE files (
         <div className="border border-border/30 rounded-lg bg-background-panel/40 p-5 space-y-3 shadow-sm hover:border-border/60 transition-all duration-300">
           <span className="block font-bold text-foreground text-sm sm:text-base font-sans border-b border-border/20 pb-1.5">2. Shares &amp; Governance Queue DDL</span>
           <pre className="p-4 rounded border border-border/20 bg-background/80 leading-relaxed overflow-x-auto whitespace-pre select-all shadow-inner text-[10px] sm:text-xs">
-{`CREATE TABLE shares (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    file_id UUID NOT NULL REFERENCES files(id) ON DELETE CASCADE,
-    shared_with UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    role VARCHAR(20) NOT NULL CHECK (role IN ('viewer', 'editor', 'owner')),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    UNIQUE(file_id, shared_with)
+{`CREATE TABLE file_shares (
+    id          UUID         PRIMARY KEY DEFAULT uuid_generate_v4(),
+    file_id     UUID         NOT NULL REFERENCES files (id) ON DELETE CASCADE,
+    user_id     UUID         NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    role        VARCHAR(16)  NOT NULL DEFAULT 'viewer'
+                             CHECK (role IN ('owner', 'editor', 'viewer')),
+    shared_by   UUID         NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    UNIQUE (file_id, user_id)
 );
 
 CREATE TABLE governance_requests (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    type VARCHAR(30) NOT NULL CHECK (type IN (
-        'FILE_LOCK', 'FILE_UNLOCK', 
-        'CLASSIFICATION_UPGRADE', 'CLASSIFICATION_DOWNGRADE', 
-        'FILE_MOVE', 'FILE_DELETE'
-    )),
-    title VARCHAR(255) NOT NULL,
-    description TEXT,
-    status VARCHAR(20) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED')),
-    requested_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    reviewed_by UUID REFERENCES users(id) ON DELETE SET NULL,
-    target_file_id UUID REFERENCES files(id) ON DELETE CASCADE,
-    metadata JSONB,
-    review_note TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    id              UUID         PRIMARY KEY DEFAULT uuid_generate_v4(),
+    type            VARCHAR(32)  NOT NULL CHECK (type IN (
+                                     'FILE_LOCK', 'FILE_UNLOCK',
+                                     'CLASSIFICATION_UPGRADE', 'CLASSIFICATION_DOWNGRADE'
+                                 )),
+    title           VARCHAR(255) NOT NULL,
+    description     TEXT,
+    status          VARCHAR(16)  NOT NULL DEFAULT 'PENDING'
+                                 CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED')),
+    requested_by    UUID         NOT NULL REFERENCES users (id),
+    reviewed_by     UUID         REFERENCES users (id),
+    target_file_id  UUID         REFERENCES files (id) ON DELETE SET NULL,
+    metadata        JSONB,
+    review_note     TEXT,
+    created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );`}
           </pre>
         </div>
@@ -91,17 +102,17 @@ CREATE TABLE governance_requests (
           <span className="block font-bold text-foreground text-sm sm:text-base font-sans border-b border-border/20 pb-1.5">3. Compliance Audit Ledger DDL</span>
           <pre className="p-4 rounded border border-border/20 bg-background/80 leading-relaxed overflow-x-auto whitespace-pre select-all shadow-inner text-[10px] sm:text-xs">
 {`CREATE TABLE audit_logs (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    actor_id UUID REFERENCES users(id) ON DELETE SET NULL,
-    action VARCHAR(50) NOT NULL,
-    target_id VARCHAR(255),
-    ip_address VARCHAR(45) NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    id              UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id         UUID        REFERENCES users (id) ON DELETE SET NULL,
+    action          VARCHAR(64) NOT NULL,
+    target_resource VARCHAR(512),
+    ip_address      VARCHAR(45),
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 /* Optimize audit search retrieval by indexing frequently filtered fields */
-CREATE INDEX idx_audit_logs_actor ON audit_logs(actor_id);
-CREATE INDEX idx_audit_logs_action ON audit_logs(action);`}
+CREATE INDEX idx_audit_logs_user ON audit_logs(user_id);
+CREATE INDEX idx_audit_logs_created ON audit_logs(created_at DESC);`}
           </pre>
         </div>
       </div>

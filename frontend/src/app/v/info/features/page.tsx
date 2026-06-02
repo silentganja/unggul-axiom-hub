@@ -36,22 +36,22 @@ export default function InfoFeaturesPage() {
           <span className="block font-bold text-foreground">Authentication Challenge Handshake:</span>
           <pre className="p-4 rounded border border-border/20 bg-background/80 leading-relaxed overflow-x-auto whitespace-pre select-all shadow-inner text-[10px] sm:text-xs">
 {`// 1. Client requests a WebAuthn login challenge
-POST /api/webauthn/login/start
+GET /api/auth/webauthn/login/begin
 Response: 200 OK
 {
-  "publicKey": {
-    "challenge": "8F_3x7A9...",
-    "timeout": 60000,
-    "rpId": "hub.unggulaxiom.com",
-    "allowCredentials": [{ "type": "public-key", "id": "cre-901..." }],
-    "userVerification": "required"
-  }
+  "challenge": "F8x7A29M_8b1...",
+  "rpId": "localhost",
+  "sessionId": "session_id_hex"
 }
 
 // 2. Client triggers navigator.credentials.get() and sends assertion back
-POST /api/webauthn/login/finish
-Request payload: { "id": "cre-901", "rawId": "...", "response": { "authenticatorData": "...", "clientDataJSON": "...", "signature": "..." } }
-Response: 200 OK (returns Session JWT token)`}
+POST /api/auth/webauthn/login/complete
+Request payload: { "id": "credential_id_here", "sessionId": "session_id_hex", "response": { "clientDataJSON": "..." } }
+Response: 200 OK
+{
+  "token": "JWT_TOKEN",
+  "refreshToken": "REFRESH_TOKEN"
+}`}
           </pre>
         </div>
       </div>

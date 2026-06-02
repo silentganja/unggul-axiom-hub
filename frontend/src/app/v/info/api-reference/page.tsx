@@ -23,16 +23,11 @@ export default function InfoApiReferencePage() {
       path: "/api/auth/webauthn/login/begin",
       auth: "Public",
       description: "Generates a cryptographically secure 32 byte challenge stored in Redis for passkey authentication.",
-      params: [
-        { name: "email", type: "Query Parameter", req: true, desc: "The email address of the user seeking biometric sign in." }
-      ],
+      params: [],
       responseBody: `{
-  "publicKey": {
-    "challenge": "F8x7A29M_8b1...",
-    "rpId": "hub.unggulaxiom.com",
-    "timeout": 60000,
-    "userVerification": "required"
-  }
+  "challenge": "F8x7A29M_8b1...",
+  "rpId": "localhost",
+  "sessionId": "session_id_hex"
 }`
     },
     {
@@ -42,19 +37,15 @@ export default function InfoApiReferencePage() {
       description: "Verifies the WebAuthn cryptographic signature assertion and issues a secure JWT cookie.",
       params: [],
       requestBody: `{
-  "email": "staff@unggul.axiom",
-  "credentialId": "id-9812-uuid",
-  "clientDataJSON": "eyJjaGFsbGVuZ2UiOiJGOHg3QTI5...",
-  "authenticatorData": "SZYN5...",
-  "signature": "MEUCIQ..."
+  "id": "credential_id_here",
+  "sessionId": "session_id_hex",
+  "response": {
+    "clientDataJSON": "eyJjaGFsbGVuZ2UiOiJGOHg3QTI5..."
+  }
 }`,
       responseBody: `{
   "token": "eyJhbGciOiJIUzI1Ni...",
-  "user": {
-    "id": "usr-2f9c-7721",
-    "email": "staff@unggul.axiom",
-    "role": "STAFF"
-  }
+  "refreshToken": "eyJhbGciOiJIUzI1Ni..."
 }`
     },
     {
