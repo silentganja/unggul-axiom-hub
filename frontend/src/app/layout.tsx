@@ -26,7 +26,7 @@ const playfairDisplay = Playfair_Display({
 });
 
 export const metadata: Metadata = {
-  title: "Unggul Axiom Hub — Secure Enterprise Portal",
+  title: "Unggul Axiom - Hub",
   description:
     "Sovereign enterprise-grade cloud storage and collaboration platform. Restricted access.",
   keywords: ["enterprise", "secure", "cloud", "storage", "collaboration"],
