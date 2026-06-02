@@ -387,7 +387,7 @@ pub async fn update_classification(
     if let Some((locker, locker_role)) = lock_info {
         match locker_role {
             Some(role) => {
-                if locker != user.id && user::role_level(&user.role) < user::role_level(&role) {
+                if locker != Some(user.id) && user::role_level(&user.role) < user::role_level(&role) {
                     return Err(AppError::Conflict(
                         "This file is locked by a higher authority and cannot change classification".into(),
                     ));
@@ -469,7 +469,7 @@ pub async fn rename_file(
     if let Some((locker, locker_role)) = lock_info {
         match locker_role {
             Some(role) => {
-                if locker != user.id && user::role_level(&user.role) < user::role_level(&role) {
+                if locker != Some(user.id) && user::role_level(&user.role) < user::role_level(&role) {
                     return Err(AppError::Conflict(
                         "This file is locked by a higher authority and cannot be renamed".into(),
                     ));
@@ -821,7 +821,7 @@ pub async fn move_files(
         if let Some((locker, locker_role)) = lock_info {
             match locker_role {
                 Some(role) => {
-                    if locker != user.id && user::role_level(&user.role) < user::role_level(&role) {
+                    if locker != Some(user.id) && user::role_level(&user.role) < user::role_level(&role) {
                         return Err(AppError::Conflict(
                             "This file is locked by a higher authority and cannot be moved".into(),
                         ));
