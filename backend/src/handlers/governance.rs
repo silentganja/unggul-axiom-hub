@@ -317,8 +317,7 @@ pub async fn approve_request(
         .await
         .map_err(AppError::Database)?;
 
-    let (req_type, target_file_id, metadata, req_title) =
-        request_info.ok_or(AppError::NotFound)?;
+    let (req_type, target_file_id, metadata, req_title) = request_info.ok_or(AppError::NotFound)?;
 
     // Classification changes require director+ authority
     if matches!(
@@ -343,14 +342,12 @@ pub async fn approve_request(
                     .await
                     .map_err(AppError::Database)?;
                 // Emit FileLocked notification
-                let file_name: String = sqlx::query_scalar(
-                    "SELECT name FROM files WHERE id = $1",
-                )
-                .bind(file_id)
-                .fetch_optional(pool.get_ref())
-                .await
-                .map_err(AppError::Database)?
-                .unwrap_or_default();
+                let file_name: String = sqlx::query_scalar("SELECT name FROM files WHERE id = $1")
+                    .bind(file_id)
+                    .fetch_optional(pool.get_ref())
+                    .await
+                    .map_err(AppError::Database)?
+                    .unwrap_or_default();
                 let locked_by_id: String = sqlx::query_scalar(
                     "SELECT requested_by::text FROM governance_requests WHERE id = $1",
                 )
@@ -376,14 +373,12 @@ pub async fn approve_request(
                     .await
                     .map_err(AppError::Database)?;
                 // Emit FileUnlocked notification
-                let file_name: String = sqlx::query_scalar(
-                    "SELECT name FROM files WHERE id = $1",
-                )
-                .bind(file_id)
-                .fetch_optional(pool.get_ref())
-                .await
-                .map_err(AppError::Database)?
-                .unwrap_or_default();
+                let file_name: String = sqlx::query_scalar("SELECT name FROM files WHERE id = $1")
+                    .bind(file_id)
+                    .fetch_optional(pool.get_ref())
+                    .await
+                    .map_err(AppError::Database)?
+                    .unwrap_or_default();
                 crate::handlers::notifications::emit_notification(
                     crate::models::notification::NotificationEvent::FileUnlocked {
                         file_id: file_id.to_string(),
@@ -457,14 +452,13 @@ pub async fn approve_request(
                     {
                         if let Ok(folder_uuid) = uuid::Uuid::parse_str(target_folder_id) {
                             // Store original parent_id in metadata for undo support
-                            let original_parent_id: Option<Uuid> = sqlx::query_scalar(
-                                "SELECT parent_id FROM files WHERE id = $1",
-                            )
-                            .bind(file_id)
-                            .fetch_optional(pool.get_ref())
-                            .await
-                            .map_err(AppError::Database)?
-                            .flatten();
+                            let original_parent_id: Option<Uuid> =
+                                sqlx::query_scalar("SELECT parent_id FROM files WHERE id = $1")
+                                    .bind(file_id)
+                                    .fetch_optional(pool.get_ref())
+                                    .await
+                                    .map_err(AppError::Database)?
+                                    .flatten();
 
                             let mut updated_meta = meta.clone();
                             if let Some(orig_pid) = original_parent_id {
@@ -1188,7 +1182,9 @@ pub async fn undo_request(
                     "FILE_MOVE" => {
                         // Read original_parent_id from the APPROVED request's metadata
                         if let Some(ref meta) = existing.metadata {
-                            if let Some(orig_pid_str) = meta.get("original_parent_id").and_then(|v| v.as_str()) {
+                            if let Some(orig_pid_str) =
+                                meta.get("original_parent_id").and_then(|v| v.as_str())
+                            {
                                 if let Ok(orig_pid) = uuid::Uuid::parse_str(orig_pid_str) {
                                     sqlx::query("UPDATE files SET parent_id = $1 WHERE id = $2")
                                         .bind(orig_pid)

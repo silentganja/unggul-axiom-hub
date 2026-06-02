@@ -284,10 +284,7 @@ async fn main() -> std::io::Result<()> {
                         web::get().to(handlers::admin::user_detail),
                     )
                     // Audit logs
-                    .route(
-                        "/audit",
-                        web::get().to(handlers::admin::admin_audit_logs),
-                    ),
+                    .route("/audit", web::get().to(handlers::admin::admin_audit_logs)),
             )
             // /api/auth
             .service(

@@ -393,9 +393,7 @@ pub async fn webauthn_register_complete(
     let credential_id = body["id"]
         .as_str()
         .ok_or(AppError::BadRequest("Missing credential id".into()))?;
-    let public_key = body["response"]["publicKey"]
-        .as_str()
-        .unwrap_or("");
+    let public_key = body["response"]["publicKey"].as_str().unwrap_or("");
     let pubkey_str = if public_key.is_empty() {
         body.to_string()
     } else {
@@ -446,8 +444,7 @@ pub async fn webauthn_login_complete(
         .as_str()
         .ok_or(AppError::BadRequest("Missing credential id".into()))?;
 
-    let session_id = body["sessionId"]
-        .as_str();
+    let session_id = body["sessionId"].as_str();
 
     if let Some(sid) = session_id {
         let key = format!("webauthn:login:{}", sid);

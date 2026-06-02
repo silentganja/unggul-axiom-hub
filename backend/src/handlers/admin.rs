@@ -609,10 +609,8 @@ pub async fn force_delete_file(
 ) -> Result<HttpResponse, AppError> {
     let file_id = path.into_inner();
     // Read the file record first to verify it exists
-    let file_exists: bool = sqlx::query_scalar(
-        "SELECT EXISTS(SELECT 1 FROM files WHERE id = $1)",
-    )
-    .bind(file_id)
+    let file_exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM files WHERE id = $1)")
+        .bind(file_id)
     .fetch_one(pool.get_ref())
     .await
     .map_err(AppError::Database)?;
@@ -779,7 +777,8 @@ pub async fn admin_governance_list(
         type_clause = type_clause,
     );
 
-    let mut requests_query = sqlx::query_as::<_, crate::models::governance::GovernanceRequestResponse>(&sql);
+    let mut requests_query =
+        sqlx::query_as::<_, crate::models::governance::GovernanceRequestResponse>(&sql);
     let mut count_query = sqlx::query_scalar::<_, i64>(&count_sql);
 
     if let Some(ref status) = query.status {

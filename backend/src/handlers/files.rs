@@ -132,7 +132,10 @@ pub async fn list_files(
     let (search_clause, search_param): (String, fn(&str) -> String) = if !search.is_empty() {
         if has_tsvector {
             (
-                format!("AND f.search_vector @@ plainto_tsquery('english', ${})", search_param_idx),
+                format!(
+                    "AND f.search_vector @@ plainto_tsquery('english', ${})",
+                    search_param_idx
+                ),
                 |s: &str| s.to_string(),
             )
         } else {
@@ -385,7 +388,9 @@ pub async fn update_classification(
         if let Some(locker_id) = locker {
             match locker_role {
                 Some(role) => {
-                    if locker_id != user.id && user::role_level(&user.role) < user::role_level(&role) {
+                    if locker_id != user.id
+                        && user::role_level(&user.role) < user::role_level(&role)
+                    {
                         return Err(AppError::Conflict(
                             "This file is locked by a higher authority and cannot change classification".into(),
                         ));
@@ -469,9 +474,12 @@ pub async fn rename_file(
         if let Some(locker_id) = locker {
             match locker_role {
                 Some(role) => {
-                    if locker_id != user.id && user::role_level(&user.role) < user::role_level(&role) {
+                    if locker_id != user.id
+                        && user::role_level(&user.role) < user::role_level(&role)
+                    {
                         return Err(AppError::Conflict(
-                            "This file is locked by a higher authority and cannot be renamed".into(),
+                            "This file is locked by a higher authority and cannot be renamed"
+                                .into(),
                         ));
                     }
                 }
@@ -823,9 +831,12 @@ pub async fn move_files(
             if let Some(locker_id) = locker {
                 match locker_role {
                     Some(role) => {
-                        if locker_id != user.id && user::role_level(&user.role) < user::role_level(&role) {
+                        if locker_id != user.id
+                            && user::role_level(&user.role) < user::role_level(&role)
+                        {
                             return Err(AppError::Conflict(
-                                "This file is locked by a higher authority and cannot be moved".into(),
+                                "This file is locked by a higher authority and cannot be moved"
+                                    .into(),
                             ));
                         }
                     }
@@ -1274,7 +1285,9 @@ pub async fn upload_file(
             .map_err(AppError::Database)?
             .flatten();
 
-    let quota_bytes = user_quota.filter(|&q| q > 0).unwrap_or(100 * 1024 * 1024 * 1024); // 100 GB default
+    let quota_bytes = user_quota
+        .filter(|&q| q > 0)
+        .unwrap_or(100 * 1024 * 1024 * 1024); // 100 GB default
 
     if used_bytes + size_bytes > quota_bytes {
         let _ = tokio::fs::remove_file(&temp_filepath).await;

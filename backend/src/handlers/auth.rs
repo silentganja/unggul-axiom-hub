@@ -92,7 +92,10 @@ pub async fn login(
     .await;
 
     // Track the session
-    let token_prefix = refresh_token.get(..16).unwrap_or(&refresh_token).to_string();
+    let token_prefix = refresh_token
+        .get(..16)
+        .unwrap_or(&refresh_token)
+        .to_string();
     let user_agent = req
         .headers()
         .get("User-Agent")

@@ -191,7 +191,8 @@ pub async fn list_audit_logs(
 
 /// Escape a value for CSV: prefix formula injections and wrap in quotes if needed.
 fn escape_csv(s: &str) -> String {
-    let escaped = if s.starts_with('=') || s.starts_with('+') || s.starts_with('-') || s.starts_with('@') {
+    let escaped =
+        if s.starts_with('=') || s.starts_with('+') || s.starts_with('-') || s.starts_with('@') {
         format!("'{}", s)
     } else {
         s.to_string()

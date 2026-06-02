@@ -100,7 +100,9 @@ pub async fn share_file(
         if let Some(locker_id) = locker {
             match locker_role {
                 Some(role) => {
-                    if locker_id != user.id && user::role_level(&user.role) < user::role_level(&role) {
+                    if locker_id != user.id
+                        && user::role_level(&user.role) < user::role_level(&role)
+                    {
                         return Err(AppError::Conflict(
                             "This file is locked by a higher authority and cannot be shared".into(),
                         ));
