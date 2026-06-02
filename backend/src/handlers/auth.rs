@@ -130,8 +130,8 @@ pub async fn login(
 
 pub async fn me(pool: web::Data<PgPool>, user: AuthUser) -> Result<HttpResponse, AppError> {
     // Try the extended query (with optional profile columns from migrations 9018-9021).
-    // If those columns don't exist yet, fall back to the basic query.
-    let profile: Option<UserProfile> = sqlx::query_as::<_, UserProfile>(
+    // If those columns don't exist yet, or the user is not found, fall back to the basic query.
+    let extended = sqlx::query_as::<_, UserProfile>(
         "SELECT u.id, u.email, u.full_name, u.role, u.active, u.storage_quota_bytes, \
                 COALESCE(u.avatar_data, '') AS avatar_data, \
                 COALESCE(u.department, '') AS department, \
@@ -144,13 +144,12 @@ pub async fn me(pool: web::Data<PgPool>, user: AuthUser) -> Result<HttpResponse,
     .fetch_optional(pool.get_ref())
     .await;
 
-    // If the extended query fails (columns may not exist yet), fall back
-    let profile = match profile {
+    let profile: UserProfile = match extended {
         Ok(Some(p)) => p,
         Ok(None) => return Err(AppError::NotFound),
         Err(_) => {
-            // Extended columns don't exist - use basic query
-            let basic: Option<UserProfile> = sqlx::query_as::<_, UserProfile>(
+            // Extended columns may not exist - fall back to basic query
+            let basic = sqlx::query_as::<_, UserProfile>(
                 "SELECT u.id, u.email, u.full_name, u.role, u.active, \
                         u.storage_quota_bytes, u.created_at, \
                         ''::text AS avatar_data, ''::text AS department, \
@@ -239,7 +238,7 @@ pub async fn update_profile(
 
     // Try extended UPDATE (with department + extended RETURNING).
     // If columns don't exist yet, fall back to basic UPDATE.
-    let updated: User = sqlx::query_as::<_, User>(
+    let result = sqlx::query_as::<_, User>(
         "UPDATE users SET full_name = $1, password_hash = $2, department = $3 WHERE id = $4
          RETURNING id, email, password_hash, full_name, role, active, \
                   storage_quota_bytes, avatar_data, department, supervisor_id, notification_prefs, created_at",
@@ -249,20 +248,25 @@ pub async fn update_profile(
     .bind(&new_department)
     .bind(user.id)
     .fetch_one(pool.get_ref())
-    .await
-    .or_else(|_| {
-        // Fallback: basic columns only
-        sqlx::query_as::<_, User>(
-            "UPDATE users SET full_name = $1, password_hash = $2 WHERE id = $3
-             RETURNING id, email, password_hash, full_name, role, active, \
-                      storage_quota_bytes, created_at",
-        )
-        .bind(&new_full_name)
-        .bind(&new_password_hash)
-        .bind(user.id)
-        .fetch_one(pool.get_ref())
-    })
-    .map_err(AppError::Database)?;
+    .await;
+
+    let updated: User = match result {
+        Ok(u) => u,
+        Err(_) => {
+            // Fallback: basic columns only
+            sqlx::query_as::<_, User>(
+                "UPDATE users SET full_name = $1, password_hash = $2 WHERE id = $3
+                 RETURNING id, email, password_hash, full_name, role, active, \
+                          storage_quota_bytes, created_at",
+            )
+            .bind(&new_full_name)
+            .bind(&new_password_hash)
+            .bind(user.id)
+            .fetch_one(pool.get_ref())
+            .await
+            .map_err(AppError::Database)?
+        }
+    };
 
     if password_changed {
         let _ = crate::utils::redis::revoke_user_tokens_async(&redis_client, &user.id.to_string())
