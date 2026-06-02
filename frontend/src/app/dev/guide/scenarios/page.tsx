@@ -47,28 +47,28 @@ export default function ScenariosGuidePage() {
           desc: "Upload the document (e.g., 'Q3 Budget.pdf') to your workspace. Select 'SULIT' (Confidential) in the upload panel classification selector.",
           role: "Staff / Officer",
           badge: "Upload File",
-          mockLog: "POST /api/files/upload HTTP/1.1\nHost: API_GATEWAY\nContent-Type: multipart/form-data\n\n-> payload: { parentId: null, classification: 'SULIT' }\n<- Response: 201 Created { fileId: 'f-8972', name: 'Q3 Budget.pdf', classification: 'SULIT' }"
+          mockLog: "POST /api/files/upload HTTP/1.1\nHost: hub.unggulaxiom.com\nContent-Type: multipart/form-data\n\n-> payload: { parentId: null, classification: 'SULIT', file: <Q3 Budget.pdf> }\n<- Response: 201 Created { id: 'f-8972', name: 'Q3 Budget.pdf', classification: 'SULIT' }"
         },
         {
           title: "Submit Lock Request",
           desc: "Select the file, click 'Governance' in the Action Bar, and submit a 'FILE_LOCK' request stating: 'Prevent modifications during draft review'.",
           role: "Staff / Officer",
           badge: "Lock Request",
-          mockLog: "POST /api/governance/requests HTTP/1.1\n-> payload: { targetFileId: 'f-8972', type: 'FILE_LOCK', title: 'Lock Draft', metadata: { lockReason: 'Prevent modifications' } }\n<- Response: 201 Created { requestId: 'req-431', status: 'PENDING' }"
+          mockLog: "POST /api/governance/requests HTTP/1.1\n-> payload: { targetFileId: 'f-8972', type: 'FILE_LOCK', title: 'Lock Draft', metadata: { lockReason: 'Prevent modifications' } }\n<- Response: 201 Created { id: 'req-431', status: 'PENDING' }"
         },
         {
           title: "Request Classification Upgrade",
           desc: "Submit a second request for 'CLASSIFICATION_UPGRADE' targeting the same file to set its status to 'RAHSIA' (Secret) to restrict views to Board Members only.",
           role: "Staff / Officer",
           badge: "Upgrade Request",
-          mockLog: "POST /api/governance/requests HTTP/1.1\n-> payload: { targetFileId: 'f-8972', type: 'CLASSIFICATION_UPGRADE', title: 'Restrict to Board', metadata: { newClassification: 'RAHSIA' } }\n<- Response: 201 Created { requestId: 'req-432', status: 'PENDING' }"
+          mockLog: "POST /api/governance/requests HTTP/1.1\n-> payload: { targetFileId: 'f-8972', type: 'CLASSIFICATION_UPGRADE', title: 'Restrict to Board', metadata: { newClassification: 'RAHSIA' } }\n<- Response: 201 Created { id: 'req-432', status: 'PENDING' }"
         },
         {
           title: "Supervisor Approval",
           desc: "A Director or Chief accesses the Admin/Governance Console, reviews the audit log, and clicks 'Approve' on both pending items.",
           role: "Director / Chief",
           badge: "Approval Gate",
-          mockLog: "POST /api/admin/governance/req-431/force-approve HTTP/1.1\nAuthorization: Bearer ADMIN_JWT\n<- Response: 200 OK { requestId: 'req-431', status: 'APPROVED' }\n\nPOST /api/admin/governance/req-432/force-approve HTTP/1.1\nAuthorization: Bearer ADMIN_JWT\n<- Response: 200 OK { requestId: 'req-432', status: 'APPROVED' }"
+          mockLog: "POST /api/governance/requests/req-431/approve HTTP/1.1\nAuthorization: Bearer USER_JWT\n-> payload: { reason: 'Lock approved for audit compliance' }\n<- Response: 200 OK { status: 'approved' }\n\nPOST /api/governance/requests/req-432/approve HTTP/1.1\nAuthorization: Bearer USER_JWT\n-> payload: { reason: 'Upgrade to RAHSIA approved for board review' }\n<- Response: 200 OK { status: 'approved' }"
         }
       ],
       outcome: "The file is locked (cannot be renamed, moved, or deleted) and upgraded to RAHSIA classification, securing it against unauthorized internal leakage."
@@ -84,28 +84,28 @@ export default function ScenariosGuidePage() {
           desc: "Create a folder named 'Marketing Campaigns 2026'. Right-click the folder, choose 'Share', enter team members' emails, and set roles to 'editor'.",
           role: "Folder Owner",
           badge: "Share Settings",
-          mockLog: "POST /api/files/folders HTTP/1.1\n-> payload: { name: 'Marketing Campaigns 2026' }\n<- Response: 201 Created { id: 'fold-391' }\n\nPOST /api/shares/fold-391 HTTP/1.1\n-> payload: { email: 'colleague@unggulaxiom.com', role: 'editor' }\n<- Response: 200 OK"
+          mockLog: "POST /api/files/folders HTTP/1.1\n-> payload: { name: 'Marketing Campaigns 2026', parentId: null, classification: 'TERBUKA' }\n<- Response: 201 Created { id: 'fold-391', name: 'Marketing Campaigns 2026' }\n\nPOST /api/files/fold-391/shares HTTP/1.1\n-> payload: { email: 'colleague@unggulaxiom.com', role: 'editor' }\n<- Response: 200 OK { status: 'shared' }"
         },
         {
           title: "Conflict Prevention",
           desc: "When working on a shared file, click 'Lock File' (Governance Lock) to inform other team members you are editing. This prevents overwrite conflicts.",
           role: "Collaborator (Editor)",
           badge: "Temporary Lock",
-          mockLog: "POST /api/governance/requests HTTP/1.1\n-> payload: { targetFileId: 'f-7128', type: 'FILE_LOCK', title: 'Lock for Editing' }\n<- Response: 201 Created { requestId: 'req-987', status: 'PENDING' }"
+          mockLog: "POST /api/governance/requests HTTP/1.1\n-> payload: { targetFileId: 'f-7128', type: 'FILE_LOCK', title: 'Lock for Editing' }\n<- Response: 201 Created { id: 'req-987', status: 'PENDING' }"
         },
         {
           title: "Upload Revision",
           desc: "Once edits are finalized locally, upload the revised file. The explorer maintains classification settings automatically.",
           role: "Collaborator (Editor)",
           badge: "Upload Revision",
-          mockLog: "POST /api/files/upload HTTP/1.1\nContent-Type: multipart/form-data\n-> payload: { fileId: 'f-7128', file: campaigns_draft_v2.docx }\n<- Response: 200 OK"
+          mockLog: "POST /api/files/upload HTTP/1.1\nContent-Type: multipart/form-data\n-> payload: { parentId: 'fold-391', classification: 'TERBUKA', file: campaigns_draft_v2.docx }\n<- Response: 200 OK"
         },
         {
           title: "Release Lock",
           desc: "Unlock the file to allow other editors to work on it, keeping the collaboration stream active and transparent.",
           role: "Collaborator (Editor)",
           badge: "Unlock",
-          mockLog: "POST /api/governance/requests HTTP/1.1\n-> payload: { targetFileId: 'f-7128', type: 'FILE_UNLOCK', title: 'Unlock Revision' }\n<- Response: 201 Created { requestId: 'req-988', status: 'PENDING' }"
+          mockLog: "POST /api/governance/requests HTTP/1.1\n-> payload: { targetFileId: 'f-7128', type: 'FILE_UNLOCK', title: 'Unlock Revision' }\n<- Response: 201 Created { id: 'req-988', status: 'PENDING' }"
         }
       ],
       outcome: "Team members collaborate in real-time, completely protected from version conflicts, with all edits securely tracked in the activity feed."
@@ -128,14 +128,14 @@ export default function ScenariosGuidePage() {
           desc: "Navigate to the 'Trash' tab in the left sidebar. Locate the file, select it, and click 'Restore'. The file is returned to its original parent folder.",
           role: "File Owner",
           badge: "Restore",
-          mockLog: "POST /api/files/f-1049/restore HTTP/1.1\n<- Response: 200 OK { fileId: 'f-1049', status: 'ACTIVE' }"
+          mockLog: "POST /api/files/f-1049/restore HTTP/1.1\n<- Response: 200 OK { status: 'restored' }"
         },
         {
           title: "Permanent Destruction",
           desc: "For permanent removal, go to the 'Trash' tab, select the file, and choose 'Permanently Delete'. This generates a permanent audit trail entry.",
           role: "Admin Only",
           badge: "Hard Delete",
-          mockLog: "DELETE /api/files/f-1049/permanent HTTP/1.1\nAuthorization: Bearer ADMIN_JWT\n<- Response: 200 OK { status: 'DELETED' }"
+          mockLog: "DELETE /api/files/f-1049/permanent HTTP/1.1\nAuthorization: Bearer USER_JWT\n<- Response: 200 OK { status: 'deleted' }"
         }
       ],
       outcome: "Information lifecycle is strictly controlled: accidental file loss is prevented through trash bins, while permanent deletions are securely audited."

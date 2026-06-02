@@ -61,7 +61,7 @@ export default function GuideIntroPage() {
         <div className="space-y-1 text-xs">
           <span className="font-bold text-foreground font-sans">Mandatory Regulatory Notice</span>
           <p className="text-foreground-muted leading-relaxed font-sans">
-            Under Unggul Axiom compliance guidelines, all actions taken inside the Strategic Portal—including file creation, download logs, and sharing configurations—are logged to immutable system database tables. Unauthorized access to files classified above your current clearance level (such as RAHSIA) is strictly prohibited.
+            Under Unggul Axiom compliance guidelines, all actions taken inside the Strategic Portal—including file creation, download logs, and sharing configurations—are logged to immutable system database tables. Unauthorized access to files classified above your current clearance level (such as SULIT, TERHAD or RAHSIA) is strictly prohibited.
           </p>
         </div>
       </div>
@@ -135,7 +135,7 @@ export default function GuideIntroPage() {
           <div className="flex gap-3">
             <span className="font-bold text-accent shrink-0">STEP 02</span>
             <p className="font-sans text-[11px] leading-relaxed">
-              <strong>Check folder permissions:</strong> Access the <Link href="/dev/guide/explorer" className="text-accent hover:underline">File Explorer</Link> and browse folders. Files marked with SULIT or RAHSIA require designated collaborator access or specific operational roles.
+              <strong>Check folder permissions:</strong> Access the <Link href="/dev/guide/explorer" className="text-accent hover:underline">File Explorer</Link> and browse folders. Files marked with SULIT, TERHAD or RAHSIA require designated collaborator access or specific operational roles.
             </p>
           </div>
           <div className="flex gap-3">

@@ -12,17 +12,18 @@ import {
 
 export default function SecurityRolesGuidePage() {
   const permissions = [
-    { action: "Browse Open Files", staff: true, officer: true, director: true, chief: true },
-    { action: "Upload/Edit Files", staff: true, officer: true, director: true, chief: true },
+    { action: "Browse Open/Terhad Files", staff: true, officer: true, director: true, chief: true },
+    { action: "Upload/Edit Files (Owned/Shared)", staff: true, officer: true, director: true, chief: true },
     { action: "Lock/Unlock Own Files", staff: true, officer: true, director: true, chief: true },
     { action: "Access Shared Folders", staff: true, officer: true, director: true, chief: true },
     { action: "Access SULIT Files", staff: "Shared Only", officer: "Shared Only", director: true, chief: true },
     { action: "Access RAHSIA Files", staff: false, officer: false, director: true, chief: true },
-    { action: "Submit Lock/Upgrade Request", staff: true, officer: true, director: true, chief: true },
-    { action: "Approve Governance Queue", staff: false, officer: false, director: true, chief: true },
-    { action: "System Config Override", staff: false, officer: false, director: false, chief: true },
-    { action: "User Creation & Deactivation", staff: false, officer: false, director: false, chief: true },
+    { action: "Submit Governance Request", staff: true, officer: true, director: true, chief: true },
+    { action: "Approve standard locks/moves/deletes", staff: false, officer: true, director: true, chief: true },
+    { action: "Approve classification changes", staff: false, officer: false, director: true, chief: true },
+    { action: "User Creation & Deactivation", staff: false, officer: false, director: true, chief: true },
     { action: "Force Delete Files Globally", staff: false, officer: false, director: false, chief: true },
+    { action: "System Config Override", staff: false, officer: false, director: false, chief: true },
   ];
 
   return (
@@ -48,11 +49,11 @@ export default function SecurityRolesGuidePage() {
             <div className="flex items-center justify-between">
               <span className="font-bold text-foreground font-serif text-xs">Staff Account</span>
               <span className="font-mono text-[8px] font-bold border border-border/40 bg-background-muted/20 text-foreground-subtle px-1.5 py-0.5 rounded uppercase">
-                Tier 1
+                Tier 1 (level 1)
               </span>
             </div>
             <p className="text-[11px] text-foreground-subtle leading-relaxed font-sans">
-              Basic operational accounts. Staff can upload documents, create folders, share resources with other team members, and request locks or security overrides. Cannot bypass governance policies.
+              Basic operational accounts. Staff can upload documents, create folders, share resources with other team members, and request locks or security overrides. Cannot bypass governance policies or approve requests.
             </p>
           </div>
 
@@ -60,11 +61,11 @@ export default function SecurityRolesGuidePage() {
             <div className="flex items-center justify-between">
               <span className="font-bold text-info font-serif text-xs">Officer Account</span>
               <span className="font-mono text-[8px] font-bold border border-info/30 bg-info/10 text-info px-1.5 py-0.5 rounded uppercase">
-                Tier 2
+                Tier 2 (level 2)
               </span>
             </div>
             <p className="text-[11px] text-foreground-subtle leading-relaxed font-sans">
-              Middle management accounts. Officers manage departmental document systems and pre-validate team request submissions.
+              Operational supervisors. Officers possess standard governance access (<code className="font-mono text-[10px]">can_govern</code>) allowing them to approve standard locks, unlocks, moves, and soft deletes. Cannot approve classification overrides.
             </p>
           </div>
         </div>
@@ -75,11 +76,11 @@ export default function SecurityRolesGuidePage() {
             <div className="flex items-center justify-between">
               <span className="font-bold text-accent/80 font-serif text-xs">Director Account</span>
               <span className="font-mono text-[8px] font-bold border border-accent/20 bg-accent/10 text-accent px-1.5 py-0.5 rounded uppercase">
-                Tier 3
+                Tier 3 (level 3)
               </span>
             </div>
             <p className="text-[11px] text-foreground-subtle leading-relaxed font-sans">
-              Executive business unit leaders. Directors can read files rated up to RAHSIA within their business unit. Authorized to review, approve, or reject pending governance requests.
+              Executive business unit leaders. Directors have access to files rated up to RAHSIA within their scope. They possess <code className="font-mono text-[10px]">can_govern_classified</code> and <code className="font-mono text-[10px]">can_manage_users</code>, allowing them to approve classification updates and edit standard user accounts.
             </p>
           </div>
 
@@ -87,11 +88,11 @@ export default function SecurityRolesGuidePage() {
             <div className="flex items-center justify-between">
               <span className="font-bold text-accent font-serif text-xs">Chief Account</span>
               <span className="font-mono text-[8px] font-bold border border-accent/30 bg-accent/15 text-accent px-1.5 py-0.5 rounded uppercase">
-                Tier 4
+                Tier 4 (level 4)
               </span>
             </div>
             <p className="text-[11px] text-foreground-subtle leading-relaxed font-sans">
-              Global system administrators. Chiefs possess full operational privileges, including user creation/deactivation, bulk file operations, and platform config overrides.
+              Global system administrators. Chiefs possess full operational privileges, including force-approving administrative governance requests, overriding global config variables, managing storage metrics, and deleting files globally.
             </p>
           </div>
         </div>

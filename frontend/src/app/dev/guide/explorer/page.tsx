@@ -63,38 +63,61 @@ export default function FileExplorerGuidePage() {
         <h3 className="font-mono text-[9px] font-bold text-accent uppercase tracking-widest">
           Classification Levels &amp; Safeguards
         </h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {/* Terbuka */}
-          <div className="border border-success/20 bg-success/2 rounded p-4 space-y-2">
-            <span className="font-mono text-[9px] font-bold text-success border border-success/35 px-2 py-0.5 rounded uppercase inline-block">
-              TERBUKA
-            </span>
-            <h4 className="text-xs font-bold text-foreground font-serif">Open/Unrestricted</h4>
-            <p className="text-[11px] text-foreground-subtle leading-relaxed font-sans">
-              General administrative templates, SOPs, press materials, and documentation guides. Open to all authenticated staff members. Download and share requests are executed immediately.
-            </p>
+          <div className="border border-success/20 bg-success/2 rounded p-4 space-y-2 flex flex-col justify-between">
+            <div className="space-y-2">
+              <span className="font-mono text-[9px] font-bold text-success border border-success/35 px-2 py-0.5 rounded uppercase inline-block">
+                TERBUKA
+              </span>
+              <h4 className="text-xs font-bold text-foreground font-serif">Open/Unrestricted</h4>
+              <p className="text-[11px] text-foreground-subtle leading-relaxed font-sans">
+                General operations documentation and guides. Open to all authenticated staff members. Download and share requests execute immediately.
+              </p>
+            </div>
+            <span className="text-[9px] font-mono text-foreground-subtle/50 mt-2 block">Index 3 (Lowest)</span>
+          </div>
+
+          {/* Terhad */}
+          <div className="border border-info/20 bg-info/2 rounded p-4 space-y-2 flex flex-col justify-between">
+            <div className="space-y-2">
+              <span className="font-mono text-[9px] font-bold text-info border border-info/35 px-2 py-0.5 rounded uppercase inline-block font-sans">
+                TERHAD
+              </span>
+              <h4 className="text-xs font-bold text-foreground font-serif">Restricted</h4>
+              <p className="text-[11px] text-foreground-subtle leading-relaxed font-sans">
+                Internal-only project docs, design system specs, and administrative reports. Closed to external networks; shared with authenticated staff departments.
+              </p>
+            </div>
+            <span className="text-[9px] font-mono text-foreground-subtle/50 mt-2 block">Index 2 (Medium-Low)</span>
           </div>
 
           {/* Sulit */}
-          <div className="border border-warning/20 bg-warning/2 rounded p-4 space-y-2">
-            <span className="font-mono text-[9px] font-bold text-warning border border-warning/35 px-2 py-0.5 rounded uppercase inline-block">
-              SULIT
-            </span>
-            <h4 className="text-xs font-bold text-foreground font-serif">Confidential / Sensitive</h4>
-            <p className="text-[11px] text-foreground-subtle leading-relaxed font-sans">
-              Department budgets, technical specification drafts, employee metrics, and internal audits. Visible only to folder owners and specifically shared collaborators.
-            </p>
+          <div className="border border-warning/20 bg-warning/2 rounded p-4 space-y-2 flex flex-col justify-between">
+            <div className="space-y-2">
+              <span className="font-mono text-[9px] font-bold text-warning border border-warning/35 px-2 py-0.5 rounded uppercase inline-block">
+                SULIT
+              </span>
+              <h4 className="text-xs font-bold text-foreground font-serif">Confidential</h4>
+              <p className="text-[11px] text-foreground-subtle leading-relaxed font-sans">
+                Department budgets, technical blueprints, and draft features. Visible only to file owners and designated shared collaborators.
+              </p>
+            </div>
+            <span className="text-[9px] font-mono text-foreground-subtle/50 mt-2 block">Index 1 (High-Medium)</span>
           </div>
 
           {/* Rahsia */}
-          <div className="border border-destructive/20 bg-destructive/2 rounded p-4 space-y-2">
-            <span className="font-mono text-[9px] font-bold text-destructive border border-destructive/35 px-2 py-0.5 rounded uppercase inline-block">
-              RAHSIA
-            </span>
-            <h4 className="text-xs font-bold text-foreground font-serif">Secret / Board Level</h4>
-            <p className="text-[11px] text-foreground-subtle leading-relaxed font-sans">
-              Board of directors documents, strategic merger planning, regulatory litigation assets, and critical databases. Restricted globally to Directors and Chief roles.
-            </p>
+          <div className="border border-destructive/20 bg-destructive/2 rounded p-4 space-y-2 flex flex-col justify-between">
+            <div className="space-y-2">
+              <span className="font-mono text-[9px] font-bold text-destructive border border-destructive/35 px-2 py-0.5 rounded uppercase inline-block">
+                RAHSIA
+              </span>
+              <h4 className="text-xs font-bold text-foreground font-serif">Secret</h4>
+              <p className="text-[11px] text-foreground-subtle leading-relaxed font-sans">
+                Board minutes, corporate litigation plans, and sensitive user records. Globally restricted; visible only to Directors and Chiefs.
+              </p>
+            </div>
+            <span className="text-[9px] font-mono text-foreground-subtle/50 mt-2 block">Index 0 (Highest)</span>
           </div>
         </div>
       </div>
