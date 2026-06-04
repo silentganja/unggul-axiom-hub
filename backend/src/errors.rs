@@ -93,13 +93,16 @@ impl actix_web::ResponseError for AppError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use actix_web::body::MessageBody;
     use actix_web::http::StatusCode;
     use actix_web::ResponseError;
-    use actix_web::body::MessageBody;
 
     #[test]
     fn unauthorized_returns_401() {
-        assert_eq!(AppError::Unauthorized.status_code(), StatusCode::UNAUTHORIZED);
+        assert_eq!(
+            AppError::Unauthorized.status_code(),
+            StatusCode::UNAUTHORIZED
+        );
     }
 
     #[test]
