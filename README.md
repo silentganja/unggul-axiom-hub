@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  <a href="https://hub.unggulaxiom.com/v/info"><img src="https://img.shields.io/badge/live_demo-online-success?style=flat" alt="Live Demo"></a>
+  <a href="https://hub.unggulaxiom.com"><img src="https://img.shields.io/badge/live-online-success?style=flat" alt="Live"></a>
   <img src="https://img.shields.io/badge/rust-1.85%2B-orange?logo=rust" alt="Rust">
   <img src="https://img.shields.io/badge/next.js-16-black?logo=next.js" alt="Next.js 16">
   <img src="https://img.shields.io/badge/react-19-087ea4?logo=react" alt="React 19">
@@ -24,7 +24,9 @@ A full-stack document collaboration platform for environments that handle classi
 
 I built this to demonstrate how I approach production systems: security from the start, deliberate tech choices, and the discipline to ship something that runs in the real world, not just locally.
 
-> **Live portal:** [hub.unggulaxiom.com/v/info](https://hub.unggulaxiom.com/v/info) - interactive ERD, system architecture, API reference, benchmarks, and telemetry.
+> **Project specs:** [hub.unggulaxiom.com/v/info](https://hub.unggulaxiom.com/v/info) - interactive ERD, system architecture, API reference, benchmarks, and telemetry.
+> 
+> **Live app:** [hub.unggulaxiom.com](https://hub.unggulaxiom.com)
 
 ---
 
@@ -182,7 +184,7 @@ I'm a software engineer who builds systems with real security and performance re
 
 I'm currently looking for backend, full-stack, or platform engineering roles. Particularly interested in teams working on infrastructure, security, data platforms, or developer tools.
 
-**Contact:** [LinkedIn](#) · [Email](#) · [Portfolio](#)
+**Contact:** [LinkedIn](https://www.linkedin.com/in/ahmad-mirza-0b606b278/) · [Email](mailto:ahmadmrza0404@gmail.com)
 
 ---
 
