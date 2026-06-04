@@ -131,8 +131,8 @@ The **[technical portal](https://hub.unggulaxiom.com/v/info/architecture)** has 
 ### Docker (one command)
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/unggul-hub.git
-cd unggul-hub
+git clone https://github.com/silentganja/unggul-axiom-hub.git
+cd unggul-axiom-hub
 cp backend/.env.example backend/.env
 docker compose up --build
 ```
