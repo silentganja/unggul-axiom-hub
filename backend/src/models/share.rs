@@ -5,6 +5,7 @@ use uuid::Uuid;
 // ── Database Row ─────────────────────────────────────────────────────────────
 
 #[derive(Debug, sqlx::FromRow)]
+// Full row struct — some fields populated only by admin queries.
 #[allow(dead_code)]
 pub struct FileShare {
     pub id: Uuid,

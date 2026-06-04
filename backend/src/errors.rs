@@ -95,6 +95,7 @@ mod tests {
     use super::*;
     use actix_web::http::StatusCode;
     use actix_web::test;
+    use actix_web::ResponseError;
 
     #[test]
     fn unauthorized_returns_401() {

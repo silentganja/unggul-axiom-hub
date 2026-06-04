@@ -55,20 +55,28 @@ describe("useAuthStore", () => {
 
   describe("login", () => {
     it("sets loading to true during login", async () => {
-      // Make login hang so we can observe loading state
+      // Deferred promise so we can observe loading state mid-flight then clean up.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- deferred mock; shape verified by other tests
+      let resolveLogin!: (value: any) => void;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const deferred = new Promise<any>((resolve) => { resolveLogin = resolve; });
+
       const { authApi } = await import("@/lib/api");
-      vi.mocked(authApi.login).mockImplementation(
-        () => new Promise(() => { /* never resolves */ })
-      );
+      vi.mocked(authApi.login).mockReturnValue(deferred);
 
       // Fire login but don't await - we want to check loading state mid-flight
-      void useAuthStore.getState().login("user@test.com", "password");
+      const loginPromise = useAuthStore.getState().login("user@test.com", "password");
 
       expect(useAuthStore.getState().isLoading).toBe(true);
       expect(useAuthStore.getState().error).toBeNull();
 
-      // Cleanup: we can't resolve the hanging promise, but resetting state is fine
-      useAuthStore.setState({ isLoading: false });
+      // Resolve the deferred promise so the test cleans up cleanly
+      resolveLogin!({
+        token: "tk",
+        refreshToken: "rt",
+        user: { id: "1", email: "u@t.com", fullName: "U", role: "staff", active: true, createdAt: "" },
+      });
+      await loginPromise;
     });
 
     it("sets error on login failure", async () => {

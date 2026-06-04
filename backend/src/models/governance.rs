@@ -5,6 +5,7 @@ use uuid::Uuid;
 // ── Database Row ─────────────────────────────────────────────────────────────
 
 #[derive(Debug, sqlx::FromRow)]
+// Full row struct — some fields read only in admin audit views.
 #[allow(dead_code)]
 pub struct GovernanceRequest {
     pub id: Uuid,

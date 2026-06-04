@@ -6,6 +6,7 @@ use std::future::{ready, Ready};
 /// Only granted via the hardcoded admin login endpoint.
 #[derive(Debug, Clone)]
 pub struct AdminUser {
+    // Stored for audit logging — not read directly by the extractor.
     #[allow(dead_code)]
     pub username: String,
 }

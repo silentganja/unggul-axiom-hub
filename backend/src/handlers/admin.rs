@@ -77,7 +77,8 @@ pub async fn list_users(
     pool: web::Data<PgPool>,
     _admin: AdminUser,
 ) -> Result<HttpResponse, AppError> {
-    // #[allow(dead_code)] - selects 7 of 12 columns; User struct has more fields
+    // This query selects 7 of 12 User columns. sqlx::FromRow fills the remaining
+    // fields with their sqlx::default values — safe because we only need the subset.
     let users: Vec<UserProfile> = sqlx::query_as::<_, User>(
         "SELECT id, email, password_hash, full_name, role, active, created_at
          FROM users

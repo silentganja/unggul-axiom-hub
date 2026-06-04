@@ -123,11 +123,13 @@ async fn main() -> std::io::Result<()> {
     // Parse optional encryption key from hex env var
     let encryption_key = env::var("FILE_ENCRYPTION_KEY").ok().map(|hex_str| {
         let raw = hex::decode(&hex_str).expect("FILE_ENCRYPTION_KEY must be valid hex");
-        assert_eq!(
-            raw.len(),
-            32,
-            "FILE_ENCRYPTION_KEY must decode to exactly 32 bytes (64 hex chars)"
-        );
+        if raw.len() != 32 {
+            panic!(
+                "FILE_ENCRYPTION_KEY decoded to {} bytes, expected exactly 32 (64 hex chars). \
+                 Generate with: openssl rand -hex 32",
+                raw.len()
+            );
+        }
         raw
     });
 

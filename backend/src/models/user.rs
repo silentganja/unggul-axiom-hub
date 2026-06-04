@@ -19,6 +19,7 @@ pub struct User {
     #[sqlx(default)]
     pub department: Option<String>,
     #[sqlx(default)]
+    // Populated in org chart queries, not read on every profile load.
     #[allow(dead_code)]
     pub supervisor_id: Option<Uuid>,
     #[sqlx(default)]
@@ -66,7 +67,8 @@ pub fn can_govern_classified(role: &str) -> bool {
     role_level(role) >= 3 // director+
 }
 
-/// Whether this role can manage users.
+/// Whether this role can manage users (director+).
+/// Part of the role model API — called from admin CRUD handlers.
 #[allow(dead_code)]
 pub fn can_manage_users(role: &str) -> bool {
     role_level(role) >= 3 // director+
