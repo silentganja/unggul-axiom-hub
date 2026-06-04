@@ -3,7 +3,7 @@
 <p align="center">
   <strong>Sovereign Enterprise Cloud Storage & Collaboration Platform</strong>
   <br>
-  <sub>Built for government-grade security. Deployed and running in production.</sub>
+  <sub>Secure file management with government-grade classification, audit trails, and granular access control. Live in production.</sub>
 </p>
 
 <p align="center">
@@ -20,22 +20,33 @@
 
 ## What is this?
 
-A full-stack document collaboration platform built for handling classified files. It does file storage, authentication, encryption, audit logging, and access control - the kind of thing you'd find in an enterprise or government agency. Built with Rust on the backend and Next.js on the frontend.
+A full-stack document collaboration platform for environments that handle classified files. It covers the full lifecycle: upload, encrypt, classify, share, approve, audit, and recover. Built with Rust on the backend and Next.js on the frontend.
 
-I built this as a portfolio piece to show how I think about systems, security, and shipping code that actually runs in production.
+I built this to demonstrate how I approach production systems: security from the start, deliberate tech choices, and the discipline to ship something that runs in the real world, not just locally.
 
-> **Live portal:** [hub.unggulaxiom.com/v/info](https://hub.unggulaxiom.com/v/info) - interactive ERD, architecture diagrams, API docs, and live telemetry.
+> **Live portal:** [hub.unggulaxiom.com/v/info](https://hub.unggulaxiom.com/v/info) - interactive ERD, system architecture, API reference, benchmarks, and telemetry.
 
 ---
 
-## Why I built this
+## What it actually does
 
-Most side projects stop at "it works on my machine." I wanted to take this all the way:
+**File management.** Upload, download, preview, rename, move, delete. Folders with hierarchy. Multipart uploads for large files. Full-text search across all your documents.
 
-- **It's live.** Running on AWS Lightsail behind Nginx. Deployments happen automatically through GitHub Actions using OIDC - no long-lived AWS keys sitting around.
-- **It takes security seriously.** AES-256-GCM encryption at rest, Argon2id for passwords, JWT rotation, WebAuthn passkeys, rate limiting via Redis. Designed for environments that classify data as **RAHSIA**, **SULIT**, **TERHAD**, or **TERBUKA**.
-- **Everything is tracked.** Immutable audit logs for every important action. You can trace exactly who did what and when.
-- **The tech choices have reasons.** Rust instead of Node for the backend because memory safety and throughput actually matter here. Raw SQL via SQLx instead of an ORM because I want every query to be visible and reviewable. No magic.
+**Versioning and recovery.** Every file keeps a version history. Soft delete with trash. Restore accidentally deleted files within a configurable window. Permanent purge after that.
+
+**Classification and governance.** Files are tagged with classification levels (RAHSIA, SULIT, TERHAD, TERBUKA). Sensitive operations go through dual-signature approval workflows. Someone requests a classification change or file access. A second authorized person must approve. Everything is logged.
+
+**Authentication.** Standard login with Argon2id-hashed passwords. WebAuthn/FIDO2 passkeys for phishing-resistant auth. Magic link login via email. JWT with access and refresh token rotation. Sessions can be viewed and revoked individually.
+
+**Sharing.** Share files and folders with specific users. Assign roles: viewer, editor, or admin. Revoke access anytime. All shares are tracked.
+
+**Admin panel.** User management (create, update, deactivate, reset passwords). Bulk operations. Storage analytics and breakdown per user. Governance queue with force approve/reject. Full audit log viewer. System configuration management.
+
+**Real-time notifications.** Server-Sent Events stream for live updates on shares, approvals, and system events.
+
+**Audit trail.** Every critical action is recorded in an append-only audit log. Who did what, when, from which IP. You can filter by user, action type, resource, and date range.
+
+**Security hardening.** AES-256-GCM file encryption at rest. Rate limiting backed by Redis. Security headers via Nginx (CSP, HSTS, X-Frame-Options). Non-root container users. No hardcoded secrets.
 
 ---
 
@@ -45,9 +56,9 @@ Most side projects stop at "it works on my machine." I wanted to take this all t
 Client (Browser)
     │
     ▼
-┌──────────────────────────────────────────────┐
-│  Nginx Reverse Proxy  (TLS termination)       │
-└──────────────────────────────────────────────┘
+┌────────────────────────────────────────┐
+│  Nginx Reverse Proxy  (TLS, HTTP/2)     │
+└────────────────────────────────────────┘
     │
     ├──▶ Next.js 16 Frontend   (React 19, SSR)
     │    ├── App Router (Server Components)
@@ -55,11 +66,12 @@ Client (Browser)
     │    └── TanStack React Query (server state)
     │
     └──▶ Rust API Service      (Actix-Web 4)
-         ├── JWT + WebAuthn Auth Layer
-         ├── RBAC + Dual-Signature Workflows
-         ├── AES-256-GCM File Encryption
-         ├── Audit Trail Service
-         └── Rate Limiter (Redis-backed)
+         ├── Auth layer (JWT + WebAuthn + Magic Link)
+         ├── RBAC authorization middleware
+         ├── AES-256-GCM file encryption
+         ├── Governance approval engine
+         ├── SSE notification stream
+         └── Redis rate limiter
               │
               ├──▶ PostgreSQL 16
               └──▶ Redis 7
@@ -67,56 +79,52 @@ Client (Browser)
 
 ```
 unggul-hub/
-├── backend/                 # Rust (Actix-Web, SQLx, Redis)
-│   ├── src/                 #   Handlers, middleware, services, models
-│   ├── migrations/          #   SQLx migrations (versioned, reviewable)
-│   └── Dockerfile           #   Multi-stage: builder -> runtime (alpine)
+├── backend/                 # Rust API
+│   ├── src/
+│   │   ├── handlers/        #   auth, files, shares, governance, admin, audit
+│   │   ├── models/          #   user, file, share, governance, notification
+│   │   ├── utils/           #   crypto, jwt, redis, email, storage, cleanup
+│   │   └── app_middleware/  #   auth extraction, admin guard
+│   ├── migrations/          #   15 versioned SQLx migrations
+│   └── Dockerfile           #   Multi-stage: rust:slim builder -> debian:bookworm-slim runtime
 │
-├── frontend/                # Next.js 16 (App Router)
-│   ├── app/                 #   Route handlers & server components
-│   ├── components/          #   Reusable UI primitives
-│   ├── lib/                 #   API client, auth helpers, type defs
+├── frontend/                # Next.js 16
+│   ├── app/                 #   App Router pages and API routes
+│   ├── components/          #   UI primitives + feature components
+│   ├── lib/                 #   API client, auth, type definitions
 │   └── store/               #   Zustand stores
 │
-├── infra/                   # DB init scripts, Nginx config
-├── .github/workflows/       # CI/CD: lint -> build -> push ECR -> deploy
-├── docker-compose.yml       # Dev stack (Postgres, Redis, backend, frontend)
-└── docker-compose.prod.yml  # Production stack (env-var driven, ECR images)
+├── infra/
+│   ├── nginx/               #   Nginx config with TLS, security headers, reverse proxy
+│   └── postgres/            #   DB init script
+│
+├── .github/workflows/       # CI/CD pipeline
+├── docker-compose.yml       # Local dev (Postgres, Redis, backend, frontend)
+└── docker-compose.prod.yml  # Production (ECR images, env-var driven)
 ```
 
-More detail in the **[architecture diagrams](https://hub.unggulaxiom.com/v/info/architecture)** on the portal.
+The **[technical portal](https://hub.unggulaxiom.com/v/info/architecture)** has interactive architecture diagrams with data flow animations.
 
 ---
 
-## Key decisions
+## Tech decisions that matter
 
-| What | I went with | Why |
-|------|-------------|-----|
-| Backend | **Rust** (Actix-Web) | Memory safety without a garbage collector. p95 latency under 10ms. |
-| Database access | **SQLx** (raw SQL) | Every query is explicit. No ORM generating surprises behind your back. |
-| Auth | **Argon2id + JWT + WebAuthn** | Memory-hard hashing, stateless sessions with rotation, phishing-resistant 2FA. |
-| Encryption | **AES-256-GCM** | Authenticated encryption. Both confidentiality and integrity in one go. |
-| Frontend state | **React Query + Zustand** | Server state and client state are different problems. Each gets the right tool. |
-| CI/CD auth | **AWS OIDC** (not IAM users) | Temporary credentials only. No access keys to leak or rotate. |
-| Containers | **Multi-stage Docker** | Build image has the toolchain. Runtime image is bare Alpine. |
-
----
-
-## Security
-
-- Every file mutation goes through auth checks and gets audit logged at the database level
-- Passwords hashed with Argon2id (memory-hard, designed to resist GPU attacks)
-- JWT tokens can be rotated and revoked server-side through Redis
-- Files encrypted with AES-256-GCM. The authenticated data prevents tampering.
-- Hierarchical RBAC with dual-signature approval for sensitive operations
-- Rate limiting via Redis to handle brute force and DoS attempts
-- No hardcoded secrets anywhere. Everything flows through environment variables.
+| What | Choice | Why |
+|------|--------|-----|
+| Backend language | Rust (Actix-Web 4) | Memory safety without GC overhead. Async runtime keeps p95 latency under 10ms. |
+| Database access | SQLx with raw SQL | Every query is visible in source. No ORM generating unexpected joins or N+1s. |
+| Password hashing | Argon2id | Memory-hard algorithm. Resistant to GPU and ASIC attacks. |
+| File encryption | AES-256-GCM | Authenticated encryption. Confidentiality and integrity in a single pass. No MAC needed. |
+| Auth | JWT + refresh tokens + WebAuthn | Stateless API auth with rotation. Passkeys for phishing resistance. |
+| Frontend data | React Query + Zustand | Server cache and client state are different problems. Each gets the right tool. |
+| CI/CD auth | AWS OIDC | No long-lived IAM keys. GitHub gets temporary credentials per workflow run. |
+| Containers | Multi-stage Docker | Build stage has the full toolchain. Runtime is bare Debian Slim, non-root user. |
 
 ---
 
 ## Running it
 
-### Docker (quickest)
+### Docker (one command)
 
 ```bash
 git clone https://github.com/YOUR_USERNAME/unggul-hub.git
@@ -126,12 +134,12 @@ docker compose up --build
 ```
 
 - Frontend: http://localhost:3000
-- Backend API: http://localhost:8080
-- Health check: http://localhost:8080/health
+- Backend: http://localhost:8080
+- Health: http://localhost:8080/health
 
-### Local dev
+### Local development
 
-You'll need Rust 1.85+, Node 20+, PostgreSQL 16, and Redis 7.
+Prerequisites: Rust 1.85+, Node 20+, PostgreSQL 16, Redis 7.
 
 ```bash
 # Backend
@@ -150,31 +158,32 @@ npm run dev
 
 ## Tech stack
 
-| Layer | What I use |
-|-------|-----------|
-| Backend | Rust, Actix-Web 4, SQLx, Redis, Argon2id, AES-256-GCM, Lettre, Tokio |
-| Frontend | Next.js 16, React 19, TypeScript 5, Tailwind CSS v4, React Query, Zustand, Lucide |
-| Database | PostgreSQL 16 with SQLx-managed migrations |
-| Cache | Redis 7 for sessions, rate limiting, and token revocation |
-| DevOps | GitHub Actions, AWS OIDC, ECR, Lightsail, multi-stage Docker |
-| Monitoring | Tokio Tracing, append-only audit trail |
+| Layer | Technologies |
+|-------|-------------|
+| Backend | Rust, Actix-Web 4, SQLx 0.8, Redis 0.25, Argon2id, AES-256-GCM, Lettre, Tokio |
+| Frontend | Next.js 16, React 19, TypeScript 5, Tailwind CSS v4, TanStack React Query, Zustand, Lucide |
+| Database | PostgreSQL 16, 15 versioned SQLx migrations |
+| Cache | Redis 7 (sessions, rate limiting, token blacklist) |
+| Infra | Nginx (TLS, HTTP/2, security headers), Docker multi-stage, GitHub Actions |
+| Cloud | AWS Lightsail, ECR, OIDC-based CI/CD auth |
+| Monitoring | Tokio Tracing, append-only audit trail, SSE notifications |
 
 ---
 
 ## License
 
-Source-available. All rights reserved. You're welcome to read the code and learn from it. Commercial use, redistribution, or derivative works need my permission first.
+Source-available. All rights reserved. Read the code, learn from it, fork it for reference. Commercial use, redistribution, or derivative works need my permission.
 
 ---
 
 ## About me
 
-I'm a software engineer who cares about building things properly. Secure systems, clean architecture, code that holds up under real traffic. This project reflects how I approach engineering work.
+I'm a software engineer who builds systems with real security and performance requirements. This project is a working demonstration of how I think about architecture, write code, and ship to production.
 
-I'm open to backend, full-stack, and platform roles. Especially interested in teams working on infrastructure, security, or developer tools.
+I'm currently looking for backend, full-stack, or platform engineering roles. Particularly interested in teams working on infrastructure, security, data platforms, or developer tools.
 
-**Get in touch:** [LinkedIn](#) · [Email](#) · [Portfolio](#)
+**Contact:** [LinkedIn](#) · [Email](#) · [Portfolio](#)
 
 ---
 
-*Detailed architecture diagrams, API docs, and live telemetry are on the **[technical portal](https://hub.unggulaxiom.com/v/info)**.*
+*Interactive architecture diagrams, full API reference, benchmarks, and live system telemetry: [hub.unggulaxiom.com/v/info](https://hub.unggulaxiom.com/v/info)*
