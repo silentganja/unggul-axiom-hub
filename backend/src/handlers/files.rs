@@ -1469,10 +1469,7 @@ mod tests {
 
     #[test]
     fn sanitize_strips_path_separators() {
-        assert_eq!(
-            sanitize_filename("../../../etc/passwd"),
-            "......etcpasswd"
-        );
+        assert_eq!(sanitize_filename("../../../etc/passwd"), "......etcpasswd");
         assert_eq!(sanitize_filename("a\\b\\c.txt"), "abc.txt");
     }
 
