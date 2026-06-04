@@ -147,9 +147,9 @@ mod tests {
     #[test]
     fn internal_error_hides_detail_in_body() {
         let err = AppError::Internal(anyhow::anyhow!("sensitive sql detail"));
-        let mut resp = err.error_response();
+        let resp = err.error_response();
 
-        let body_bytes = resp.take_body().try_into_bytes().unwrap();
+        let body_bytes = resp.into_body().try_into_bytes().unwrap();
         let body_str = String::from_utf8_lossy(&body_bytes);
 
         assert!(
@@ -166,9 +166,9 @@ mod tests {
     fn bad_request_includes_user_message() {
         let msg = "classification must be one of: RAHSIA, SULIT, TERHAD, TERBUKA";
         let err = AppError::BadRequest(msg.into());
-        let mut resp = err.error_response();
+        let resp = err.error_response();
 
-        let body_bytes = resp.take_body().try_into_bytes().unwrap();
+        let body_bytes = resp.into_body().try_into_bytes().unwrap();
         let body_str = String::from_utf8_lossy(&body_bytes);
         assert!(
             body_str.contains(msg),
