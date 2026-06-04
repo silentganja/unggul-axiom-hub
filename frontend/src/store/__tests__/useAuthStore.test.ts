@@ -62,7 +62,7 @@ describe("useAuthStore", () => {
       );
 
       // Fire login but don't await - we want to check loading state mid-flight
-      const loginPromise = useAuthStore.getState().login("user@test.com", "password");
+      void useAuthStore.getState().login("user@test.com", "password");
 
       expect(useAuthStore.getState().isLoading).toBe(true);
       expect(useAuthStore.getState().error).toBeNull();
@@ -131,8 +131,7 @@ describe("useAuthStore", () => {
       const { authApi, clearToken } = await import("@/lib/api");
       vi.mocked(authApi.logout).mockResolvedValue({ status: "ok" });
 
-      // Mock window.location
-      const mockHref = vi.fn();
+      // Redirect after logout is verified by clearToken being called
       Object.defineProperty(window, "location", {
         value: { href: "/dashboard" },
         writable: true,

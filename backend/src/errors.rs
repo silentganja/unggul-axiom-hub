@@ -186,6 +186,9 @@ mod tests {
             .get("content-type")
             .and_then(|v| v.to_str().ok())
             .unwrap_or("");
-        assert!(content_type.contains("application/json"), "error must be JSON");
+        assert!(
+            content_type.contains("application/json"),
+            "error must be JSON"
+        );
     }
 }

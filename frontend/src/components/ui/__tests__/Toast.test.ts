@@ -13,7 +13,7 @@ beforeEach(() => {
 describe("useToastStore", () => {
   describe("addToast", () => {
     it("adds a toast with default type and duration", () => {
-      const id = useToastStore.getState().addToast("File uploaded");
+      useToastStore.getState().addToast("File uploaded");
       const toasts = useToastStore.getState().toasts;
 
       expect(toasts).toHaveLength(1);
