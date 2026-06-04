@@ -140,7 +140,10 @@ mod tests {
                 parent_id: None,
                 classification: None,
             };
-            assert!(req.validate().is_err(), "whitespace-only name must be rejected");
+            assert!(
+                req.validate().is_err(),
+                "whitespace-only name must be rejected"
+            );
         }
 
         #[test]
@@ -150,7 +153,10 @@ mod tests {
                 parent_id: None,
                 classification: Some("TOP_SECRET".into()),
             };
-            assert!(req.validate().is_err(), "unknown classification must be rejected");
+            assert!(
+                req.validate().is_err(),
+                "unknown classification must be rejected"
+            );
         }
 
         #[test]
@@ -160,7 +166,10 @@ mod tests {
                 parent_id: None,
                 classification: None,
             };
-            assert!(req.validate().is_ok(), "trimmed name should still be non-empty");
+            assert!(
+                req.validate().is_ok(),
+                "trimmed name should still be non-empty"
+            );
         }
     }
 

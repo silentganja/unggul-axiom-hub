@@ -195,7 +195,10 @@ mod tests {
         let now = Utc::now().timestamp() as usize;
         assert!(claims.exp > now, "expiry must be in the future");
         // Access tokens last 1 hour; allow small clock skew
-        assert!(claims.exp <= now + 3600 + 5, "expiry must be within ~1 hour");
+        assert!(
+            claims.exp <= now + 3600 + 5,
+            "expiry must be within ~1 hour"
+        );
     }
 
     #[test]
@@ -228,6 +231,9 @@ mod tests {
         .expect("manual encoding should succeed");
 
         let result = decode_token(&alien_token);
-        assert!(result.is_err(), "token signed with a different key must be rejected");
+        assert!(
+            result.is_err(),
+            "token signed with a different key must be rejected"
+        );
     }
 }

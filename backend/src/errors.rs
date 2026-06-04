@@ -122,7 +122,10 @@ mod tests {
 
     #[test]
     fn too_many_requests_returns_429() {
-        assert_eq!(AppError::TooManyRequests.status_code(), StatusCode::TOO_MANY_REQUESTS);
+        assert_eq!(
+            AppError::TooManyRequests.status_code(),
+            StatusCode::TOO_MANY_REQUESTS
+        );
     }
 
     #[test]
@@ -150,8 +153,14 @@ mod tests {
         let body = test::read_body(resp).await;
         let body_str = String::from_utf8_lossy(&body);
 
-        assert!(!body_str.contains("sensitive sql detail"), "internal error must not leak detail");
-        assert!(body_str.contains("Internal server error"), "must show generic message");
+        assert!(
+            !body_str.contains("sensitive sql detail"),
+            "internal error must not leak detail"
+        );
+        assert!(
+            body_str.contains("Internal server error"),
+            "must show generic message"
+        );
     }
 
     #[actix_web::test]
@@ -162,7 +171,10 @@ mod tests {
 
         let body = test::read_body(resp).await;
         let body_str = String::from_utf8_lossy(&body);
-        assert!(body_str.contains(msg), "bad request body must include the validation message");
+        assert!(
+            body_str.contains(msg),
+            "bad request body must include the validation message"
+        );
     }
 
     #[actix_web::test]

@@ -110,7 +110,7 @@ describe("useToastStore", () => {
 
     it("removes a toast without affecting order of others", () => {
       useToastStore.getState().info("A");
-      const idB = useToastStore.getState().info("B");
+      const idB = useToastStore.getState().addToast("B");
       useToastStore.getState().info("C");
 
       useToastStore.getState().removeToast(idB);

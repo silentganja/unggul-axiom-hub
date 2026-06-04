@@ -147,7 +147,10 @@ mod tests {
     #[test]
     fn invalid_hash_format_returns_error() {
         let result = verify_password("anything", "not-a-valid-phc-hash");
-        assert!(result.is_err(), "garbage hash must return AppError::Internal");
+        assert!(
+            result.is_err(),
+            "garbage hash must return AppError::Internal"
+        );
     }
 
     #[test]

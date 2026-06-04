@@ -95,8 +95,14 @@ mod tests {
         let plaintext = b"classified document content";
 
         let ciphertext = encrypt(&key, plaintext).expect("encryption should succeed");
-        assert!(ciphertext.len() > plaintext.len(), "ciphertext includes nonce + tag");
-        assert_ne!(ciphertext, plaintext, "ciphertext must differ from plaintext");
+        assert!(
+            ciphertext.len() > plaintext.len(),
+            "ciphertext includes nonce + tag"
+        );
+        assert_ne!(
+            ciphertext, plaintext,
+            "ciphertext must differ from plaintext"
+        );
 
         let decrypted = decrypt(&key, &ciphertext).expect("decryption should succeed");
         assert_eq!(decrypted, plaintext, "roundtrip must preserve data");
@@ -106,7 +112,11 @@ mod tests {
     fn encrypt_empty_payload() {
         let key = test_key();
         let ciphertext = encrypt(&key, b"").expect("empty encrypt should succeed");
-        assert_eq!(ciphertext.len(), 12 + 16, "empty plaintext = nonce + tag only");
+        assert_eq!(
+            ciphertext.len(),
+            12 + 16,
+            "empty plaintext = nonce + tag only"
+        );
         let decrypted = decrypt(&key, &ciphertext).expect("empty decrypt should succeed");
         assert!(decrypted.is_empty());
     }
@@ -147,7 +157,10 @@ mod tests {
     fn decrypt_too_short_data() {
         let key = test_key();
         let result = decrypt(&key, b"too-short");
-        assert!(result.is_err(), "data shorter than 28 bytes must be rejected");
+        assert!(
+            result.is_err(),
+            "data shorter than 28 bytes must be rejected"
+        );
     }
 
     #[test]
@@ -166,7 +179,11 @@ mod tests {
         let c1 = encrypt(&key, b"same plaintext").unwrap();
         let c2 = encrypt(&key, b"same plaintext").unwrap();
         // First 12 bytes are the nonce - they must differ
-        assert_ne!(&c1[..12], &c2[..12], "each encryption must use a unique nonce");
+        assert_ne!(
+            &c1[..12],
+            &c2[..12],
+            "each encryption must use a unique nonce"
+        );
     }
 
     #[test]

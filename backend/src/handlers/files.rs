@@ -1404,20 +1404,20 @@ fn sanitize_filename(raw: &str) -> String {
 /// Each entry: (bytes at offset 0, MIME type prefix).
 const KNOWN_SIGNATURES: &[(&[u8], &str)] = &[
     // Images
-    (&[0xFF, 0xD8, 0xFF],               "image/jpeg"),
-    (&[0x89, 0x50, 0x4E, 0x47],         "image/png"),
-    (&[0x47, 0x49, 0x46, 0x38],         "image/gif"),
-    (&[0x52, 0x49, 0x46, 0x46],         "image/webp"), // RIFF....WEBP
+    (&[0xFF, 0xD8, 0xFF], "image/jpeg"),
+    (&[0x89, 0x50, 0x4E, 0x47], "image/png"),
+    (&[0x47, 0x49, 0x46, 0x38], "image/gif"),
+    (&[0x52, 0x49, 0x46, 0x46], "image/webp"),
     // Documents
-    (&[0x25, 0x50, 0x44, 0x46],         "application/pdf"),
-    // Archives (block executables masquerading as documents)
-    (&[0x50, 0x4B, 0x03, 0x04],         "application/zip"),
-    (&[0x50, 0x4B, 0x05, 0x06],         "application/zip"),
-    (&[0x50, 0x4B, 0x07, 0x08],         "application/zip"),
+    (&[0x25, 0x50, 0x44, 0x46], "application/pdf"),
+    // Archives
+    (&[0x50, 0x4B, 0x03, 0x04], "application/zip"),
+    (&[0x50, 0x4B, 0x05, 0x06], "application/zip"),
+    (&[0x50, 0x4B, 0x07, 0x08], "application/zip"),
     // Text
-    (&[0xEF, 0xBB, 0xBF],               "text/"),
+    (&[0xEF, 0xBB, 0xBF], "text/"),
     // Office Open XML
-    (&[0x50, 0x4B, 0x03, 0x04],         "application/vnd.openxmlformats"),
+    (&[0x50, 0x4B, 0x03, 0x04], "application/vnd.openxmlformats"),
 ];
 
 /// Verify that a file's content matches its declared MIME type by checking magic bytes.
@@ -1480,7 +1480,10 @@ mod tests {
 
     #[test]
     fn sanitize_preserves_valid_names() {
-        assert_eq!(sanitize_filename("Q3 Report 2026.pdf"), "Q3 Report 2026.pdf");
+        assert_eq!(
+            sanitize_filename("Q3 Report 2026.pdf"),
+            "Q3 Report 2026.pdf"
+        );
         assert_eq!(sanitize_filename("résumé.docx"), "résumé.docx");
     }
 
