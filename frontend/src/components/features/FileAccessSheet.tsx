@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useId, useEffect } from "react";
 import {
@@ -38,7 +38,7 @@ export default function FileAccessSheet() {
   const [isSharing, setIsSharing] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
 
-  // Classification editing — track pending change
+  // Classification editing - track pending change
   const [classSaving, setClassSaving] = useState(false);
   const [classSaved, setClassSaved] = useState(false);
   const [pendingClass, setPendingClass] = useState<string | null>(null);

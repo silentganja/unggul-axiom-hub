@@ -1,7 +1,10 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// Unggul Axiom Backend — main.rs
-// Phase 7–8: Core schema, Auth Engine & File System API
-// Phase 9: Redis, Rate Limiting, Token Refresh, Email Service
+﻿// ─────────────────────────────────────────────────────────────────────────────
+// Unggul Axiom Hub - application entry point.
+//
+// Responsibilities:
+//   - Load configuration from environment variables
+//   - Initialise PostgreSQL pool, Redis client, and auto-migrations
+//   - Compose the Actix-Web HTTP server with middleware, routes, and graceful shutdown
 // ─────────────────────────────────────────────────────────────────────────────
 
 use actix_cors::Cors;
@@ -82,10 +85,10 @@ async fn health_check(
 }
 
 /// GET /
-/// Root — redirect hint for any stray clients.
+/// Root - redirect hint for any stray clients.
 #[get("/")]
 async fn root() -> impl Responder {
-    HttpResponse::Ok().body("Unggul Axiom Backend — v".to_owned() + env!("CARGO_PKG_VERSION"))
+    HttpResponse::Ok().body("Unggul Axiom Backend - v".to_owned() + env!("CARGO_PKG_VERSION"))
 }
 
 // ─── Main ────────────────────────────────────────────────────────────────────
@@ -128,6 +131,13 @@ async fn main() -> std::io::Result<()> {
         raw
     });
 
+    if encryption_key.is_none() {
+        tracing::warn!(
+            "FILE_ENCRYPTION_KEY is not set - files will be stored in plaintext. \
+             Generate one with: openssl rand -hex 32"
+        );
+    }
+
     // Ensure the storage directory exists on startup
     tokio::fs::create_dir_all(&storage_path)
         .await
@@ -151,7 +161,7 @@ async fn main() -> std::io::Result<()> {
 
     info!("✓ Database connected");
 
-    // ── Auto-migrations — ensure schema is up to date ─────────────────────────
+    // ── Auto-migrations - ensure schema is up to date ─────────────────────────
     utils::migrations::run_migrations(&pool).await;
 
     // ── Redis ─────────────────────────────────────────────────────────────────
@@ -182,7 +192,7 @@ async fn main() -> std::io::Result<()> {
     let redis_data = web::Data::new(redis_client);
 
     HttpServer::new(move || {
-        // CORS — allow localhost in dev + hub subdomain in production
+        // CORS - allow localhost in dev + hub subdomain in production
         let cors = Cors::default()
             .allowed_origin_fn(|origin, _| {
                 let o = origin.as_bytes();
@@ -212,7 +222,7 @@ async fn main() -> std::io::Result<()> {
             // ── Routes ────────────────────────────────────────────────────────
             .service(root)
             .service(health_check)
-            // /api/admin — admin panel (login is public; CRUD requires AdminUser extractor)
+            // /api/admin - admin panel (login is public; CRUD requires AdminUser extractor)
             .service(
                 web::scope("/api/admin")
                     .route("/login", web::post().to(handlers::admin::admin_login))
@@ -342,7 +352,7 @@ async fn main() -> std::io::Result<()> {
                         web::post().to(handlers::auth_extras::webauthn_login_complete),
                     ),
             )
-            // /api/governance  — approval workflow (submit: any user, approve/reject: admin)
+            // /api/governance  - approval workflow (submit: any user, approve/reject: admin)
             .service(
                 web::scope("/api/governance")
                     .route(
@@ -374,21 +384,21 @@ async fn main() -> std::io::Result<()> {
                         web::post().to(handlers::governance::undo_request),
                     ),
             )
-            // /api/activity  — activity feed (audit + shares + governance)
+            // /api/activity  - activity feed (audit + shares + governance)
             .service(
                 web::scope("/api/activity")
                     .route("", web::get().to(handlers::files::activity_feed)),
             )
-            // /api/audit  — all routes require a valid JWT (AuthUser extractor)
+            // /api/audit  - all routes require a valid JWT (AuthUser extractor)
             .service(
                 web::scope("/api/audit").route("", web::get().to(handlers::audit::list_audit_logs)),
             )
-            // /api/notifications — SSE stream
+            // /api/notifications - SSE stream
             .service(
                 web::scope("/api/notifications")
                     .route("/stream", web::get().to(handlers::notifications::stream)),
             )
-            // /api/files  — all routes require a valid JWT (AuthUser extractor)
+            // /api/files  - all routes require a valid JWT (AuthUser extractor)
             .service(
                 web::scope("/api/files")
                     .route("", web::get().to(handlers::files::list_files))
@@ -458,6 +468,16 @@ async fn main() -> std::io::Result<()> {
             )
     })
     .bind((host.as_str(), port))?
-    .run()
-    .await
+    .shutdown_timeout(30) // 30-second grace period for in-flight requests
+    .run();
+
+    // Wait for either the server to finish or a shutdown signal
+    let server_handle = server.handle();
+    tokio::spawn(async move {
+        tokio::signal::ctrl_c().await.ok();
+        tracing::info!("SIGINT received, starting graceful shutdown...");
+        server_handle.stop(true).await;
+    });
+
+    server.await
 }

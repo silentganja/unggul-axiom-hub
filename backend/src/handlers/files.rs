@@ -1,4 +1,4 @@
-use crate::{
+﻿use crate::{
     app_middleware::auth::AuthUser,
     errors::AppError,
     models::file::{CreateFolderReq, FileListResponse, FileNode, ListFilesQuery, RenameFileReq},
@@ -79,10 +79,10 @@ pub async fn get_file(
 /// List files and folders owned by the authenticated user.
 ///
 /// Supports:
-/// - `?parent_id=<uuid>` — scoped folder listing
-/// - `?q=<search>` — full-text search on name
-/// - `?page=1&perPage=50` — pagination
-/// - `?sort=name&order=asc` — sorting (name, size, classification, updated)
+/// - `?parent_id=<uuid>` - scoped folder listing
+/// - `?q=<search>` - full-text search on name
+/// - `?page=1&perPage=50` - pagination
+/// - `?sort=name&order=asc` - sorting (name, size, classification, updated)
 pub async fn list_files(
     pool: web::Data<PgPool>,
     user: AuthUser,
@@ -303,7 +303,7 @@ pub async fn create_folder(
     }
 
     // ── Insert the folder ─────────────────────────────────────────────────────
-    // No sqlx macros — raw query_as per engineering rules.
+    // No sqlx macros - raw query_as per engineering rules.
     let folder: FileNode = sqlx::query_as::<_, FileNode>(
         "INSERT INTO files
             (parent_id, owner_id, name, is_folder, size_bytes, classification)
@@ -348,7 +348,7 @@ pub async fn create_folder(
 /// Rename a file or folder.
 ///
 /// The resource MUST be owned by the authenticated user.
-/// Returns `404` if not found or ownership mismatch — never leaks existence
+/// Returns `404` if not found or ownership mismatch - never leaks existence
 /// of resources belonging to other users.
 // ─────────────────────────────────────────────────────────────────────────────
 // PUT /api/files/{id}/classification
@@ -374,7 +374,7 @@ pub async fn update_classification(
         return Err(AppError::BadRequest("Invalid classification".into()));
     }
 
-    // ── Enforce lock: hierarchical — must be the locker or have >= role level ──
+    // ── Enforce lock: hierarchical - must be the locker or have >= role level ──
     let lock_info: Option<(Option<Uuid>, Option<String>)> = sqlx::query_as(
         "SELECT f.locked_by, u.role FROM files f LEFT JOIN users u ON u.id = f.locked_by WHERE f.id = $1 AND f.owner_id = $2",
     )
@@ -457,7 +457,7 @@ pub async fn rename_file(
 
     let new_name = body.new_name.trim().to_string();
 
-    // ── Enforce lock: hierarchical — must be the locker or have >= role level ──
+    // ── Enforce lock: hierarchical - must be the locker or have >= role level ──
     let lock_info: Option<(Option<Uuid>, Option<String>)> = sqlx::query_as(
         "SELECT f.locked_by, u.role FROM files f LEFT JOIN users u ON u.id = f.locked_by WHERE f.id = $1 AND f.owner_id = $2",
     )
@@ -485,7 +485,7 @@ pub async fn rename_file(
         }
     }
 
-    // ── Update — owner_id in WHERE clause enforces ownership ──────────────────
+    // ── Update - owner_id in WHERE clause enforces ownership ──────────────────
     let updated: Option<FileNode> = sqlx::query_as::<_, FileNode>(
         "UPDATE files
          SET name = $1
@@ -538,7 +538,7 @@ pub async fn delete_file(
 ) -> Result<HttpResponse, AppError> {
     let file_id = path.into_inner();
 
-    // ── Fetch the row — verify it exists AND belongs to this user ─────────────
+    // ── Fetch the row - verify it exists AND belongs to this user ─────────────
     let file: Option<FileNode> = sqlx::query_as::<_, FileNode>(
         "SELECT id, parent_id, owner_id, name, is_folder,
                 size_bytes, mime_type, classification, created_at, updated_at, locked_by, locked_at, lock_reason
@@ -553,7 +553,7 @@ pub async fn delete_file(
 
     let file = file.ok_or(AppError::NotFound)?;
 
-    // ── Enforce lock: hierarchical — must be the locker or have >= role level ──
+    // ── Enforce lock: hierarchical - must be the locker or have >= role level ──
     if let Some(locker) = file.locked_by {
         if locker != user.id {
             let locker_role: Option<String> =
@@ -809,7 +809,7 @@ pub async fn move_files(
         }
     }
 
-    // ── Enforce lock: hierarchical — must be the locker or have >= role level ──
+    // ── Enforce lock: hierarchical - must be the locker or have >= role level ──
     for file_id in &body.file_ids {
         let lock_info: Option<(Option<Uuid>, Option<String>)> = sqlx::query_as(
             "SELECT f.locked_by, u.role FROM files f LEFT JOIN users u ON u.id = f.locked_by WHERE f.id = $1 AND f.owner_id = $2",
@@ -1066,7 +1066,7 @@ pub async fn get_file_content(
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Fire-and-forget append to `audit_logs`.
-/// Errors are logged but NEVER bubble up — we must not fail the primary
+/// Errors are logged but NEVER bubble up - we must not fail the primary
 /// request due to an audit write failure.
 pub(crate) async fn write_audit_log_internal(
     pool: &PgPool,
@@ -1194,7 +1194,14 @@ pub async fn upload_file(
                         })?
                         .to_string();
 
-                    filename = fname;
+                    // Sanitize filename: strip directory separators and null bytes
+                    filename = sanitize_filename(&fname);
+                    if filename.is_empty() {
+                        return Err(AppError::BadRequest(
+                            "Invalid filename - name is empty after sanitization".to_string(),
+                        ));
+                    }
+
                     mime_type = field.content_type().map(|m| m.to_string());
 
                     file_written = true;
@@ -1217,6 +1224,11 @@ pub async fn upload_file(
                         }
 
                         all_bytes.extend_from_slice(&bytes);
+                    }
+
+                    // Validate file type by magic bytes - reject known-dangerous types
+                    if !all_bytes.is_empty() {
+                        validate_magic_bytes(&all_bytes, mime_type.as_deref())?;
                     }
 
                     // Encrypt bytes before writing to disk (if encryption key is configured)
@@ -1328,7 +1340,7 @@ pub async fn upload_file(
         }
     };
 
-    // ── File versioning — save as version 1 ──────────────────────────────────
+    // ── File versioning - save as version 1 ──────────────────────────────────
     let version_path = temp_filepath.to_string_lossy().to_string();
     if let Err(e) = sqlx::query(
         "INSERT INTO file_versions (file_id, version_number, size_bytes, storage_path, uploaded_by)
@@ -1373,4 +1385,157 @@ pub async fn upload_file(
     );
 
     Ok(HttpResponse::Created().json(file_node))
+}
+
+// ── File validation helpers ────────────────────────────────────────────────────
+
+/// Strip directory separators, null bytes, and control characters from a filename.
+/// Returns an empty string only if nothing remains after sanitization.
+fn sanitize_filename(raw: &str) -> String {
+    raw.replace(['/', '\\', '\0'], "")
+        .chars()
+        .filter(|c| !c.is_control() || *c == '\n' || *c == '\r')
+        .collect::<String>()
+        .trim()
+        .to_string()
+}
+
+/// Known file signatures (magic bytes) used for basic type verification.
+/// Each entry: (bytes at offset 0, MIME type prefix).
+const KNOWN_SIGNATURES: &[(&[u8], &str)] = &[
+    // Images
+    (&[0xFF, 0xD8, 0xFF],               "image/jpeg"),
+    (&[0x89, 0x50, 0x4E, 0x47],         "image/png"),
+    (&[0x47, 0x49, 0x46, 0x38],         "image/gif"),
+    (&[0x52, 0x49, 0x46, 0x46],         "image/webp"), // RIFF....WEBP
+    // Documents
+    (&[0x25, 0x50, 0x44, 0x46],         "application/pdf"),
+    // Archives (block executables masquerading as documents)
+    (&[0x50, 0x4B, 0x03, 0x04],         "application/zip"),
+    (&[0x50, 0x4B, 0x05, 0x06],         "application/zip"),
+    (&[0x50, 0x4B, 0x07, 0x08],         "application/zip"),
+    // Text
+    (&[0xEF, 0xBB, 0xBF],               "text/"),
+    // Office Open XML
+    (&[0x50, 0x4B, 0x03, 0x04],         "application/vnd.openxmlformats"),
+];
+
+/// Verify that a file's content matches its declared MIME type by checking magic bytes.
+///
+/// If the MIME type is unknown or doesn't match any known signature, we allow it
+/// (fail-open for unknown types). If the MIME type claims to be one thing but the
+/// bytes say another, we reject.
+fn validate_magic_bytes(data: &[u8], declared_mime: Option<&str>) -> Result<(), AppError> {
+    let Some(mime) = declared_mime else {
+        return Ok(()); // No MIME type declared, allow through
+    };
+
+    // Find the expected signature for this MIME type
+    let expected = KNOWN_SIGNATURES
+        .iter()
+        .find(|(_, prefix)| mime.starts_with(prefix))
+        .map(|(sig, _)| *sig);
+
+    let Some(expected_sig) = expected else {
+        return Ok(()); // Unknown MIME type, allow through
+    };
+
+    if data.len() < expected_sig.len() {
+        // File too small to verify - allow (could be an empty/headerless variant)
+        return Ok(());
+    }
+
+    if &data[..expected_sig.len()] != expected_sig {
+        tracing::warn!(
+            mime = %mime,
+            expected = ?hex::encode(expected_sig),
+            actual = ?hex::encode(&data[..expected_sig.len().min(8)]),
+            "File magic bytes do not match declared MIME type"
+        );
+        return Err(AppError::BadRequest(format!(
+            "File content does not match declared type ({})",
+            mime
+        )));
+    }
+
+    Ok(())
+}
+
+// ── Tests ─────────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sanitize_strips_path_separators() {
+        assert_eq!(sanitize_filename("../../../etc/passwd"), "..etcpasswd");
+        assert_eq!(sanitize_filename("a\\b\\c.txt"), "abc.txt");
+    }
+
+    #[test]
+    fn sanitize_strips_null_bytes() {
+        assert_eq!(sanitize_filename("report\0hidden.pdf"), "reporthidden.pdf");
+    }
+
+    #[test]
+    fn sanitize_preserves_valid_names() {
+        assert_eq!(sanitize_filename("Q3 Report 2026.pdf"), "Q3 Report 2026.pdf");
+        assert_eq!(sanitize_filename("résumé.docx"), "résumé.docx");
+    }
+
+    #[test]
+    fn sanitize_handles_empty_and_whitespace() {
+        assert_eq!(sanitize_filename(""), "");
+        assert_eq!(sanitize_filename("   "), "");
+        assert_eq!(sanitize_filename("/\\/\\"), "");
+    }
+
+    #[test]
+    fn magic_bytes_valid_png() {
+        let mut data = vec![0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+        data.extend(vec![0u8; 100]);
+        assert!(validate_magic_bytes(&data, Some("image/png")).is_ok());
+    }
+
+    #[test]
+    fn magic_bytes_valid_jpeg() {
+        let mut data = vec![0xFF, 0xD8, 0xFF, 0xE0];
+        data.extend(vec![0u8; 100]);
+        assert!(validate_magic_bytes(&data, Some("image/jpeg")).is_ok());
+    }
+
+    #[test]
+    fn magic_bytes_valid_pdf() {
+        let data = b"%PDF-1.4\n...rest of document";
+        assert!(validate_magic_bytes(data, Some("application/pdf")).is_ok());
+    }
+
+    #[test]
+    fn magic_bytes_mismatch_rejected() {
+        // Claims to be PNG but is actually a JPEG
+        let mut data = vec![0xFF, 0xD8, 0xFF, 0xE0];
+        data.extend(vec![0u8; 100]);
+        assert!(validate_magic_bytes(&data, Some("image/png")).is_err());
+    }
+
+    #[test]
+    fn magic_bytes_unknown_type_allowed() {
+        // No known signature for this type, so allow through
+        let data = b"some proprietary binary format v1.0";
+        assert!(validate_magic_bytes(data, Some("application/x-custom")).is_ok());
+    }
+
+    #[test]
+    fn magic_bytes_no_mime_allowed() {
+        let data = b"anything goes";
+        assert!(validate_magic_bytes(data, None).is_ok());
+    }
+
+    #[test]
+    fn magic_bytes_too_short_allowed() {
+        // File smaller than expected signature - allow through
+        let data = b"ab"; // 2 bytes, PNG expects 4
+        assert!(validate_magic_bytes(data, Some("image/png")).is_ok());
+    }
 }

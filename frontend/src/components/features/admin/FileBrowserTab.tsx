@@ -1,9 +1,10 @@
-"use client";
+﻿"use client";
 import { useEffect, useState, useCallback } from "react";
 import {
   Folder, File, FileText, Search, ArrowLeft, Download, Trash2,
   Loader2, AlertCircle, Lock,
 } from "lucide-react";
+import { useToastStore } from "@/components/ui/Toast";
 import {
   adminApi, BackendFileNode, AdminUserEntry,
   formatFileSize, formatTimestamp,
@@ -149,7 +150,7 @@ export default function FileBrowserTab({ initialFilter, initialUserId }: Props) 
       setAllFiles(prev => prev.filter(f => f.id !== deleteTarget.id));
       setDeleteTarget(null);
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Delete failed");
+      useToastStore.getState().error(e instanceof Error ? e.message : "Delete failed");
     } finally {
       setDeleteLoading(false);
     }
@@ -173,7 +174,7 @@ export default function FileBrowserTab({ initialFilter, initialUserId }: Props) 
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Download failed");
+      useToastStore.getState().error(e instanceof Error ? e.message : "Download failed");
     }
   };
 
@@ -255,7 +256,7 @@ export default function FileBrowserTab({ initialFilter, initialUserId }: Props) 
                       </div>
                     </td>
                     <td className="px-4 py-2 text-right text-foreground-muted">
-                      {f.isFolder ? "—" : formatFileSize(f.sizeBytes)}
+                      {f.isFolder ? "-" : formatFileSize(f.sizeBytes)}
                     </td>
                     <td className="px-4 py-2 text-center">
                       <span className={cn("px-1.5 py-0.5 rounded-sm text-[8px] font-bold uppercase border",
@@ -267,7 +268,7 @@ export default function FileBrowserTab({ initialFilter, initialUserId }: Props) 
                     </td>
                     {selectedUserId === "ALL" && (
                       <td className="px-4 py-2 text-foreground-muted text-[10px]">
-                        {f.ownerId ? users.find(u => u.id === f.ownerId)?.fullName || f.ownerId.slice(0, 8) : "—"}
+                        {f.ownerId ? users.find(u => u.id === f.ownerId)?.fullName || f.ownerId.slice(0, 8) : "-"}
                       </td>
                     )}
                     <td className="px-4 py-2 text-foreground-muted text-[10px]">{formatTimestamp(f.updatedAt)}</td>
@@ -328,7 +329,7 @@ export default function FileBrowserTab({ initialFilter, initialUserId }: Props) 
             </div>
             <div className="grid grid-cols-2 gap-3 text-[10px] font-mono text-foreground-muted">
               <div><span className="block text-[8px] text-foreground-subtle uppercase tracking-wider">ID</span>{previewFile.id.slice(0, 12)}...</div>
-              <div><span className="block text-[8px] text-foreground-subtle uppercase tracking-wider">MIME</span>{previewFile.mimeType || "—"}</div>
+              <div><span className="block text-[8px] text-foreground-subtle uppercase tracking-wider">MIME</span>{previewFile.mimeType || "-"}</div>
               <div><span className="block text-[8px] text-foreground-subtle uppercase tracking-wider">Created</span>{formatTimestamp(previewFile.createdAt)}</div>
               <div><span className="block text-[8px] text-foreground-subtle uppercase tracking-wider">Modified</span>{formatTimestamp(previewFile.updatedAt)}</div>
             </div>

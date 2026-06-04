@@ -222,6 +222,7 @@ pub async fn update_profile(
                 "new_password must not be empty".into(),
             ));
         }
+        password::validate_password_strength(new).map_err(|msg| AppError::BadRequest(msg.into()))?;
         let ok = password::verify_password(current, &existing.password_hash)?;
         if !ok {
             return Err(AppError::Unauthorized);

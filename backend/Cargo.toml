@@ -22,7 +22,7 @@ uuid               = { version = "1", features = ["v4", "serde"] }
 chrono             = { version = "0.4", features = ["serde"] }
 actix-multipart    = "0.7"
 futures-util       = "0.3"
-# ── Phase 7: Authentication Engine ──────────────────────────
+# ── Authentication Engine ────────────────────────────────────
 jsonwebtoken       = "9"
 argon2             = "0.5"
 rand_core          = { version = "0.6", features = ["getrandom"] }

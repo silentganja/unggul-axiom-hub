@@ -1,4 +1,4 @@
-import { create } from "zustand";
+﻿import { create } from "zustand";
 import {
   filesApi,
   sharesApi,
@@ -528,7 +528,7 @@ export const useFileStore = create<FileState>((set, get) => ({
           await fetchFiles();
           resolve();
         } else if (xhr.status === 401) {
-          // Token expired during upload — try refreshing and retry
+          // Token expired during upload - try refreshing and retry
           const refreshed = await attemptTokenRefresh();
           if (refreshed) {
             const newToken = getToken() || "";
@@ -611,7 +611,7 @@ export const useFileStore = create<FileState>((set, get) => ({
         quotaFolderCount: q.folderCount,
       });
     } catch {
-      // Quota is non-critical — silently ignore errors
+      // Quota is non-critical - silently ignore errors
     }
   },
 
@@ -817,9 +817,9 @@ export const useFileStore = create<FileState>((set, get) => ({
           : state.activeFile,
     })),
 
-  /** UI-only lock — does NOT persist to backend. Use governance API for real locking. */
+  /** UI-only lock - does NOT persist to backend. Use governance API for real locking. */
   lockFile: (id, user, reason) => {
-    console.warn("lockFile is UI-only — use governanceApi.create for real locking");
+    console.warn("lockFile is UI-only - use governanceApi.create for real locking");
     set((state) => ({
       files: state.files.map((f) =>
         f.id === id ? { ...f, lockedBy: user, lockReason: reason } : f
@@ -831,9 +831,9 @@ export const useFileStore = create<FileState>((set, get) => ({
     }));
   },
 
-  /** UI-only unlock — does NOT persist to backend. Use governance API for real unlocking. */
+  /** UI-only unlock - does NOT persist to backend. Use governance API for real unlocking. */
   unlockFile: (id) => {
-    console.warn("unlockFile is UI-only — use governanceApi.create for real unlocking");
+    console.warn("unlockFile is UI-only - use governanceApi.create for real unlocking");
     set((state) => ({
       files: state.files.map((f) =>
         f.id === id ? { ...f, lockedBy: null, lockReason: null } : f

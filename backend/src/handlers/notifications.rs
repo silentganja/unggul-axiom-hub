@@ -1,4 +1,4 @@
-use crate::{
+﻿use crate::{
     app_middleware::auth::AuthUser, errors::AppError, models::notification::NotificationEvent,
 };
 use actix_web::HttpResponse;
@@ -12,7 +12,7 @@ use tokio_stream::wrappers::BroadcastStream;
 /// Capacity of the notification broadcast channel.
 const CHANNEL_CAPACITY: usize = 256;
 
-/// Global broadcast sender — used by handlers to push events.
+/// Global broadcast sender - used by handlers to push events.
 static NOTIFICATION_TX: LazyLock<broadcast::Sender<NotificationEvent>> = LazyLock::new(|| {
     let (tx, _) = broadcast::channel(CHANNEL_CAPACITY);
     tx

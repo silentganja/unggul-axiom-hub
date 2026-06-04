@@ -1,4 +1,4 @@
-// ─────────────────────────────────────────────────────────────────────────────
+﻿// ─────────────────────────────────────────────────────────────────────────────
 // Background cleanup tasks.
 // - Soft-deleted files that have been in the trash for more than 30 days are
 //   permanently deleted from the database and their physical file on disk.
@@ -46,7 +46,7 @@ pub async fn cleanup_expired_governance(pool: &PgPool) {
 /// 2. Deletes the physical storage files from disk.
 /// 3. Removes the database rows.
 ///
-/// It is safe to call repeatedly — deletes are idempotent.
+/// It is safe to call repeatedly - deletes are idempotent.
 pub async fn cleanup_expired_trash(pool: &PgPool, storage_path: &str) {
     tracing::info!("Running expired trash cleanup...");
 
@@ -74,7 +74,7 @@ pub async fn cleanup_expired_trash(pool: &PgPool, storage_path: &str) {
 
     let count = expired.len();
     for (file_id, _name) in &expired {
-        // Remove the physical file from disk (ignore errors — file may already be gone)
+        // Remove the physical file from disk (ignore errors - file may already be gone)
         let filepath = Path::new(storage_path).join(file_id.to_string());
         if filepath.exists() {
             if let Err(e) = tokio::fs::remove_file(&filepath).await {

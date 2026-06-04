@@ -1,5 +1,5 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// Rate limiting helpers — Redis-backed sliding-window rate limiter.
+﻿// ─────────────────────────────────────────────────────────────────────────────
+// Rate limiting helpers - Redis-backed sliding-window rate limiter.
 // ─────────────────────────────────────────────────────────────────────────────
 
 use crate::errors::AppError;

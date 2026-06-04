@@ -1,9 +1,9 @@
-use chrono::{DateTime, Utc};
+﻿use chrono::{DateTime, Utc};
 use serde::Serialize;
 use uuid::Uuid;
 
 /// Database row returned by `SELECT ... FROM users WHERE ...`.
-/// Used with `sqlx::query_as::<_, User>(...)` — no compile-time macros.
+/// Used with `sqlx::query_as::<_, User>(...)` - no compile-time macros.
 #[derive(Debug, sqlx::FromRow)]
 pub struct User {
     pub id: Uuid,
@@ -26,7 +26,7 @@ pub struct User {
     pub created_at: DateTime<Utc>,
 }
 
-/// Safe public projection of a user — never includes `password_hash`.
+/// Safe public projection of a user - never includes `password_hash`.
 #[derive(Debug, Serialize, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
 pub struct UserProfile {

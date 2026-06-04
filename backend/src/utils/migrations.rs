@@ -1,5 +1,5 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// Auto-migration runner — applies idempotent schema migrations on every startup.
+﻿// ─────────────────────────────────────────────────────────────────────────────
+// Auto-migration runner - applies idempotent schema migrations on every startup.
 //
 // Uses version numbers in the 9000+ range to avoid conflicts with any existing
 // _migrations records that may have been created by an older init.sql.
@@ -27,7 +27,7 @@ pub async fn run_migrations(pool: &PgPool) {
     // ── Migration definitions ──────────────────────────────────────────────────
     // Using 9000+ versions to avoid conflicts with any pre-existing records.
     let migrations: Vec<(&str, &str, Vec<&str>)> = vec![
-        // 9001 — Core extensions
+        // 9001 - Core extensions
         (
             "9001",
             "Auto: Core extensions",
@@ -36,10 +36,10 @@ pub async fn run_migrations(pool: &PgPool) {
                 "CREATE EXTENSION IF NOT EXISTS \"pgcrypto\"",
             ],
         ),
-        // 9002 — File shares table
+        // 9002 - File shares table
         (
             "9002",
-            "Auto: File sharing — file_shares table",
+            "Auto: File sharing - file_shares table",
             vec![
                 "CREATE TABLE IF NOT EXISTS file_shares (
                     id          UUID         PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -55,16 +55,16 @@ pub async fn run_migrations(pool: &PgPool) {
                 "CREATE INDEX IF NOT EXISTS idx_file_shares_user_id ON file_shares (user_id)",
             ],
         ),
-        // 9003 — Soft-delete column on files
+        // 9003 - Soft-delete column on files
         (
             "9003",
-            "Auto: Soft-delete — deleted_at on files",
+            "Auto: Soft-delete - deleted_at on files",
             vec![
                 "ALTER TABLE files ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ",
                 "CREATE INDEX IF NOT EXISTS idx_files_deleted_at ON files (deleted_at)",
             ],
         ),
-        // 9004 — Governance + file locking columns
+        // 9004 - Governance + file locking columns
         (
             "9004",
             "Auto: Governance + file locking columns",
@@ -73,10 +73,10 @@ pub async fn run_migrations(pool: &PgPool) {
                 "ALTER TABLE files ADD COLUMN IF NOT EXISTS locked_at TIMESTAMPTZ",
             ],
         ),
-        // 9005 — Auth extras tables
+        // 9005 - Auth extras tables
         (
             "9005",
-            "Auto: Auth extras — password_resets, magic_links, webauthn_credentials",
+            "Auto: Auth extras - password_resets, magic_links, webauthn_credentials",
             vec![
                 "CREATE TABLE IF NOT EXISTS password_resets (
                     id          UUID         PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -104,16 +104,16 @@ pub async fn run_migrations(pool: &PgPool) {
                 )",
             ],
         ),
-        // 9006 — Role hierarchy
+        // 9006 - Role hierarchy
         (
             "9006",
-            "Auto: Role hierarchy — chief/director/officer/staff",
+            "Auto: Role hierarchy - chief/director/officer/staff",
             vec![
                 "ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check",
                 "ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('chief', 'director', 'officer', 'staff'))",
             ],
         ),
-        // 9007 — Active flag on users
+        // 9007 - Active flag on users
         (
             "9007",
             "Auto: Active flag on users",
@@ -121,7 +121,7 @@ pub async fn run_migrations(pool: &PgPool) {
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE",
             ],
         ),
-        // 9008 — System config
+        // 9008 - System config
         (
             "9008",
             "Auto: System configuration table",
@@ -138,7 +138,7 @@ pub async fn run_migrations(pool: &PgPool) {
                 ON CONFLICT (key) DO NOTHING",
             ],
         ),
-        // 9009 — Server-side favorites
+        // 9009 - Server-side favorites
         (
             "9009",
             "Auto: Favorites table",
@@ -152,7 +152,7 @@ pub async fn run_migrations(pool: &PgPool) {
                 "CREATE INDEX IF NOT EXISTS idx_favorites_user_id ON favorites (user_id)",
             ],
         ),
-        // 9010 — File versioning
+        // 9010 - File versioning
         (
             "9010",
             "Auto: File versioning table",
@@ -171,7 +171,7 @@ pub async fn run_migrations(pool: &PgPool) {
                 "CREATE INDEX IF NOT EXISTS idx_file_versions_created ON file_versions (created_at DESC)",
             ],
         ),
-        // 9011 — Governance requests table
+        // 9011 - Governance requests table
         (
             "9011",
             "Auto: Governance requests table",
@@ -197,7 +197,7 @@ pub async fn run_migrations(pool: &PgPool) {
                 "CREATE INDEX IF NOT EXISTS idx_gov_requests_file ON governance_requests (target_file_id)",
             ],
         ),
-        // 9013 — Per-user storage quota
+        // 9013 - Per-user storage quota
         (
             "9013",
             "Auto: Per-user storage quota",
@@ -205,16 +205,16 @@ pub async fn run_migrations(pool: &PgPool) {
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS storage_quota_bytes BIGINT",
             ],
         ),
-        // 9014 — Soft-delete TTL cleanup (runtime enforcement in cleanup.rs)
+        // 9014 - Soft-delete TTL cleanup (runtime enforcement in cleanup.rs)
         (
             "9014",
-            "Auto: Soft-delete TTL — expired trash cleanup policy (30-day retention)",
+            "Auto: Soft-delete TTL - expired trash cleanup policy (30-day retention)",
             vec!["SELECT 1 AS migration_documentation"],
         ),
-        // 9015 — Full-text search via tsvector on files.name
+        // 9015 - Full-text search via tsvector on files.name
         (
             "9015",
-            "Auto: Full-text search — tsvector column + GIN index on files",
+            "Auto: Full-text search - tsvector column + GIN index on files",
             vec![
                 "ALTER TABLE files ADD COLUMN IF NOT EXISTS search_vector tsvector",
                 "CREATE INDEX IF NOT EXISTS idx_files_search_vector ON files USING GIN (search_vector)",
@@ -222,31 +222,31 @@ pub async fn run_migrations(pool: &PgPool) {
                 "UPDATE files SET search_vector = to_tsvector('english', COALESCE(name, '')) WHERE search_vector IS NULL",
             ],
         ),
-        // 9016 — Governance review_note column
+        // 9016 - Governance review_note column
         (
             "9016",
-            "Auto: Governance — review_note column on governance_requests",
+            "Auto: Governance - review_note column on governance_requests",
             vec![
                 "ALTER TABLE governance_requests ADD COLUMN IF NOT EXISTS review_note TEXT",
             ],
         ),
-        // 9017 — lock_reason column on files
+        // 9017 - lock_reason column on files
         (
             "9017",
-            "Auto: Files — lock_reason column",
+            "Auto: Files - lock_reason column",
             vec![
                 "ALTER TABLE files ADD COLUMN IF NOT EXISTS lock_reason TEXT",
             ],
         ),
-        // 9018 — Avatar data column
+        // 9018 - Avatar data column
         (
             "9018",
-            "Auto: Avatar — avatar_data TEXT on users",
+            "Auto: Avatar - avatar_data TEXT on users",
             vec![
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_data TEXT",
             ],
         ),
-        // 9019 — Department and supervisor
+        // 9019 - Department and supervisor
         (
             "9019",
             "Auto: Department and supervisor columns on users",
@@ -255,15 +255,15 @@ pub async fn run_migrations(pool: &PgPool) {
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS supervisor_id UUID REFERENCES users(id)",
             ],
         ),
-        // 9020 — Notification preferences
+        // 9020 - Notification preferences
         (
             "9020",
-            "Auto: Notification preferences — notification_prefs JSONB on users",
+            "Auto: Notification preferences - notification_prefs JSONB on users",
             vec![
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS notification_prefs JSONB DEFAULT '{}'",
             ],
         ),
-        // 9021 — User sessions table
+        // 9021 - User sessions table
         (
             "9021",
             "Auto: User sessions table for active session tracking",
@@ -280,7 +280,7 @@ pub async fn run_migrations(pool: &PgPool) {
                 "CREATE INDEX IF NOT EXISTS idx_user_sessions_user_id ON user_sessions (user_id)",
             ],
         ),
-        // 9012 — Audit logs table
+        // 9012 - Audit logs table
         (
             "9012",
             "Auto: Audit logs table",

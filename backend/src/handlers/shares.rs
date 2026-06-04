@@ -1,4 +1,4 @@
-use crate::{
+﻿use crate::{
     app_middleware::auth::AuthUser,
     errors::AppError,
     models::share::{
@@ -87,7 +87,7 @@ pub async fn share_file(
             .map_err(AppError::Database)?
             .ok_or(AppError::NotFound)?;
 
-    // ── Enforce lock: hierarchical — must be the locker or have >= role level ──
+    // ── Enforce lock: hierarchical - must be the locker or have >= role level ──
     let lock_info: Option<(Option<Uuid>, Option<String>)> = sqlx::query_as(
         "SELECT f.locked_by, u.role FROM files f LEFT JOIN users u ON u.id = f.locked_by WHERE f.id = $1",
     )

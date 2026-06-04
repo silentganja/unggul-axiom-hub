@@ -1,8 +1,8 @@
 ﻿use crate::{
-    app_middleware::admin::AdminUser,
+    app_middleware::{admin::AdminUser, rate_limit},
     errors::AppError,
     models::user::{self, User, UserProfile},
-    utils::{jwt, password},
+    utils::{jwt, password, redis::RedisClient},
     AppConfig,
 };
 use actix_web::{web, HttpRequest, HttpResponse};
@@ -48,8 +48,16 @@ pub struct UpdateUserRequest {
 
 pub async fn admin_login(
     config: web::Data<AppConfig>,
+    redis_client: web::Data<RedisClient>,
+    req: HttpRequest,
     body: web::Json<AdminLoginRequest>,
 ) -> Result<HttpResponse, AppError> {
+    let ip = req
+        .peer_addr()
+        .map(|a| a.ip().to_string())
+        .unwrap_or_else(|| "unknown".to_string());
+    rate_limit::check_sensitive_rate_limit(&redis_client, &ip).await?;
+
     if body.username != config.admin_username || body.password != config.admin_password {
         return Err(AppError::Unauthorized);
     }
@@ -69,7 +77,7 @@ pub async fn list_users(
     pool: web::Data<PgPool>,
     _admin: AdminUser,
 ) -> Result<HttpResponse, AppError> {
-    // #[allow(dead_code)] — selects 7 of 12 columns; User struct has more fields
+    // #[allow(dead_code)] - selects 7 of 12 columns; User struct has more fields
     let users: Vec<UserProfile> = sqlx::query_as::<_, User>(
         "SELECT id, email, password_hash, full_name, role, active, created_at
          FROM users
@@ -102,6 +110,9 @@ pub async fn create_user(
             "email, password, and full_name are required".into(),
         ));
     }
+
+    password::validate_password_strength(&body.password)
+        .map_err(|msg| AppError::BadRequest(msg.into()))?;
 
     if !user::VALID_ROLES.contains(&role.as_str()) {
         return Err(AppError::BadRequest(format!(
@@ -193,6 +204,8 @@ pub async fn update_user(
         if plain.is_empty() {
             existing.password_hash
         } else {
+            password::validate_password_strength(plain)
+                .map_err(|msg| AppError::BadRequest(msg.into()))?;
             password::hash_password(plain)?
         }
     } else {
@@ -408,11 +421,8 @@ pub async fn reset_user_password(
     body: web::Json<AdminResetPasswordRequest>,
 ) -> Result<HttpResponse, AppError> {
     let user_id = path.into_inner();
-    if body.new_password.len() < 6 {
-        return Err(AppError::BadRequest(
-            "Password must be at least 6 characters".into(),
-        ));
-    }
+    password::validate_password_strength(&body.new_password)
+        .map_err(|msg| AppError::BadRequest(msg.into()))?;
     let hash = password::hash_password(&body.new_password)?;
     let updated = sqlx::query("UPDATE users SET password_hash = $1 WHERE id = $2")
         .bind(&hash)
@@ -835,7 +845,7 @@ pub async fn force_approve(
 ) -> Result<HttpResponse, AppError> {
     let request_id = path.into_inner();
 
-    // Check current status first — only proceed if PENDING
+    // Check current status first - only proceed if PENDING
     let current_status: Option<String> =
         sqlx::query_scalar("SELECT status FROM governance_requests WHERE id = $1")
             .bind(request_id)
@@ -1307,6 +1317,10 @@ pub async fn bulk_create_users(
         }
         if !user::VALID_ROLES.contains(&u.role.as_str()) {
             errors.push(format!("{}: invalid role", u.email));
+            continue;
+        }
+        if let Err(msg) = password::validate_password_strength(&u.password) {
+            errors.push(format!("{}: {}", u.email, msg));
             continue;
         }
         let hash = match password::hash_password(&u.password) {

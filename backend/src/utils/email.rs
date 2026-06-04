@@ -1,5 +1,5 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// Email service — sends transactional emails via SMTP.
+﻿// ─────────────────────────────────────────────────────────────────────────────
+// Email service - sends transactional emails via SMTP.
 // Falls back to console logging when SMTP_ENABLED is not set (dev mode).
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -47,7 +47,7 @@ fn smtp_config() -> SmtpConfig {
 pub async fn send_password_reset(email: &str, full_name: &str, token: &str) {
     let cfg = smtp_config();
 
-    let subject = "Password Reset — Unggul Axiom Hub";
+    let subject = "Password Reset - Unggul Axiom Hub";
     let body = format!(
         r#"Hello {name},
 
@@ -61,8 +61,8 @@ This token expires in 1 hour.
 If you did not request this, please ignore this email and contact your
 security administrator immediately.
 
-—
-Unggul Axiom Hub — Strategic Workspace
+-
+Unggul Axiom Hub - Strategic Workspace
 This is an automated message. Do not reply to this email.
 "#,
         name = full_name,
@@ -82,7 +82,7 @@ This is an automated message. Do not reply to this email.
 pub async fn send_magic_link(email: &str, full_name: &str, token: &str) {
     let cfg = smtp_config();
 
-    let subject = "Magic Link Login — Unggul Axiom Hub";
+    let subject = "Magic Link Login - Unggul Axiom Hub";
     let body = format!(
         r#"Hello {name},
 
@@ -96,8 +96,8 @@ This token expires in 15 minutes.
 If you did not request this, please ignore this email and contact your
 security administrator immediately.
 
-—
-Unggul Axiom Hub — Strategic Workspace
+-
+Unggul Axiom Hub - Strategic Workspace
 This is an automated message. Do not reply to this email.
 "#,
         name = full_name,
@@ -117,11 +117,11 @@ This is an automated message. Do not reply to this email.
 
 async fn send_email(to: &str, subject: &str, body: &str, cfg: &SmtpConfig) {
     if !cfg.enabled {
-        // Dev mode — log the email content instead of sending
+        // Dev mode - log the email content instead of sending
         tracing::info!(
             to = %to,
             subject = %subject,
-            "SMTP disabled — email content logged to console"
+            "SMTP disabled - email content logged to console"
         );
         return;
     }
@@ -157,13 +157,27 @@ async fn send_email(to: &str, subject: &str, body: &str, cfg: &SmtpConfig) {
 
     let creds = Credentials::new(cfg.username.clone(), cfg.password.clone());
 
-    // Use builder_dangerous for broadest compatibility.
-    // For SMTP servers that support STARTTLS, TLS is negotiated automatically.
-    let mailer: AsyncSmtpTransport<Tokio1Executor> =
+    // Use STARTTLS by default. If SMTP_TLS_VERIFY=false (dev only), skip verification.
+    let tls_verify = env::var("SMTP_TLS_VERIFY")
+        .unwrap_or_else(|_| "true".to_string())
+        .to_lowercase()
+        != "false";
+
+    let mailer: AsyncSmtpTransport<Tokio1Executor> = if tls_verify {
+        match AsyncSmtpTransport::<Tokio1Executor>::starttls_relay(&cfg.host) {
+            Ok(m) => m.port(cfg.port).credentials(creds).build(),
+            Err(e) => {
+                tracing::error!("Failed to create secure SMTP transport: {}", e);
+                return;
+            }
+        }
+    } else {
+        tracing::warn!("SMTP_TLS_VERIFY=false - email transport is not encrypted");
         AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(&cfg.host)
             .port(cfg.port)
             .credentials(creds)
-            .build();
+            .build()
+    };
 
     match mailer.send(message).await {
         Ok(_) => tracing::info!(to = %to, subject = %subject, "Email sent successfully"),

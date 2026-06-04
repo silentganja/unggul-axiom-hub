@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import {
   Loader2, AlertCircle, Trash2, Search, Download,
 } from "lucide-react";
+import { useToastStore } from "@/components/ui/Toast";
 import {
   adminApi, AllSharesRow, AdminUserEntry,
   formatTimestamp,
@@ -83,7 +84,7 @@ export default function ShareManagementTab() {
       setShares(prev => prev.filter(s => s.id !== revokeTarget.id));
       setRevokeTarget(null);
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Failed to revoke share");
+      useToastStore.getState().error(e instanceof Error ? e.message : "Failed to revoke share");
     } finally {
       setRevokeLoading(false);
     }

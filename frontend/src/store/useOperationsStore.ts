@@ -1,4 +1,4 @@
-import { create } from "zustand";
+﻿import { create } from "zustand";
 import { governanceApi, GovernanceRequest, formatTimestamp, ListGovernanceParams } from "@/lib/api";
 
 // ── Frontend-facing task shape ──────────────────────────────────────────────
@@ -27,7 +27,7 @@ function transformRequest(r: GovernanceRequest): ApprovalTask {
   if (r.metadata) {
     const meta = r.metadata as Record<string, string>;
     if (meta.newClassification) amountValue += ` → ${meta.newClassification}`;
-    if (meta.lockReason) amountValue += ` — ${meta.lockReason}`;
+    if (meta.lockReason) amountValue += ` - ${meta.lockReason}`;
   }
 
   const typeLabel: Record<string, string> = {
@@ -43,7 +43,7 @@ function transformRequest(r: GovernanceRequest): ApprovalTask {
     type: typeLabel[r.type] || r.type,
     requestedBy: r.requestedByName,
     requestedByEmail: r.requestedByEmail,
-    amountValue: amountValue || "—",
+    amountValue: amountValue || "-",
     status: r.status,
     relatedFileId: r.targetFileId,
     relatedFileName: r.targetFileName,

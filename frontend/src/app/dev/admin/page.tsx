@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React, { useState, useEffect, useId, useCallback } from "react";
 import {
@@ -6,6 +6,7 @@ import {
   Search, LogOut, Lock, Folder, ExternalLink,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
+import { useToastStore } from "@/components/ui/Toast";
 import { useAdminStore } from "@/store/useAdminStore";
 import { useNotificationStore } from "@/store/useNotificationStore";
 import GovernanceTab from "@/components/features/admin/GovernanceTab";
@@ -66,7 +67,7 @@ function AdminLoginView() {
             </div>
           </div>
           <h1 className="text-lg font-bold tracking-tight text-foreground font-serif">Admin Console</h1>
-          <p className="font-mono text-[8px] font-bold tracking-[0.25em] text-accent uppercase">Strategic Portal — User Management</p>
+          <p className="font-mono text-[8px] font-bold tracking-[0.25em] text-accent uppercase">Strategic Portal - User Management</p>
         </div>
         <div className="glass-premium rounded-lg p-6 shadow-xl border border-border/20 space-y-4">
           <div className="flex items-center justify-center gap-1.5 border border-accent/15 bg-accent-subtle/30 px-3 py-1 font-mono text-[8px] font-semibold text-accent tracking-wider uppercase rounded">
@@ -106,7 +107,7 @@ function AdminLoginView() {
             <span className="h-2 w-px bg-border/20" />
             <span className="flex items-center gap-1"><Shield size={9} className="text-accent/80" /> ADMIN GATEWAY</span>
           </div>
-          <p className="font-mono text-[8px] text-foreground-subtle/50 tracking-wide">Unggul Axiom — Strategic Portal Admin Console</p>
+          <p className="font-mono text-[8px] text-foreground-subtle/50 tracking-wide">Unggul Axiom - Strategic Portal Admin Console</p>
         </div>
       </div>
     </div>
@@ -118,7 +119,7 @@ function AdminLoginView() {
 function AdminDashboardView() {
   const { username, logout } = useAdminStore();
 
-  // Tab state — expanded to include new tabs
+  // Tab state - expanded to include new tabs
   const TABS = ["dashboard", "users", "governance", "files", "audit", "shares", "storage", "config"] as const;
   type AdminTab = typeof TABS[number];
   const [adminTab, setAdminTab] = useState<AdminTab>("dashboard");
@@ -221,21 +222,21 @@ function AdminDashboardView() {
 
   const handleResetPassword = async (userId: string) => {
     const pw = prompt("Enter new password (min 6 characters):");
-    if (!pw || pw.length < 6) { alert("Password must be at least 6 characters."); return; }
-    try { await adminApi.resetUserPassword(userId, pw); alert("Password reset successfully."); }
-    catch (e) { alert(e instanceof Error ? e.message : "Failed to reset password"); }
+    if (!pw || pw.length < 6) { useToastStore.getState().error("Password must be at least 6 characters"); return; }
+    try { await adminApi.resetUserPassword(userId, pw); useToastStore.getState().success("Password reset successfully"); }
+    catch (e) { useToastStore.getState().error(e instanceof Error ? e.message : "Failed to reset password"); }
   };
 
   const handleToggleActive = async (userId: string) => {
     try { await adminApi.toggleUserActive(userId); await fetchUsers(); }
-    catch (e) { alert(e instanceof Error ? e.message : "Failed to toggle"); }
+    catch (e) { useToastStore.getState().error(e instanceof Error ? e.message : "Failed to toggle"); }
   };
 
   const handleForceDelete = async (fileId: string, fileName: string) => {
     if (!confirm(`Permanently delete "${fileName}"?`)) return;
     if (!expandedUserId) return;
     try { await adminApi.forceDeleteFile(fileId); await handleExpandUser(expandedUserId); }
-    catch (e) { alert(e instanceof Error ? e.message : "Failed to delete"); }
+    catch (e) { useToastStore.getState().error(e instanceof Error ? e.message : "Failed to delete"); }
   };
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -507,7 +508,7 @@ function AdminDashboardView() {
                                             <span className={cn("px-1 py-0 rounded text-[8px] font-bold uppercase border", f.classification === "RAHSIA" && "bg-destructive/15 text-destructive border-destructive/25", f.classification === "SULIT" && "bg-warning/15 text-warning border-warning/25")}>{f.classification}</span>
                                           </div>
                                           <div className="flex items-center gap-2 shrink-0">
-                                            <span className="text-foreground-muted">{f.isFolder ? "—" : formatFileSize(f.sizeBytes)}</span>
+                                            <span className="text-foreground-muted">{f.isFolder ? "-" : formatFileSize(f.sizeBytes)}</span>
                                             <button onClick={() => handleForceDelete(f.id, f.name)} className="text-[8px] font-bold text-destructive hover:bg-destructive/10 px-1.5 py-0.5 rounded uppercase tracking-wider transition-colors cursor-pointer" title="Force delete">Delete</button>
                                           </div>
                                         </div>

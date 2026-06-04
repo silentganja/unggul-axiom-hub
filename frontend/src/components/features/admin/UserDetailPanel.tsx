@@ -1,9 +1,10 @@
-"use client";
+﻿"use client";
 import { useEffect, useState } from "react";
 import {
   Loader2, ArrowLeft, AlertCircle, Lock, Shield,
   File, Folder, Activity,
 } from "lucide-react";
+import { useToastStore } from "@/components/ui/Toast";
 import {
   adminApi, UserDetail, formatFileSize, formatTimestamp,
 } from "@/lib/api";
@@ -86,14 +87,14 @@ export default function UserDetailPanel({ userId, onBack, onRefresh }: Props) {
           <button onClick={() => {
             const pw = prompt("Enter new password (min 6 chars):");
             if (pw && pw.length >= 6) {
-              adminApi.resetUserPassword(detail.id, pw).then(() => { alert("Password reset"); onRefresh(); }).catch(e => alert(e.message));
+              adminApi.resetUserPassword(detail.id, pw).then(() => { useToastStore.getState().success("Password reset"); onRefresh(); }).catch(e => useToastStore.getState().error(e.message));
             }
           }}
             className="h-7 px-2.5 rounded-sm border border-accent/30 text-accent bg-accent/5 hover:bg-accent/15 text-[9px] font-bold uppercase font-mono transition-colors flex items-center gap-1.5 cursor-pointer">
             <Lock size={10} /> Reset Password
           </button>
           <button onClick={() => {
-            adminApi.toggleUserActive(detail.id).then(async () => { await onRefresh(); onBack(); }).catch(e => alert(e.message));
+            adminApi.toggleUserActive(detail.id).then(async () => { await onRefresh(); onBack(); }).catch(e => useToastStore.getState().error(e.message));
           }}
             className="h-7 px-2.5 rounded-sm border border-warning/30 text-warning bg-warning/5 hover:bg-warning/15 text-[9px] font-bold uppercase font-mono transition-colors flex items-center gap-1.5 cursor-pointer">
             <Shield size={10} /> Toggle Active
@@ -168,7 +169,7 @@ export default function UserDetailPanel({ userId, onBack, onRefresh }: Props) {
                     a.action.includes("DELETE") && "bg-destructive/10 text-destructive border-destructive/20",
                     a.action.includes("SHARE") && "bg-info/10 text-info border-info/20",
                   )}>{a.action.replace(/_/g, " ")}</span>
-                  <span className="text-foreground-muted truncate max-w-[200px]">{a.targetResource || "—"}</span>
+                  <span className="text-foreground-muted truncate max-w-[200px]">{a.targetResource || "-"}</span>
                 </div>
                 <span className="text-foreground-subtle shrink-0">{formatTimestamp(a.createdAt)}</span>
               </div>

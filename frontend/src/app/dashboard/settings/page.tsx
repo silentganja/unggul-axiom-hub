@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect, useId, useRef } from "react";
 import { useRouter } from "next/navigation";
@@ -72,7 +72,7 @@ export default function ProfileSettingsPage() {
   const [revokingId, setRevokingId] = useState<string | null>(null);
 
   // ── Sync local state and fetch data on user change ──────────────────────────
-  // (hydrate is called by the dashboard layout — no need to call it again here)
+  // (hydrate is called by the dashboard layout - no need to call it again here)
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
@@ -292,7 +292,7 @@ export default function ProfileSettingsPage() {
     const updated = { ...notifRules, [key]: !notifRules[key] };
     setNotifRules(updated);
     localStorage.setItem("user-notif-rules", JSON.stringify(updated));
-    // Sync to backend — revert on failure
+    // Sync to backend - revert on failure
     authApi.updateNotificationPrefs(updated).catch(() => {
       const reverted = { ...updated, [key]: !updated[key] };
       setNotifRules(reverted);
@@ -503,7 +503,7 @@ export default function ProfileSettingsPage() {
                       </span>
                       <div className="h-9 px-3 flex items-center rounded-sm border border-border/30 bg-background/50 text-sm text-foreground-muted font-mono">
                         <Building size={13} className="mr-1.5 text-foreground-subtle" />
-                        {user.department || "—"}
+                        {user.department || "-"}
                       </div>
                     </div>
                     <div className="space-y-1.5">
@@ -512,7 +512,7 @@ export default function ProfileSettingsPage() {
                       </span>
                       <div className="h-9 px-3 flex items-center rounded-sm border border-border/30 bg-background/50 text-sm text-foreground-muted font-mono">
                         <UserCheck size={13} className="mr-1.5 text-foreground-subtle" />
-                        {user.supervisorName || "—"}
+                        {user.supervisorName || "-"}
                       </div>
                     </div>
 

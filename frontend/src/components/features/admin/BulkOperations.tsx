@@ -1,6 +1,7 @@
-"use client";
+﻿"use client";
 import { Loader2 } from "lucide-react";
 import { adminApi, AdminUserEntry } from "@/lib/api";
+import { useToastStore } from "@/components/ui/Toast";
 
 interface Props {
   users: AdminUserEntry[];
@@ -23,14 +24,14 @@ export default function BulkOperations({ users, fetchUsers, bulkCsvText, setBulk
       return { email, password, fullName: fullName || (email ? email.split("@")[0] : ""), role: role || "staff" };
     });
     if (errors.length > 0) {
-      alert(`CSV validation errors:\n${errors.join("\n")}`);
+      useToastStore.getState().error(`CSV validation failed: ${errors.length} row(s) have errors`);
       return;
     }
     if (parsed.length === 0) return;
     if (!confirm(`Import ${parsed.length} users?`)) return;
     setBulkLoading(true);
     try { setBulkResult(await adminApi.bulkCreateUsers(parsed)); fetchUsers(); }
-    catch { alert("Bulk import failed"); }
+    catch { useToastStore.getState().error("Bulk import failed"); }
     finally { setBulkLoading(false); }
   };
 
@@ -39,7 +40,7 @@ export default function BulkOperations({ users, fetchUsers, bulkCsvText, setBulk
     if (!confirm(`Update ${bulkRoleUserIds.length} users to role "${bulkRoleTarget}"?`)) return;
     setBulkLoading(true);
     try { await adminApi.bulkRoleUpdate(bulkRoleUserIds, bulkRoleTarget); fetchUsers(); setBulkRoleUserIds([]); }
-    catch { alert("Bulk role update failed"); }
+    catch { useToastStore.getState().error("Bulk role update failed"); }
     finally { setBulkLoading(false); }
   };
 
@@ -54,7 +55,7 @@ export default function BulkOperations({ users, fetchUsers, bulkCsvText, setBulk
       {/* CSV Import */}
       <div className="space-y-2">
         <span className="text-[9px] font-bold font-mono uppercase text-foreground-subtle">Import Users (CSV)</span>
-        <p className="text-[8px] text-foreground-subtle/70 font-mono">Format: email,password,fullName,role — one per line</p>
+        <p className="text-[8px] text-foreground-subtle/70 font-mono">Format: email,password,fullName,role - one per line</p>
         <textarea rows={4} value={bulkCsvText} onChange={e => setBulkCsvText(e.target.value)}
           placeholder="admin@unggulaxiom.com,pass123,Admin User,chief&#10;staff@unggulaxiom.com,pass456,Staff User,staff"
           className="w-full px-2.5 py-1.5 rounded-sm border border-border bg-background text-[10px] font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-accent resize-none" />

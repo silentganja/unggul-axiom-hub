@@ -1,4 +1,4 @@
-name: Build & Deploy — Unggul Axiom Hub
+﻿name: Build & Deploy - Unggul Axiom Hub
 
 on:
   push:
@@ -15,7 +15,7 @@ env:
 jobs:
   # ─── 1. FRONTEND LINT & TYPE-CHECK ──────────────────────────────────────────
   lint-frontend:
-    name: Lint & Verify — Frontend
+    name: Lint & Verify - Frontend
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -38,9 +38,12 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Run tests
+        run: npm run test
+
   # ─── 2. BACKEND LINT & TESTS ────────────────────────────────────────────────
   check-backend:
-    name: Check & Verify — Backend (Rust)
+    name: Check & Verify - Backend (Rust)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -64,6 +67,11 @@ jobs:
 
       - name: Build (debug)
         run: cargo build
+
+      - name: Run tests
+        run: cargo test
+        env:
+          JWT_SECRET: ci-test-jwt-secret-min-32-chars-!!
 
   # ─── 3. BUILD AND PUSH TO AWS ECR ───────────────────────────────────────────
   docker-build-push:

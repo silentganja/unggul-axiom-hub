@@ -1,5 +1,5 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// Redis client — synchronous connection pool shared across the application.
+﻿// ─────────────────────────────────────────────────────────────────────────────
+// Redis client - synchronous connection pool shared across the application.
 // Async wrappers use `web::block` to avoid depending on unstable `redis::aio`.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -7,7 +7,7 @@ use std::env;
 use std::sync::Mutex;
 
 /// Thin wrapper around a synchronous Redis connection.
-/// Protected by a Mutex for thread safety — actix handlers acquire the lock
+/// Protected by a Mutex for thread safety - actix handlers acquire the lock
 /// briefly for each operation.
 pub struct RedisClient {
     client: redis::Client,
@@ -36,9 +36,8 @@ impl RedisClient {
         f(&mut conn)
     }
 
-    /// Get the underlying client (for spawning new connections if needed).
-    #[allow(dead_code)]
-    pub fn client(&self) -> &redis::Client {
+    /// Get the underlying client for pub/sub subscriptions or connection pooling.
+    pub fn _client(&self) -> &redis::Client {
         &self.client
     }
 }

@@ -3,6 +3,7 @@ import { Inter, JetBrains_Mono, Playfair_Display } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
 import { ToastContainer } from "@/components/ui/Toast";
+import { ConfirmDialogProvider } from "@/components/ui/ConfirmDialog";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -59,8 +60,10 @@ export default function RootLayout({
           disableTransitionOnChange={false}
           storageKey="unggul-axiom-theme"
         >
-          {children}
-          <ToastContainer />
+          <ConfirmDialogProvider>
+            {children}
+            <ToastContainer />
+          </ConfirmDialogProvider>
         </ThemeProvider>
       </body>
     </html>

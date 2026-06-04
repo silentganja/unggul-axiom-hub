@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React, { useState, useMemo, useRef } from "react";
 import {
@@ -544,7 +544,7 @@ export default function ERDPage() {
                                 {field.defaultValue}
                               </code>
                             ) : (
-                              <span className="text-foreground-subtle/30">—</span>
+                              <span className="text-foreground-subtle/30">-</span>
                             )}
                           </td>
 

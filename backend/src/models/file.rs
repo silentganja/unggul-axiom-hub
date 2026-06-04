@@ -1,11 +1,11 @@
-use chrono::{DateTime, Utc};
+﻿use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 // ─── Database Row ────────────────────────────────────────────────────────────
 
 /// Full file/folder row as returned from the `files` table.
-/// Used with `sqlx::query_as::<_, FileNode>(...)` — no compile-time macros.
+/// Used with `sqlx::query_as::<_, FileNode>(...)` - no compile-time macros.
 #[derive(Debug, Serialize, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
 pub struct FileNode {
@@ -27,7 +27,7 @@ pub struct FileNode {
 // ─── Request Payloads ────────────────────────────────────────────────────────
 
 /// Query parameters for `GET /api/files`.
-/// `parent_id` is optional — omit it to list root-level entries.
+/// `parent_id` is optional - omit it to list root-level entries.
 /// Accepts both `parent_id` (snake_case) and `parentId` (camelCase) query params.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -98,5 +98,106 @@ impl RenameFileReq {
             return Err("new_name must not be empty");
         }
         Ok(())
+    }
+}
+
+// ── Tests ─────────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    mod create_folder_req {
+        use super::*;
+
+        #[test]
+        fn valid_default_classification() {
+            let req = CreateFolderReq {
+                name: "Q3 Reports".into(),
+                parent_id: None,
+                classification: None,
+            };
+            let cls = req.validate().expect("should be valid");
+            assert_eq!(cls, "TERBUKA", "default classification is TERBUKA");
+        }
+
+        #[test]
+        fn valid_explicit_classification() {
+            for &cls in VALID_CLASSIFICATIONS {
+                let req = CreateFolderReq {
+                    name: "Folder".into(),
+                    parent_id: None,
+                    classification: Some(cls.into()),
+                };
+                assert!(req.validate().is_ok(), "{} should be valid", cls);
+            }
+        }
+
+        #[test]
+        fn empty_name_rejected() {
+            let req = CreateFolderReq {
+                name: "   ".into(),
+                parent_id: None,
+                classification: None,
+            };
+            assert!(req.validate().is_err(), "whitespace-only name must be rejected");
+        }
+
+        #[test]
+        fn invalid_classification_rejected() {
+            let req = CreateFolderReq {
+                name: "Valid Name".into(),
+                parent_id: None,
+                classification: Some("TOP_SECRET".into()),
+            };
+            assert!(req.validate().is_err(), "unknown classification must be rejected");
+        }
+
+        #[test]
+        fn name_with_leading_trailing_spaces_trimmed() {
+            let req = CreateFolderReq {
+                name: "  trimmed  ".into(),
+                parent_id: None,
+                classification: None,
+            };
+            assert!(req.validate().is_ok(), "trimmed name should still be non-empty");
+        }
+    }
+
+    mod rename_file_req {
+        use super::*;
+
+        #[test]
+        fn valid_rename() {
+            let req = RenameFileReq {
+                new_name: "updated-report.pdf".into(),
+            };
+            assert!(req.validate().is_ok());
+        }
+
+        #[test]
+        fn empty_name_rejected() {
+            let req = RenameFileReq {
+                new_name: "".into(),
+            };
+            assert!(req.validate().is_err());
+        }
+
+        #[test]
+        fn unicode_name_accepted() {
+            let req = RenameFileReq {
+                new_name: "機密ファイル.txt".into(),
+            };
+            assert!(req.validate().is_ok());
+        }
+    }
+
+    #[test]
+    fn valid_classifications_contains_all_tiers() {
+        assert_eq!(VALID_CLASSIFICATIONS.len(), 4);
+        assert!(VALID_CLASSIFICATIONS.contains(&"RAHSIA"));
+        assert!(VALID_CLASSIFICATIONS.contains(&"SULIT"));
+        assert!(VALID_CLASSIFICATIONS.contains(&"TERHAD"));
+        assert!(VALID_CLASSIFICATIONS.contains(&"TERBUKA"));
     }
 }

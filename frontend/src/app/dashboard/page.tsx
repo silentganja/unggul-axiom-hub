@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useId, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
@@ -1082,7 +1082,7 @@ export default function FileExplorerPage() {
               {/* Warning */}
               <div className="rounded-sm border border-warning/20 bg-warning/5 px-3 py-2 text-[9px] font-mono text-foreground-subtle flex items-start gap-2">
                 <AlertTriangle size={10} className="text-warning shrink-0 mt-0.5" />
-                <span>This action cannot be undone — though you may use the Undo option on completed requests.</span>
+                <span>This action cannot be undone - though you may use the Undo option on completed requests.</span>
               </div>
 
               {confirmError && (
@@ -1310,7 +1310,7 @@ export default function FileExplorerPage() {
                         )}>{file.classification}</span>
                       </td>
                       <td className="px-4 py-2 font-mono text-[11px] text-foreground-muted truncate max-w-[140px]">
-                        {file.lockedBy || "—"}
+                        {file.lockedBy || "-"}
                       </td>
                       <td className="px-4 py-2 text-center select-none">
                         <span className={cn(
@@ -1528,7 +1528,8 @@ export default function FileExplorerPage() {
                             Restore
                           </button>
                           <button
-                            // NOTE: window.confirm is synchronous and blocks React — ideally replace with a custom modal
+                            // Browser confirm() is synchronous and blocks the main thread.
+                            // Acceptable here since permanent deletion is an infrequent, high-stakes action.
                             onClick={() => { if (confirm(`Permanently delete "${file.name}"? This cannot be undone.`)) permanentDelete(file.id); }}
                             className="h-7 px-2.5 rounded-sm border border-destructive/20 text-destructive bg-destructive/5 hover:bg-destructive/15 text-[9px] font-bold tracking-wider uppercase font-mono transition-all cursor-pointer"
                           >
@@ -1956,7 +1957,7 @@ export default function FileExplorerPage() {
           </div>
         </div>
       )}
-      {/* Phase 6 secure file previewer overlay modal */}
+      {/* File preview overlay - renders above the dashboard grid */}
       <FilePreviewOverlay />
     </div>
   );

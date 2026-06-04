@@ -1,4 +1,4 @@
-use crate::{app_middleware::auth::AuthUser, errors::AppError, models::user};
+﻿use crate::{app_middleware::auth::AuthUser, errors::AppError, models::user};
 use actix_web::{web, HttpResponse};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -51,7 +51,7 @@ pub struct AuditLogListResponse {
 /// Supports `?format=csv` for CSV export.
 ///
 /// # Errors
-/// - `401 Unauthorized` — missing or invalid JWT
+/// - `401 Unauthorized` - missing or invalid JWT
 pub async fn list_audit_logs(
     pool: web::Data<PgPool>,
     user: AuthUser,

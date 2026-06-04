@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useId, Suspense, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
@@ -24,7 +24,7 @@ function LoginForm() {
 
   const { login, isLoading: authLoading, error: authError, isAuthenticated } = useAuthStore();
 
-  // Block direct /login access — users must select a portal from the landing page first.
+  // Block direct /login access - users must select a portal from the landing page first.
   // Exception: magic links and password resets are allowed without portal
   const magicLinkUrlToken = searchParams?.get("magic");
   const resetToken = searchParams?.get("reset");
@@ -554,7 +554,7 @@ function LoginForm() {
               ) : (
                 <>
                   <div className="space-y-1">
-                    <h3 className="text-sm font-semibold text-foreground font-serif">SSO Vault — Magic Link</h3>
+                    <h3 className="text-sm font-semibold text-foreground font-serif">SSO Vault - Magic Link</h3>
                     <p className="text-[10px] text-foreground-subtle font-mono">Enter your email to receive a one-time secure login link.</p>
                   </div>
                   <form onSubmit={handleMagicLink} className="space-y-3">

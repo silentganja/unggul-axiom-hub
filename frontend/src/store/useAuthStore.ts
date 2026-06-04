@@ -1,4 +1,4 @@
-import { create } from "zustand";
+﻿import { create } from "zustand";
 import {
   authApi,
   UserProfile,
@@ -65,7 +65,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         await authApi.logout(rt);
       }
     } catch {
-      // Ignore errors — logout locally regardless
+      // Ignore errors - logout locally regardless
     }
 
     clearToken();
@@ -121,10 +121,10 @@ export const useAuthStore = create<AuthState>((set) => ({
       set({ token, user, refreshToken, isAuthenticated: true, isLoading: false });
     } catch {
       if (hasCache) {
-        // Token might be expired — keep cached session, auto-refresh will handle it
+        // Token might be expired - keep cached session, auto-refresh will handle it
         set({ isLoading: false });
       } else {
-        // No cache — must log out
+        // No cache - must log out
         clearToken();
         set({
           token: null,

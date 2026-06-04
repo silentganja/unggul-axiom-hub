@@ -1,5 +1,6 @@
-"use client";
+﻿"use client";
 import { useEffect, useState, useCallback } from "react";
+import { useToastStore } from "@/components/ui/Toast";
 import {
   Loader2, CheckCircle, X, Check, AlertCircle,
   Undo2, FileText,
@@ -106,7 +107,7 @@ export default function GovernanceTab({ govRequests, setGovRequests, govLoading,
       await adminApi.forceApprove(reqId, selectedReviewer);
       setGovRequests(govRequests.filter(r => r.id !== reqId));
       setBatchSelectedIds(prev => prev.filter(id => id !== reqId));
-    } catch { alert("Force approve failed"); }
+    } catch { useToastStore.getState().error("Force approve failed"); }
   };
 
   const handleReject = async (reqId: string, reason: string) => {
@@ -125,7 +126,7 @@ export default function GovernanceTab({ govRequests, setGovRequests, govLoading,
       await governanceApi.undo(reqId);
       const g = await adminApi.getAdminGovernance();
       setGovRequests(g.requests);
-    } catch { alert("Undo failed"); }
+    } catch { useToastStore.getState().error("Undo failed"); }
   };
 
   const handleBatchApprove = async () => {
@@ -136,7 +137,7 @@ export default function GovernanceTab({ govRequests, setGovRequests, govLoading,
       }
       setGovRequests(govRequests.filter(r => !batchSelectedIds.includes(r.id)));
       setBatchSelectedIds([]);
-    } catch { alert("Batch approve failed"); }
+    } catch { useToastStore.getState().error("Batch approve failed"); }
   };
 
   const handleBatchReject = async (reason: string) => {
@@ -167,7 +168,7 @@ export default function GovernanceTab({ govRequests, setGovRequests, govLoading,
         <div>
           <h2 className="text-sm font-bold text-foreground font-serif">Governance Console</h2>
           <p className="text-[10px] text-foreground-subtle font-mono mt-0.5">
-            {total} requests — {govRequests.filter(r => r.status === "PENDING").length} pending
+            {total} requests - {govRequests.filter(r => r.status === "PENDING").length} pending
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">

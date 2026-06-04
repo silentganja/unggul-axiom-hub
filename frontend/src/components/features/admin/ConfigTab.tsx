@@ -1,7 +1,8 @@
-"use client";
+﻿"use client";
 import { useEffect, useState } from "react";
 import { Loader2, Edit2, Check } from "lucide-react";
 import { adminApi } from "@/lib/api";
+import { useToastStore } from "@/components/ui/Toast";
 
 interface Props {
   configMap: Record<string, string>;
@@ -27,7 +28,7 @@ export default function ConfigTab({ configMap, setConfigMap, configEditKey, setC
 
   const handleSave = async (key: string) => {
     try { await adminApi.updateConfig(key, configEditVal); setConfigMap({...configMap, [key]: configEditVal}); setConfigEditKey(null); }
-    catch { alert("Failed to save"); }
+    catch { useToastStore.getState().error("Failed to save configuration"); }
   };
 
   return (
@@ -55,7 +56,7 @@ export default function ConfigTab({ configMap, setConfigMap, configEditKey, setC
                   </>
                 ) : (
                   <>
-                    <span className="text-[10px] font-mono text-foreground-muted max-w-[300px] truncate">{configMap[key] || "—"}</span>
+                    <span className="text-[10px] font-mono text-foreground-muted max-w-[300px] truncate">{configMap[key] || "-"}</span>
                     <button onClick={() => { setConfigEditKey(key); setConfigEditVal(configMap[key] || ""); }} className="h-7 w-7 rounded-sm border border-border bg-background hover:bg-background-subtle/50 text-foreground-subtle flex items-center justify-center transition-colors cursor-pointer"><Edit2 size={11} /></button>
                   </>
                 )}

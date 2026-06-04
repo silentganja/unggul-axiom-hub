@@ -184,12 +184,17 @@ pub async fn forgot_password(
 pub async fn reset_password(
     pool: web::Data<PgPool>,
     redis_client: web::Data<RedisClient>,
+    req: actix_web::HttpRequest,
     body: web::Json<ResetPasswordRequest>,
 ) -> Result<HttpResponse, AppError> {
-    if body.new_password.len() < 6 {
-        return Err(AppError::BadRequest(
-            "Password must be at least 6 characters".into(),
-        ));
+    let ip = req
+        .peer_addr()
+        .map(|a| a.ip().to_string())
+        .unwrap_or_else(|| "unknown".to_string());
+    rate_limit::check_sensitive_rate_limit(&redis_client, &ip).await?;
+
+    if let Err(msg) = password::validate_password_strength(&body.new_password) {
+        return Err(AppError::BadRequest(msg.into()));
     }
 
     let row: Option<(Uuid,)> = sqlx::query_as(
@@ -257,13 +262,12 @@ pub async fn request_magic_link(
     .await
     .map_err(AppError::Database)?;
 
-    if user.is_none() {
+    let Some(user) = user else {
         return Ok(HttpResponse::Ok().json(serde_json::json!({
             "message": "If an account with that email exists, a magic link has been sent."
         })));
-    }
+    };
 
-    let user = user.unwrap();
     let token = generate_token();
 
     sqlx::query(

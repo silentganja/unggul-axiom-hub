@@ -167,6 +167,11 @@ export default function DashboardLayout({
   return (
     <div className="relative min-h-dvh flex bg-background text-foreground font-sans overflow-hidden selection:bg-accent selection:text-accent-foreground">
 
+      {/* Skip-to-content link for keyboard users */}
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:top-3 focus:left-3 focus:z-[300] focus:px-4 focus:py-2 focus:bg-accent focus:text-accent-foreground focus:rounded-sm focus:text-xs focus:font-mono focus:outline-none">
+        Skip to content
+      </a>
+
       {/* ── Background Scan Grid Overlay ── */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
         <div className="absolute top-[10%] left-[20%] w-[35%] h-[35%] rounded-full bg-accent/5 blur-[120px] hidden md:block" />
@@ -184,6 +189,7 @@ export default function DashboardLayout({
 
       {/* ── Enterprise Sidebar (Fixed Left Navigation) ── */}
       <aside
+        aria-label="Sidebar"
         className={cn(
           "fixed inset-y-0 left-0 z-40 w-64 border-r border-border/40 bg-background-panel/85 backdrop-blur-md flex flex-col justify-between p-5 transition-transform duration-300 lg:translate-x-0 lg:static shrink-0",
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
@@ -218,7 +224,7 @@ export default function DashboardLayout({
           </div>
 
           {/* Navigation Links */}
-          <nav className="space-y-4">
+          <nav className="space-y-4" aria-label="Main navigation">
             <div className="space-y-1">
               <span className="block font-mono text-[8px] uppercase tracking-widest text-foreground-subtle/50 px-3 mb-1.5">
                 Command Core
@@ -300,7 +306,8 @@ export default function DashboardLayout({
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
               className="lg:hidden h-8 w-8 rounded border border-border bg-background/50 hover:bg-background-subtle/30 flex items-center justify-center text-foreground shrink-0 transition-colors"
-              title="Toggle Menu"
+              aria-label={sidebarOpen ? "Close menu" : "Open menu"}
+              aria-expanded={sidebarOpen}
             >
               <Menu size={14} />
             </button>
@@ -438,7 +445,7 @@ export default function DashboardLayout({
         </header>
 
         {/* ── Main Panel Viewport ── */}
-        <main className="flex-grow p-6 overflow-y-auto relative">
+        <main id="main-content" className="flex-grow p-6 overflow-y-auto relative">
           {children}
         </main>
 

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect } from "react";
 import {
@@ -173,9 +173,9 @@ export default function ExecutiveOverview() {
           <span>SESSION ACTIVE</span>
         </div>
         <div className="flex items-center gap-4">
-          <span>{user?.fullName || user?.email || "—"}</span>
+          <span>{user?.fullName || user?.email || "-"}</span>
           <span className="text-foreground-subtle/30">|</span>
-          <span>ROLE: {user?.role || "—"}</span>
+          <span>ROLE: {user?.role || "-"}</span>
           <span className="text-foreground-subtle/30">|</span>
           <span className="flex items-center gap-1.5">
             <Lock size={9} className="text-accent" /> SECURE
@@ -292,7 +292,7 @@ export default function ExecutiveOverview() {
             Governance Analytics
           </span>
 
-          {/* Requests by type — mini bar chart */}
+          {/* Requests by type - mini bar chart */}
           <div className="mt-3 space-y-2">
             <span className="text-[7px] font-mono uppercase tracking-wider text-foreground-subtle/70">By Type</span>
             {govTypeLabels.length === 0 ? (
@@ -321,7 +321,7 @@ export default function ExecutiveOverview() {
             )}
           </div>
 
-          {/* Approval rate — horizontal stacked bar */}
+          {/* Approval rate - horizontal stacked bar */}
           <div className="mt-4 space-y-1.5">
             <span className="text-[7px] font-mono uppercase tracking-wider text-foreground-subtle/70">Approval Rate</span>
             {totalProcessed === 0 ? (
@@ -569,7 +569,7 @@ export default function ExecutiveOverview() {
                     entry.action.includes("TRASH") && "bg-destructive/10 text-destructive border-destructive/20",
                     (!entry.action.includes("SHARED") && !entry.action.includes("UPLOAD") && !entry.action.includes("GOV") && !entry.action.includes("LOCK") && !entry.action.includes("DELETE") && !entry.action.includes("TRASH")) && "bg-background-muted/40 text-foreground-subtle border-border/40"
                   )}>{entry.action.replace(/_/g, " ")}</span>
-                  <span className="truncate text-foreground-muted">{entry.targetResource || "—"}</span>
+                  <span className="truncate text-foreground-muted">{entry.targetResource || "-"}</span>
                   {entry.actor && <span className="text-foreground-subtle/60 hidden sm:inline">by {entry.actor}</span>}
                 </div>
                 <span className="text-foreground-subtle/60 shrink-0">{formatTimestamp(entry.occurredAt)}</span>
@@ -606,7 +606,7 @@ export default function ExecutiveOverview() {
 
             <div className="rounded-sm border border-warning/20 bg-warning/5 px-3 py-2 text-[9px] font-mono text-foreground-subtle flex items-start gap-2">
               <AlertTriangle size={10} className="text-warning shrink-0 mt-0.5" />
-              <span>This action cannot be undone — though you may use the Undo option on completed requests.</span>
+              <span>This action cannot be undone - though you may use the Undo option on completed requests.</span>
             </div>
 
             {confirmError && (

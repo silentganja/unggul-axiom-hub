@@ -1,4 +1,4 @@
-import { create } from "zustand";
+﻿import { create } from "zustand";
 import { adminApi, setAdminToken, clearAdminToken } from "@/lib/api";
 
 interface AdminAuthState {
@@ -66,12 +66,12 @@ export const useAdminStore = create<AdminAuthState>((set) => ({
         const { username } = JSON.parse(cached);
         set({ token, username, isAuthenticated: true });
       } catch {
-        // Corrupt cache — clear and continue with token-only auth
+        // Corrupt cache - clear and continue with token-only auth
         localStorage.removeItem("admin-user");
         set({ token, isAuthenticated: true, username: "admin" });
       }
     } else {
-      // No cache but token exists — still authenticate
+      // No cache but token exists - still authenticate
       set({ token, isAuthenticated: true, username: "admin" });
     }
   },

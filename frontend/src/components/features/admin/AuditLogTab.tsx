@@ -1,8 +1,9 @@
-"use client";
+﻿"use client";
 import { useEffect, useState } from "react";
 import {
   Loader2, AlertCircle, Download, Search,
 } from "lucide-react";
+import { useToastStore } from "@/components/ui/Toast";
 import {
   adminApi, AuditLogEntry, AdminUserEntry,
   formatTimestamp,
@@ -145,14 +146,14 @@ export default function AuditLogTab() {
       const headers = ["Timestamp", "User", "Action", "Target Resource", "IP Address"];
       const rows = all.entries.map(e => [
         formatTimestamp(e.createdAt),
-        e.userName || "—",
+        e.userName || "-",
         e.action.replace(/_/g, " "),
-        e.targetResource || "—",
-        e.ipAddress || "—",
+        e.targetResource || "-",
+        e.ipAddress || "-",
       ]);
       exportCSV(headers, rows, `audit-log-${new Date().toISOString().slice(0, 10)}.csv`);
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Export failed");
+      useToastStore.getState().error(e instanceof Error ? e.message : "Export failed");
     } finally {
       setExportLoading(false);
     }
@@ -235,14 +236,14 @@ export default function AuditLogTab() {
                 {filtered.map(e => (
                   <tr key={e.id} className="hover:bg-background-subtle/30 transition-colors">
                     <td className="px-4 py-2 text-foreground-muted text-[10px]">{formatTimestamp(e.createdAt)}</td>
-                    <td className="px-4 py-2 text-foreground">{e.userName || "—"}</td>
+                    <td className="px-4 py-2 text-foreground">{e.userName || "-"}</td>
                     <td className="px-4 py-2">
                       <span className={cn("px-1.5 py-0.5 rounded-sm text-[8px] font-bold uppercase border inline-block",
                         actionColorMap[e.action] || "bg-background-muted/40 text-foreground-subtle border-border/40"
                       )}>{e.action.replace(/_/g, " ")}</span>
                     </td>
-                    <td className="px-4 py-2 text-foreground-muted truncate max-w-[200px]">{e.targetResource || "—"}</td>
-                    <td className="px-4 py-2 text-foreground-muted text-[10px] font-mono">{e.ipAddress || "—"}</td>
+                    <td className="px-4 py-2 text-foreground-muted truncate max-w-[200px]">{e.targetResource || "-"}</td>
+                    <td className="px-4 py-2 text-foreground-muted text-[10px] font-mono">{e.ipAddress || "-"}</td>
                   </tr>
                 ))}
               </tbody>

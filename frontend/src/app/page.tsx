@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect } from "react";
 import Link from "next/link";
@@ -103,7 +103,7 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* HR & Operations Card (Disabled Phase 2) */}
+          {/* HR & Operations - planned for upcoming release */}
           <div className="glass-premium rounded-2xl p-6 flex flex-col justify-between text-left space-y-6 shadow-md opacity-75 relative group border border-border/10">
             <div className="absolute top-0 right-0 mt-6 mr-6">
               <span className="inline-flex items-center gap-1 rounded-full border border-border/30 bg-background-panel px-2.5 py-0.5 font-mono text-[8px] font-semibold uppercase tracking-wider text-foreground-subtle">
@@ -135,7 +135,7 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* Investor Relations Card (Disabled Phase 2) */}
+          {/* Investor Relations - planned for upcoming release */}
           <div className="glass-premium rounded-2xl p-6 flex flex-col justify-between text-left space-y-6 shadow-md opacity-75 relative group border border-border/10">
             <div className="absolute top-0 right-0 mt-6 mr-6">
               <span className="inline-flex items-center gap-1 rounded-full border border-border/30 bg-background-panel px-2.5 py-0.5 font-mono text-[8px] font-semibold uppercase tracking-wider text-foreground-subtle">
@@ -167,7 +167,7 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* Partner Telemetry Gate Card (Disabled Phase 2) */}
+          {/* Partner Telemetry Gate - planned for upcoming release */}
           <div className="glass-premium rounded-2xl p-6 flex flex-col justify-between text-left space-y-6 shadow-md opacity-75 relative group border border-border/10">
             <div className="absolute top-0 right-0 mt-6 mr-6">
               <span className="inline-flex items-center gap-1 rounded-full border border-border/30 bg-background-panel px-2.5 py-0.5 font-mono text-[8px] font-semibold uppercase tracking-wider text-foreground-subtle">
