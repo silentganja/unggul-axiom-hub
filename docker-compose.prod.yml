@@ -43,10 +43,12 @@ services:
     environment:
       DATABASE_URL: postgres://unggul:${DB_PASSWORD}@postgres:5432/unggul_axiom
       REDIS_URL:    redis://:${REDIS_PASSWORD}@redis:6379
-      JWT_SECRET:   ${JWT_SECRET}
-      HOST:         0.0.0.0
-      PORT:         "8080"
-      RUST_LOG:     info
+      JWT_SECRET:     ${JWT_SECRET}
+      ADMIN_USERNAME: ${ADMIN_USERNAME}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      HOST:           0.0.0.0
+      PORT:           "8080"
+      RUST_LOG:       info
     ports:
       - "127.0.0.1:8080:8080" # Exposed locally to host Nginx reverse proxy
     depends_on:
