@@ -27,6 +27,8 @@ I built this to demonstrate how I approach production systems: security from the
 > **Project specs:** [hub.unggulaxiom.com/v/info](https://hub.unggulaxiom.com/v/info) - interactive ERD, system architecture, API reference, benchmarks, and telemetry.
 > 
 > **Live app:** [hub.unggulaxiom.com](https://hub.unggulaxiom.com)
+> 
+> **Demo login:** `demo@unggulaxiom.com` / `demo`
 
 ---
 
