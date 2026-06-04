@@ -100,7 +100,7 @@ mod tests {
     #[test]
     fn unauthorized_returns_401() {
         assert_eq!(
-            AppError::Unauthorized.status_code(),
+            AppError::Unauthorized.error_response().status(),
             StatusCode::UNAUTHORIZED
         );
     }
@@ -108,24 +108,27 @@ mod tests {
     #[test]
     fn bad_request_returns_400() {
         let err = AppError::BadRequest("name is required".into());
-        assert_eq!(err.status_code(), StatusCode::BAD_REQUEST);
+        assert_eq!(err.error_response().status(), StatusCode::BAD_REQUEST);
     }
 
     #[test]
     fn not_found_returns_404() {
-        assert_eq!(AppError::NotFound.status_code(), StatusCode::NOT_FOUND);
+        assert_eq!(
+            AppError::NotFound.error_response().status(),
+            StatusCode::NOT_FOUND
+        );
     }
 
     #[test]
     fn conflict_returns_409() {
         let err = AppError::Conflict("duplicate entry".into());
-        assert_eq!(err.status_code(), StatusCode::CONFLICT);
+        assert_eq!(err.error_response().status(), StatusCode::CONFLICT);
     }
 
     #[test]
     fn too_many_requests_returns_429() {
         assert_eq!(
-            AppError::TooManyRequests.status_code(),
+            AppError::TooManyRequests.error_response().status(),
             StatusCode::TOO_MANY_REQUESTS
         );
     }
@@ -133,7 +136,10 @@ mod tests {
     #[test]
     fn database_error_returns_500() {
         let err = AppError::Internal(anyhow::anyhow!("simulated"));
-        assert_eq!(err.status_code(), StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(
+            err.error_response().status(),
+            StatusCode::INTERNAL_SERVER_ERROR
+        );
     }
 
     #[test]
@@ -141,7 +147,7 @@ mod tests {
         use jsonwebtoken::errors::Error as JwtError;
         use jsonwebtoken::errors::ErrorKind;
         let err = AppError::Jwt(JwtError::from(ErrorKind::ExpiredSignature));
-        assert_eq!(err.status_code(), StatusCode::UNAUTHORIZED);
+        assert_eq!(err.error_response().status(), StatusCode::UNAUTHORIZED);
     }
 
     #[test]
