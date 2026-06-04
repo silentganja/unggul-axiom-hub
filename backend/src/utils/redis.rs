@@ -10,6 +10,8 @@ use std::sync::Mutex;
 /// Protected by a Mutex for thread safety - actix handlers acquire the lock
 /// briefly for each operation.
 pub struct RedisClient {
+    // Retained for spawning additional connections (pub/sub, connection pooling).
+    #[allow(dead_code)]
     client: redis::Client,
     conn: Mutex<redis::Connection>,
 }
