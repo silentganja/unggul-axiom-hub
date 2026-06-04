@@ -6,7 +6,7 @@ on:
 
 env:
   AWS_REGION:          ${{ vars.AWS_REGION || 'ap-southeast-1' }}
-  ECR_REGISTRY:        ${{ secrets.AWS_ACCOUNT_ID || '300978239288' }}.dkr.ecr.${{ vars.AWS_REGION || 'ap-southeast-1' }}.amazonaws.com
+  ECR_REGISTRY:        ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ vars.AWS_REGION || 'ap-southeast-1' }}.amazonaws.com
   BACKEND_IMAGE_NAME:  unggul-axiom-hub-backend
   FRONTEND_IMAGE_NAME: unggul-axiom-hub-frontend
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -135,9 +135,9 @@ jobs:
       - name: Copy config files via SCP
         uses: appleboy/scp-action@v1.0.0
         with:
-          host:        ${{ secrets.LIGHTSAIL_HOST || '13.228.172.43' }}
+          host:        ${{ secrets.LIGHTSAIL_HOST }}
           username:    root
-          password:    ${{ secrets.LIGHTSAIL_PASSWORD || '396500' }}
+          password:    ${{ secrets.LIGHTSAIL_PASSWORD }}
           port:        22
           source:      "docker-compose.prod.yml,infra/postgres/init.sql"
           target:      "/home/ubuntu/unggul-axiom-hub"
@@ -147,9 +147,9 @@ jobs:
       - name: Execute deployment commands via SSH
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host:        ${{ secrets.LIGHTSAIL_HOST || '13.228.172.43' }}
+          host:        ${{ secrets.LIGHTSAIL_HOST }}
           username:    root
-          password:    ${{ secrets.LIGHTSAIL_PASSWORD || '396500' }}
+          password:    ${{ secrets.LIGHTSAIL_PASSWORD }}
           port:        22
           script: |
             set -e
@@ -166,9 +166,9 @@ jobs:
             # Write .env securely on VPS host inside project folder
             cat << EOF > /home/ubuntu/unggul-axiom-hub/.env
             ECR_REGISTRY=${{ env.ECR_REGISTRY }}
-            DB_PASSWORD=${{ secrets.DB_PASSWORD || 'postgres_prod_pass_123' }}
-            REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD || 'redis_prod_pass_123' }}
-            JWT_SECRET=${{ secrets.JWT_SECRET || 'jwt_prod_secret_key_123_456' }}
+            DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+            REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}
+            JWT_SECRET=${{ secrets.JWT_SECRET }}
             EOF
 
             cd /home/ubuntu/unggul-axiom-hub

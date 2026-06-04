@@ -53,10 +53,12 @@ services:
     environment:
       DATABASE_URL: postgres://unggul:unggul_dev_secret@postgres:5432/unggul_axiom
       REDIS_URL:    redis://:redis_dev_secret@redis:6379
-      JWT_SECRET:   change_me_in_production_use_min_32_random_chars
-      HOST:         0.0.0.0
-      PORT:         "8080"
-      RUST_LOG:     info
+      JWT_SECRET:     change_me_in_production_use_min_32_random_chars
+      ADMIN_USERNAME: admin
+      ADMIN_PASSWORD: change_me_to_a_strong_password
+      HOST:           0.0.0.0
+      PORT:           "8080"
+      RUST_LOG:       info
     ports:
       - "8080:8080"
     depends_on:

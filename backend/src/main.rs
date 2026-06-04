@@ -104,8 +104,8 @@ async fn main() -> std::io::Result<()> {
     // ── Config ───────────────────────────────────────────────────────────────
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let jwt_secret = env::var("JWT_SECRET").expect("JWT_SECRET must be set");
-    let admin_username = env::var("ADMIN_USERNAME").unwrap_or_else(|_| "mirza".to_string());
-    let admin_password = env::var("ADMIN_PASSWORD").unwrap_or_else(|_| "396500Ja!".to_string());
+    let admin_username = env::var("ADMIN_USERNAME").expect("ADMIN_USERNAME must be set");
+    let admin_password = env::var("ADMIN_PASSWORD").expect("ADMIN_PASSWORD must be set");
     let storage_path = env::var("STORAGE_PATH").unwrap_or_else(|_| "./uploads".to_string());
     let host = env::var("HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
     let port: u16 = env::var("PORT")

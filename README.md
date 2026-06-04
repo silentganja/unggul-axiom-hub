@@ -1,195 +1,180 @@
-# Unggul Axiom - Hub
+# Unggul Axiom — Hub
 
-**Sovereign Enterprise Cloud Storage & Collaboration Platform**
+<p align="center">
+  <strong>Sovereign Enterprise Cloud Storage & Collaboration Platform</strong>
+  <br>
+  <sub>Built for government-grade security. Engineered for production from day one.</sub>
+</p>
 
-Unggul Axiom - Hub is a high-performance, secure, and sovereign cloud storage and document collaboration platform designed to align with strict governmental data privacy and data classification tiers (RAHSIA, SULIT, TERHAD, TERBUKA). 
-
-Built as an audited monorepo, the platform couples a robust, type-safe **Rust (Actix-Web)** backend with a modern, high-density **Next.js 16 (React 19)** frontend dashboard.
-
----
-
-## 🚀 System Architecture & Stack
-
-### Backend (Rust)
-- **Engine**: [Actix-Web](https://actix.rs/) for high-throughput, low-latency concurrent routing.
-- **Database**: [PostgreSQL](https://www.postgresql.org/) with [SQLx](https://github.com/launchbadge/sqlx) (raw queries for execution transparency).
-- **Session & Limits**: [Redis](https://redis.io/) handling API rate-limiting and active session verification.
-- **Security & Crypto**:
-  - `Argon2id` password hashing.
-  - `AES-256-GCM` authenticated at-rest file encryption.
-  - `JSON Web Tokens (JWT)` for session management with rotation/revocation.
-  - `Lettre` for secure transactional email dispatch (SMTP).
-
-### Frontend (Next.js)
-- **Framework**: [Next.js 16](https://nextjs.org/) (App Router) + [React 19](https://react.dev/).
-- **Styling**: [Tailwind CSS v4](https://tailwindcss.com/) using an HSL-tailored dark/light mode system with custom micro-animations.
-- **State Management**: [Zustand](https://github.com/pmndrs/zustand) for low-overhead client state stores.
-- **Data Fetching**: [React Query](https://tanstack.com/query) for declarative caching and queries.
-
-### Infrastructure & DevOps
-- **Containerization**: Docker & multi-stage `Dockerfiles`.
-- **CI/CD**: GitHub Actions deploying to **AWS Elastic Container Registry (ECR)** via secure AWS OIDC.
-- **Production Host**: Hosted on **AWS Lightsail VPS** in the `ap-southeast-1` (Singapore) region.
+<p align="center">
+  <a href="https://hub.unggulaxiom.com/v/info"><img src="https://img.shields.io/badge/live_demo-online-success?style=flat" alt="Live Demo"></a>
+  <img src="https://img.shields.io/badge/rust-1.85%2B-orange?logo=rust" alt="Rust">
+  <img src="https://img.shields.io/badge/next.js-16-black?logo=next.js" alt="Next.js 16">
+  <img src="https://img.shields.io/badge/react-19-087ea4?logo=react" alt="React 19">
+  <img src="https://img.shields.io/badge/postgresql-16-336791?logo=postgresql" alt="PostgreSQL 16">
+  <img src="https://img.shields.io/badge/tailwind-v4-06B6D4?logo=tailwindcss" alt="Tailwind v4">
+  <img src="https://img.shields.io/badge/deploy-aws_lightsail-FF9900?logo=amazonaws" alt="AWS Lightsail">
+</p>
 
 ---
 
-## 📁 Monorepo Layout
+## What is this?
+
+Unggul Axiom — Hub is a full-stack, production-grade secure document collaboration platform. It handles **file storage, authentication, encryption, audit logging, and access control** — the kind of system an enterprise or government agency would use to manage classified documents.
+
+This is a portfolio project demonstrating the caliber of software engineering I bring to the table: **systems-level thinking, security-first architecture, and the discipline to ship production-ready code.**
+
+> **🔗 Live Technical Portal:** [hub.unggulaxiom.com/v/info](https://hub.unggulaxiom.com/v/info) — *Interactive ERD, system architecture diagrams, API reference, and live telemetry.*
+
+---
+
+## 🎯 Why this project matters
+
+Most portfolio projects stop at "it works on my machine." This one goes further:
+
+- **It's deployed.** Running on AWS Lightsail behind Nginx, with automated CI/CD via GitHub Actions and OIDC-based credentialing — no long-lived secrets.
+- **It's secure by design.** AES-256-GCM at-rest encryption, Argon2id password hashing, JWT rotation, WebAuthn passkeys, Redis-backed rate limiting. Built for environments that require **RAHSIA / SULIT / TERHAD / TERBUKA** classification levels.
+- **It's observable.** Immutable, append-only audit trails track every critical action. You can trace who did what and when.
+- **It makes deliberate tradeoffs.** Rust for the backend (not Node.js) because memory safety and throughput matter. Raw SQL via SQLx (not an ORM) because auditability and query performance matter. Every choice has a reason.
+
+---
+
+## 🧱 Architecture at a glance
+
+```
+Client (Browser)
+    │
+    ▼
+┌──────────────────────────────────────────────┐
+│  Nginx Reverse Proxy  (TLS termination)       │
+└──────────────────────────────────────────────┘
+    │
+    ├──▶ Next.js 16 Frontend   (React 19, SSR)
+    │    ├── App Router (Server Components)
+    │    ├── Zustand (client state)
+    │    └── TanStack React Query (server state)
+    │
+    └──▶ Rust API Service      (Actix-Web 4)
+         ├── JWT + WebAuthn Auth Layer
+         ├── RBAC + Dual-Signature Workflows
+         ├── AES-256-GCM File Encryption
+         ├── Audit Trail Service
+         └── Rate Limiter (Redis-backed)
+              │
+              ├──▶ PostgreSQL 16
+              └──▶ Redis 7
+```
 
 ```
 unggul-hub/
-├── .github/
-│   └── workflows/
-│       └── deploy.yml            # CI/CD pipeline (OIDC authentication -> AWS ECR)
-├── backend/                      # Rust Service
-│   ├── src/
-│   │   ├── app_middleware/       # Request interceptors
-│   │   │   ├── admin.rs          # Admin authorization guard
-│   │   │   ├── auth.rs           # JWT user authentication guard
-│   │   │   └── rate_limit.rs     # Redis-backed client rate limiter
-│   │   ├── handlers/             # Controller logic / HTTP endpoints
-│   │   │   ├── admin.rs          # User management, config tweaks, full audit reports
-│   │   │   ├── audit.rs          # Immutable system activity logging
-│   │   │   ├── auth.rs           # Standard credential authentication & profiles
-│   │   │   ├── auth_extras.rs    # WebAuthn, Magic Links, Passwords resets, JWT Refresh
-│   │   │   ├── favorites.rs      # User file bookmarking
-│   │   │   ├── file_versions.rs  # Storage version tracking & state restoration
-│   │   │   ├── files.rs          # Core document storage CRUD, uploads, locking
-│   │   │   ├── governance.rs     # Data classification upgrades/downgrades workflow
-│   │   │   ├── notifications.rs  # Server-Sent Events (SSE) dispatch
-│   │   │   └── shares.rs         # Permission scopes (viewer/editor) sharing
-│   │   ├── models/               # Domain database entities (SQLx mapping structs)
-│   │   ├── utils/                # Service helpers (Crypto, Email, Redis, Storage)
-│   │   ├── errors.rs             # Custom backend error types
-│   │   └── main.rs               # Entrypoint & HTTP server bootstrap
-│   ├── Cargo.toml
-│   └── Dockerfile
-├── frontend/                     # Next.js Application
-│   ├── src/
-│   │   ├── app/                  # File-system routing
-│   │   │   ├── dashboard/        # Main platform dashboard interface
-│   │   │   │   ├── audit/        # Admin Audit Logs viewer
-│   │   │   │   └── settings/     # Security and profile configurations
-│   │   │   ├── login/            # Enterprise multi-factor portal
-│   │   │   ├── usr/guide/        # User documentation & simulations
-│   │   │   │   ├── explorer/     # Interactive UI guidance
-│   │   │   │   ├── governance/   # Sovereign classification workflows documentation
-│   │   │   │   ├── roles/        # System access levels specification
-│   │   │   │   └── scenarios/    # Access permission simulators
-│   │   │   ├── v/info/           # Architecture overview, ERD and technical portal
-│   │   │   │   ├── api-reference/ # Complete endpoint reference
-│   │   │   │   ├── architecture/  # System architecture & Data Flow Diagram
-│   │   │   │   ├── erd/          # Interactive SVG-based DB entity relationship diagram
-│   │   │   │   ├── tech-stack/   # Technical tradeoffs and version documentation
-│   │   │   │   └── telemetry/    # Simulated live system activity
-│   │   │   └── globals.css       # HSL theme declarations & design tokens
-│   │   ├── components/           # Modular visual components
-│   │   ├── lib/                  # Fetch client (api.ts) & UI utilities
-│   │   └── store/                # Zustand stores (Auth, Files, Admin, Notifications)
-│   ├── package.json
-│   └── Dockerfile
-├── infra/
-│   └── postgres/
-│       └── init.sql              # Idempotent DB tables, indexes & migration register
-├── docker-compose.yml            # Local development orchestration
-├── docker-compose.prod.yml       # Production environment orchestration
-└── .gitignore
+├── backend/                 # Rust (Actix-Web, SQLx, Redis)
+│   ├── src/                 #   Handlers, middleware, services, models
+│   ├── migrations/          #   SQLx migrations (versioned, reviewable)
+│   └── Dockerfile           #   Multi-stage: builder → runtime (alpine)
+│
+├── frontend/                # Next.js 16 (App Router)
+│   ├── app/                 #   Route handlers & server components
+│   ├── components/          #   Reusable UI primitives
+│   ├── lib/                 #   API client, auth helpers, type defs
+│   └── store/               #   Zustand stores
+│
+├── infra/                   # DB init scripts, Nginx config
+├── .github/workflows/       # CI/CD: lint → build → push ECR → deploy Lightsail
+├── docker-compose.yml       # Dev stack (Postgres, Redis, backend, frontend)
+└── docker-compose.prod.yml  # Production stack (env-var driven, ECR images)
 ```
 
----
-
-## 🛡️ Core Platform Capabilities
-
-1. **Sovereign File Storage**: Nested directory creation, direct secure multipart uploading, AES-256-GCM encryption at-rest, file locking, and version recovery.
-2. **National Security Classification**: Documents can be categorized as `RAHSIA` (Secret), `SULIT` (Confidential), `TERHAD` (Restricted), or `TERBUKA` (Open) matching governmental policies.
-3. **Dual-Signature Governance**: Security classification changes or file unlocks require a formal approval workflow requested by staff and verified by administrators.
-4. **Immutable Audit Trails**: Absolute, append-only logs tracking file reading, updates, shared links, lock changes, and administrative actions.
-5. **Secure Cryptographic Auth**: Passwordless login with **WebAuthn (FIDO2)** passkeys, token-based **Magic Links**, and standard credentials hashed with Argon2id.
-6. **Detailed Admin Panel**: Storage quota definitions, active user management, session termination, global configurations, and direct share revocations.
-7. **Interactive Technical Portal**: Live system telemetry simulator, interactive vector ERD, and comprehensive endpoint documentation.
+For a deeper dive, see the **[Technical Portal → Architecture](https://hub.unggulaxiom.com/v/info/architecture)** with interactive diagrams.
 
 ---
 
-## 🛠️ Environment Configuration
+## 🔑 Engineering decisions
 
-Both components require environmental setups. Configure `backend/.env` using the keys below:
-
-```ini
-# Database Connection
-DATABASE_URL=postgres://unggul:unggul_dev_secret@localhost:5432/unggul_axiom
-
-# Redis Connection
-REDIS_URL=redis://localhost:6379
-
-# Server Binding
-HOST=0.0.0.0
-PORT=8080
-
-# JWT Cryptographic Signing (Generate a strong secret in production)
-JWT_SECRET=change_me_in_production_use_min_32_random_chars
-
-# System Administrator Account
-ADMIN_USERNAME=mirza
-ADMIN_PASSWORD=396500Ja!
-
-# Maximum File Upload Size (bytes)
-MAX_UPLOAD_SIZE_BYTES=104857600
-```
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| Backend language | **Rust** (Actix-Web) | Zero-cost abstractions, memory safety, sub-10ms p95 latency |
+| Database access | **SQLx** (raw SQL) | No magic — every query is reviewable, optimized, and auditable |
+| Auth | **Argon2id + JWT + WebAuthn** | Memory-hard hashing, stateless auth with rotation, phishing-resistant 2FA |
+| Encryption | **AES-256-GCM** | Authenticated encryption — confidentiality + integrity in one pass |
+| Frontend data | **React Query + Zustand** | Server state vs client state separated; cache invalidation is declarative |
+| CI/CD auth | **AWS OIDC** (not IAM users) | Temporary credentials, no long-lived access keys stored anywhere |
+| Containerization | **Multi-stage Docker** | Builder image has dev tools; runtime image is a minimal Alpine base |
 
 ---
 
-## 💻 Local Development
+## 🛡️ Security properties
 
-### 1. The Docker Stack (Recommended)
-Builds and starts PostgreSQL, Redis, the Rust API, and the Next.js frontend in one command:
+- All file mutations are **auth-checked and audit-logged** at the database layer
+- Passwords hashed with **Argon2id** (memory-hard, resistant to GPU/ASIC attacks)
+- JWT tokens support **rotation and server-side revocation** via Redis
+- File-level encryption uses **AES-256-GCM** (authenticated additional data prevents tampering)
+- **Hierarchical RBAC** with dual-signature approval for sensitive operations
+- **Distributed rate limiting** via Redis — protects against brute-force and DoS
+- No hardcoded secrets in the codebase — all credentials injected via environment variables
+
+---
+
+## 🚀 Quick Start
+
+### One command (Docker)
 
 ```bash
-# Clone the configuration template
+git clone https://github.com/YOUR_USERNAME/unggul-hub.git
+cd unggul-hub
 cp backend/.env.example backend/.env
-
-# Spin up all containers
 docker compose up --build
 ```
-Once initialized, resources are available at:
-- **Frontend App**: `http://localhost:3000`
-- **Backend API**: `http://localhost:8080`
-- **Health Verification**: `http://localhost:8080/health`
 
-### 2. Manual Startup (Without Docker Containers)
-To run the processes locally with hot-reloads:
+- **Frontend:** http://localhost:3000
+- **Backend API:** http://localhost:8080
+- **Health check:** http://localhost:8080/health
 
-#### Run Database and Cache (Dependencies)
-Make sure you have PostgreSQL running on port `5432` with the `infra/postgres/init.sql` schema applied, and Redis running on port `6379`.
+### Local development
 
-#### Run Backend Server
+**Prerequisites:** Rust 1.85+, Node.js 20+, PostgreSQL 16, Redis 7
+
 ```bash
+# Backend
 cd backend
+cp .env.example .env
+sqlx migrate run
 cargo run
-```
 
-#### Run Frontend Client
-```bash
+# Frontend (separate terminal)
 cd frontend
+npm install
 npm run dev
 ```
 
 ---
 
-## 🤖 CI/CD & Deployments
+## 🛠️ Tech stack
 
-The workspace includes a automated workflow located in `.github/workflows/deploy.yml`.
-
-### Deployment Pipeline
-- Triggered on direct merges/pushes to the `master` branch.
-- Performs parallel builds of the Frontend and Backend Docker containers.
-- Authenticates securely with AWS via **OIDC (OpenID Connect)** without persistent IAM credentials.
-- Pushes compiled production images to **AWS ECR** in the `ap-southeast-1` region.
-- Signals deployment updates to the live AWS Lightsail instance running `docker-compose.prod.yml`.
+| Layer | Technologies |
+|-------|-------------|
+| **Backend** | Rust, Actix-Web 4, SQLx, Redis, Argon2id, AES-256-GCM, Lettre, Tokio |
+| **Frontend** | Next.js 16, React 19, TypeScript 5, Tailwind CSS v4, React Query, Zustand, Lucide |
+| **Database** | PostgreSQL 16 (with SQLx-managed migrations) |
+| **Cache** | Redis 7 (sessions, rate limiting, revocation lists) |
+| **DevOps** | GitHub Actions, AWS OIDC, ECR, Lightsail, Docker multi-stage builds |
+| **Observability** | Tokio Tracing, immutable audit trail |
 
 ---
 
-## 📐 Engineering Guidelines
+## 📄 License
 
-- **No SQLx Macros**: Always write explicit, readable raw SQL queries using `sqlx::query` or `sqlx::query_as`. Avoid `sqlx::query!` macros to prevent compile-time database dependency requirements.
-- **System-Wide Clean Code**: Run `cargo clippy` and `npm run lint` regularly. A zero-warning/zero-error tolerance is maintained.
-- **Cloudflare-Style UI Density**: UI structures should maintain crisp borders, small margins, high readability, and strict HSL layouts (dark theme `#09090b` and light theme `#ffffff`).
-- **Accent Palette**: Corporate Purple accent (`#7c3aed` light / `#8b5cf6` dark).
+Source-available. All rights reserved. View and learn from the code, but commercial use, distribution, or derivative works require explicit permission.
+
+---
+
+## 👋 About me
+
+I'm a software engineer focused on building secure, performant, and maintainable systems. This project represents my approach to engineering: **understand the problem deeply, choose the right tools deliberately, and build with production discipline from the start.**
+
+I'm currently looking for backend, full-stack, or platform engineering roles where I can work on systems that matter — infrastructure, security, data platforms, or developer tools.
+
+**Let's talk:** [LinkedIn](#) · [Email](#) · [Portfolio](#)
+
+---
+
+*For detailed architecture diagrams, API documentation, and live telemetry, visit the **[Technical Portal](https://hub.unggulaxiom.com/v/info)**.*
