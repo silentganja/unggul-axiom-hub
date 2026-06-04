@@ -191,7 +191,7 @@ async fn main() -> std::io::Result<()> {
     let config_data = web::Data::new(config);
     let redis_data = web::Data::new(redis_client);
 
-    HttpServer::new(move || {
+    let server = HttpServer::new(move || {
         // CORS - allow localhost in dev + hub subdomain in production
         let cors = Cors::default()
             .allowed_origin_fn(|origin, _| {
@@ -466,18 +466,18 @@ async fn main() -> std::io::Result<()> {
                     )
                     .route("/{id}", web::delete().to(handlers::files::delete_file)),
             )
-    })
-    .bind((host.as_str(), port))?
-    .shutdown_timeout(30) // 30-second grace period for in-flight requests
-    .run();
+    });
 
-    // Wait for either the server to finish or a shutdown signal
-    let server_handle = server.handle();
+    let srv = server.bind((host.as_str(), port))?.run();
+
+    // Listen for SIGINT/SIGTERM and initiate graceful shutdown.
+    // stop(true) tells actix to drain in-flight requests before resolving.
+    let handle = srv.handle();
     tokio::spawn(async move {
         tokio::signal::ctrl_c().await.ok();
         tracing::info!("SIGINT received, starting graceful shutdown...");
-        server_handle.stop(true).await;
+        handle.stop(true).await;
     });
 
-    server.await
+    srv.await
 }
