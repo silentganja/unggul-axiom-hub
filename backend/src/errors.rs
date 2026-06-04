@@ -94,13 +94,12 @@ impl actix_web::ResponseError for AppError {
 mod tests {
     use super::*;
     use actix_web::http::StatusCode;
-    use actix_web::test;
     use actix_web::ResponseError;
+    use actix_web::body::MessageBody;
 
     #[test]
     fn unauthorized_returns_401() {
-        let err = AppError::Unauthorized;
-        assert_eq!(err.status_code(), StatusCode::UNAUTHORIZED);
+        assert_eq!(AppError::Unauthorized.status_code(), StatusCode::UNAUTHORIZED);
     }
 
     #[test]
@@ -111,8 +110,7 @@ mod tests {
 
     #[test]
     fn not_found_returns_404() {
-        let err = AppError::NotFound;
-        assert_eq!(err.status_code(), StatusCode::NOT_FOUND);
+        assert_eq!(AppError::NotFound.status_code(), StatusCode::NOT_FOUND);
     }
 
     #[test]
@@ -131,8 +129,6 @@ mod tests {
 
     #[test]
     fn database_error_returns_500() {
-        // Verify Database variant maps to 500 via ResponseError
-        // We can't construct sqlx::Error easily, but Internal is the same pattern
         let err = AppError::Internal(anyhow::anyhow!("simulated"));
         assert_eq!(err.status_code(), StatusCode::INTERNAL_SERVER_ERROR);
     }
@@ -141,18 +137,17 @@ mod tests {
     fn jwt_error_returns_401() {
         use jsonwebtoken::errors::Error as JwtError;
         use jsonwebtoken::errors::ErrorKind;
-        let jwt_err = JwtError::from(ErrorKind::ExpiredSignature);
-        let err = AppError::Jwt(jwt_err);
+        let err = AppError::Jwt(JwtError::from(ErrorKind::ExpiredSignature));
         assert_eq!(err.status_code(), StatusCode::UNAUTHORIZED);
     }
 
-    #[actix_web::test]
-    async fn internal_error_hides_detail_in_body() {
+    #[test]
+    fn internal_error_hides_detail_in_body() {
         let err = AppError::Internal(anyhow::anyhow!("sensitive sql detail"));
-        let resp = err.error_response();
+        let mut resp = err.error_response();
 
-        let body = test::read_body(resp).await;
-        let body_str = String::from_utf8_lossy(&body);
+        let body_bytes = resp.take_body().try_into_bytes().unwrap();
+        let body_str = String::from_utf8_lossy(&body_bytes);
 
         assert!(
             !body_str.contains("sensitive sql detail"),
@@ -164,22 +159,22 @@ mod tests {
         );
     }
 
-    #[actix_web::test]
-    async fn bad_request_includes_user_message() {
+    #[test]
+    fn bad_request_includes_user_message() {
         let msg = "classification must be one of: RAHSIA, SULIT, TERHAD, TERBUKA";
         let err = AppError::BadRequest(msg.into());
-        let resp = err.error_response();
+        let mut resp = err.error_response();
 
-        let body = test::read_body(resp).await;
-        let body_str = String::from_utf8_lossy(&body);
+        let body_bytes = resp.take_body().try_into_bytes().unwrap();
+        let body_str = String::from_utf8_lossy(&body_bytes);
         assert!(
             body_str.contains(msg),
             "bad request body must include the validation message"
         );
     }
 
-    #[actix_web::test]
-    async fn error_response_is_json() {
+    #[test]
+    fn error_response_is_json() {
         let err = AppError::NotFound;
         let resp = err.error_response();
         let content_type = resp
