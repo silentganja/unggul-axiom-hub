@@ -129,7 +129,7 @@ pub async fn share_file(
     .await
     .map_err(AppError::Database)?;
 
-    if let Some((locker, locker_role)) = lock_info {
+    if let Some((Some(locker), locker_role)) = lock_info {
         match locker_role {
             Some(role) => {
                 let user_lvl = user::get_role_level(pool.get_ref(), &user.role)
@@ -138,7 +138,7 @@ pub async fn share_file(
                 let locker_lvl = user::get_role_level(pool.get_ref(), &role)
                     .await
                     .unwrap_or(0);
-                if locker != Some(user.id)
+                if locker != user.id
                     && user_lvl < locker_lvl
                     && !user::user_has_permission(
                         pool.get_ref(),

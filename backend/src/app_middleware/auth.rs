@@ -50,7 +50,11 @@ fn extract_auth_user(req: &HttpRequest) -> Result<AuthUser, AppError> {
     // Decode & validate the JWT
     let claims = jwt::decode_token(&config.jwt_secret, token)?;
 
-    let user_id = Uuid::parse_str(&claims.sub).map_err(|_| AppError::Unauthorized)?;
+    let user_id = if claims.role == "admin_panel" {
+        Uuid::nil()
+    } else {
+        Uuid::parse_str(&claims.sub).map_err(|_| AppError::Unauthorized)?
+    };
 
     Ok(AuthUser {
         id: user_id,

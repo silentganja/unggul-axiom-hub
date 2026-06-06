@@ -858,6 +858,42 @@ export const sharesApi = {
 
 // ── Admin API ────────────────────────────────────────────────────────────────
 
+export interface UserStorageRow {
+  userId: string;
+  fullName: string;
+  email: string;
+  role: string;
+  fileCount: number;
+  totalBytes: number;
+  quotaBytes: number | null;
+}
+
+export interface StorageAnalytics {
+  byClassification: Array<{
+    classification: string;
+    bytes: number;
+    fileCount: number;
+  }>;
+  largestFiles: Array<{
+    id: string;
+    name: string;
+    sizeBytes: number;
+    ownerId: string;
+    ownerName: string;
+    classification: string;
+  }>;
+  storageTrend: Array<{
+    date: string;
+    bytes: number;
+  }>;
+  overQuotaUsers: Array<{
+    userId: string;
+    fullName: string;
+    usedBytes: number;
+    quotaBytes: number;
+  }>;
+}
+
 export interface AdminLoginPayload {
   username: string;
   password: string;

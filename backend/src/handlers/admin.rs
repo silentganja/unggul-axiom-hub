@@ -536,7 +536,7 @@ pub async fn dashboard(
     .await
     .unwrap_or(0);
     let storage_used_bytes: i64 = sqlx::query_scalar(
-        "SELECT COALESCE(SUM(size_bytes), 0) FROM files WHERE deleted_at IS NULL",
+        "SELECT COALESCE(SUM(size_bytes), 0)::BIGINT FROM files WHERE deleted_at IS NULL",
     )
     .fetch_one(pool.get_ref())
     .await
@@ -1231,7 +1231,7 @@ pub async fn storage_breakdown(
 ) -> Result<HttpResponse, AppError> {
     let rows: Vec<UserStorageRow> = sqlx::query_as(
         "SELECT u.id AS user_id, u.full_name, u.email, u.role,
-                COUNT(f.id) AS file_count, COALESCE(SUM(f.size_bytes), 0) AS total_bytes,
+                COUNT(f.id) AS file_count, COALESCE(SUM(f.size_bytes), 0)::BIGINT AS total_bytes,
                 u.storage_quota_bytes
          FROM users u LEFT JOIN files f ON f.owner_id = u.id AND f.deleted_at IS NULL
          GROUP BY u.id ORDER BY total_bytes DESC",
@@ -1294,7 +1294,7 @@ pub async fn storage_analytics(
     _admin: AdminUser,
 ) -> Result<HttpResponse, AppError> {
     let by_classification: Vec<ClassificationBreakdown> = sqlx::query_as(
-        "SELECT classification, COUNT(*) AS file_count, COALESCE(SUM(size_bytes), 0) AS bytes
+        "SELECT classification, COUNT(*) AS file_count, COALESCE(SUM(size_bytes), 0)::BIGINT AS bytes
          FROM files WHERE deleted_at IS NULL
          GROUP BY classification
          ORDER BY bytes DESC",
@@ -1318,7 +1318,7 @@ pub async fn storage_analytics(
     let storage_trend: Vec<StorageTrendEntry> = sqlx::query_as(
         "SELECT
             d.date::TEXT AS date,
-            COALESCE(SUM(f.size_bytes), 0) AS bytes,
+            COALESCE(SUM(f.size_bytes), 0)::BIGINT AS bytes,
             COUNT(f.id) AS file_count
          FROM generate_series(
             CURRENT_DATE - INTERVAL '29 days',
@@ -1338,13 +1338,13 @@ pub async fn storage_analytics(
             u.id AS user_id,
             u.full_name AS full_name,
             u.email,
-            COALESCE(SUM(f.size_bytes), 0) AS used_bytes,
+            COALESCE(SUM(f.size_bytes), 0)::BIGINT AS used_bytes,
             u.storage_quota_bytes AS quota_bytes
          FROM users u
          LEFT JOIN files f ON f.owner_id = u.id AND f.deleted_at IS NULL
          WHERE u.storage_quota_bytes IS NOT NULL
          GROUP BY u.id
-         HAVING COALESCE(SUM(f.size_bytes), 0) > u.storage_quota_bytes
+         HAVING COALESCE(SUM(f.size_bytes), 0)::BIGINT > u.storage_quota_bytes
          ORDER BY used_bytes DESC",
     )
     .fetch_all(pool.get_ref())
@@ -1409,7 +1409,7 @@ pub async fn user_detail(
     .ok_or(AppError::NotFound)?;
 
     let storage_used: i64 = sqlx::query_scalar(
-        "SELECT COALESCE(SUM(size_bytes), 0) FROM files WHERE owner_id = $1 AND deleted_at IS NULL",
+        "SELECT COALESCE(SUM(size_bytes), 0)::BIGINT FROM files WHERE owner_id = $1 AND deleted_at IS NULL",
     )
     .bind(user_id)
     .fetch_one(pool.get_ref())

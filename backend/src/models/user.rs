@@ -52,6 +52,7 @@ pub struct UserProfile {
 /// For custom roles, use `get_role_level()` which checks the database.
 pub fn role_level(role: &str) -> u8 {
     match role {
+        "admin_panel" => 5,
         "chief" => 4,
         "director" => 3,
         "officer" => 2,
@@ -150,7 +151,7 @@ pub async fn implicit_permissions(
 
     // Fall back to hardcoded for known base roles
     Ok(match role {
-        "chief" | "director" => vec![
+        "admin_panel" | "chief" | "director" => vec![
             "files:read".into(),
             "files:write".into(),
             "files:delete".into(),
@@ -189,7 +190,7 @@ pub async fn user_has_permission(
 ) -> Result<bool, crate::errors::AppError> {
     // Fast path: hardcoded implicit grants for known base roles
     match base_role {
-        "chief" | "director" => return Ok(true),
+        "admin_panel" | "chief" | "director" => return Ok(true),
         "officer"
             if [
                 "files:read",

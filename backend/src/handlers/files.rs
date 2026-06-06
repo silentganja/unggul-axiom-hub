@@ -26,6 +26,14 @@ pub async fn get_file(
 ) -> Result<HttpResponse, AppError> {
     let file_id = path.into_inner();
 
+    // Auto-clear orphaned locks where the user was deleted
+    let _ = sqlx::query(
+        "UPDATE files SET locked_by = NULL, locked_at = NULL, lock_reason = NULL \
+         WHERE locked_by IS NOT NULL AND NOT EXISTS (SELECT 1 FROM users WHERE id = files.locked_by)"
+    )
+    .execute(pool.get_ref())
+    .await;
+
     let file: Option<FileNode> = sqlx::query_as::<_, FileNode>(
         "SELECT id, parent_id, owner_id, name, is_folder,
                 size_bytes, mime_type, classification, created_at, updated_at, locked_by, locked_at, lock_reason
@@ -88,6 +96,14 @@ pub async fn list_files(
     user: AuthUser,
     query: web::Query<ListFilesQuery>,
 ) -> Result<HttpResponse, AppError> {
+    // Auto-clear orphaned locks where the user was deleted
+    let _ = sqlx::query(
+        "UPDATE files SET locked_by = NULL, locked_at = NULL, lock_reason = NULL \
+         WHERE locked_by IS NOT NULL AND NOT EXISTS (SELECT 1 FROM users WHERE id = files.locked_by)"
+    )
+    .execute(pool.get_ref())
+    .await;
+
     let page = query.page.unwrap_or(1).max(1);
     let per_page = query.per_page.unwrap_or(50).clamp(1, 200);
     let offset = ((page - 1) * per_page) as i64;
@@ -403,7 +419,7 @@ pub async fn update_classification(
     .await
     .map_err(AppError::Database)?;
 
-    if let Some((locker, locker_role)) = lock_info {
+    if let Some((Some(locker), locker_role)) = lock_info {
         match locker_role {
             Some(role) => {
                 let user_lvl = user::get_role_level(pool.get_ref(), &user.role)
@@ -412,7 +428,7 @@ pub async fn update_classification(
                 let locker_lvl = user::get_role_level(pool.get_ref(), &role)
                     .await
                     .unwrap_or(0);
-                if locker != Some(user.id)
+                if locker != user.id
                     && user_lvl < locker_lvl
                     && !user::user_has_permission(
                         pool.get_ref(),
@@ -507,7 +523,7 @@ pub async fn rename_file(
     .await
     .map_err(AppError::Database)?;
 
-    if let Some((locker, locker_role)) = lock_info {
+    if let Some((Some(locker), locker_role)) = lock_info {
         match locker_role {
             Some(role) => {
                 let user_lvl = user::get_role_level(pool.get_ref(), &user.role)
@@ -516,7 +532,7 @@ pub async fn rename_file(
                 let locker_lvl = user::get_role_level(pool.get_ref(), &role)
                     .await
                     .unwrap_or(0);
-                if locker != Some(user.id)
+                if locker != user.id
                     && user_lvl < locker_lvl
                     && !user::user_has_permission(
                         pool.get_ref(),
@@ -851,7 +867,7 @@ const DEFAULT_QUOTA: i64 = 100 * 1024 * 1024 * 1024; // 100 GB
 
 pub async fn get_quota(pool: web::Data<PgPool>, user: AuthUser) -> Result<HttpResponse, AppError> {
     let used: i64 = sqlx::query_scalar(
-        "SELECT COALESCE(SUM(size_bytes), 0) FROM files WHERE owner_id = $1 AND deleted_at IS NULL AND is_folder = FALSE",
+        "SELECT COALESCE(SUM(size_bytes), 0)::BIGINT FROM files WHERE owner_id = $1 AND deleted_at IS NULL AND is_folder = FALSE",
     )
     .bind(user.id)
     .fetch_one(pool.get_ref())
@@ -940,7 +956,7 @@ pub async fn move_files(
         .await
         .map_err(AppError::Database)?;
 
-        if let Some((locker, locker_role)) = lock_info {
+        if let Some((Some(locker), locker_role)) = lock_info {
             match locker_role {
                 Some(role) => {
                     let user_lvl = user::get_role_level(pool.get_ref(), &user.role)
@@ -949,7 +965,7 @@ pub async fn move_files(
                     let locker_lvl = user::get_role_level(pool.get_ref(), &role)
                         .await
                         .unwrap_or(0);
-                    if locker != Some(user.id)
+                    if locker != user.id
                         && user_lvl < locker_lvl
                         && !user::user_has_permission(
                             pool.get_ref(),
@@ -1421,7 +1437,7 @@ pub async fn upload_file(
 
     // ── Storage quota enforcement ─────────────────────────────────────────────
     let used_bytes: i64 = sqlx::query_scalar(
-        "SELECT COALESCE(SUM(size_bytes), 0) FROM files WHERE owner_id = $1 AND deleted_at IS NULL",
+        "SELECT COALESCE(SUM(size_bytes), 0)::BIGINT FROM files WHERE owner_id = $1 AND deleted_at IS NULL",
     )
     .bind(user.id)
     .fetch_one(pool.get_ref())
