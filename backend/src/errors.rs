@@ -5,8 +5,13 @@ use thiserror::Error;
 /// Each variant maps to a specific HTTP status code and a clean JSON body.
 #[derive(Debug, Error)]
 pub enum AppError {
+    /// 401 – missing or invalid authentication token (triggers re-login)
     #[error("Unauthorized")]
     Unauthorized,
+
+    /// 403 – authenticated but insufficient permissions (must NOT trigger re-login)
+    #[error("Forbidden: {0}")]
+    Forbidden(String),
 
     #[error("Bad request: {0}")]
     BadRequest(String),
@@ -50,6 +55,7 @@ impl actix_web::ResponseError for AppError {
         // Never leak internal details to the client
         let (status, message) = match self {
             AppError::Unauthorized => (StatusCode::UNAUTHORIZED, "Unauthorized".to_string()),
+            AppError::Forbidden(msg) => (StatusCode::FORBIDDEN, msg.clone()),
             AppError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg.clone()),
             AppError::NotFound => (StatusCode::NOT_FOUND, "Not found".to_string()),
             AppError::Conflict(msg) => (StatusCode::CONFLICT, msg.clone()),

@@ -393,7 +393,9 @@ pub async fn approve_request(
             .await
             .unwrap_or(false));
     if !can_act {
-        return Err(AppError::Unauthorized);
+        return Err(AppError::Forbidden(
+            "You do not have permission to approve governance requests.".into(),
+        ));
     }
 
     // Classification changes require director+ authority OR custom governance:approve permission
@@ -405,7 +407,9 @@ pub async fn approve_request(
             .await
             .unwrap_or(false)
     {
-        return Err(AppError::Unauthorized);
+        return Err(AppError::Forbidden(
+            "Classification changes require director-level authority or the governance:approve permission.".into(),
+        ));
     }
 
     // Open a transaction so the file side-effect and the status update are atomic.
@@ -647,7 +651,9 @@ pub async fn reject_request(
             .await
             .unwrap_or(false)
     {
-        return Err(AppError::Unauthorized);
+        return Err(AppError::Forbidden(
+            "You do not have permission to reject governance requests.".into(),
+        ));
     }
 
     let request_id = path.into_inner();
@@ -745,7 +751,9 @@ pub async fn batch_approve(
             .await
             .unwrap_or(false)
     {
-        return Err(AppError::Unauthorized);
+        return Err(AppError::Forbidden(
+            "You do not have permission to batch-approve governance requests.".into(),
+        ));
     }
     let mut processed = 0usize;
     let mut succeeded = 0usize;
@@ -1040,7 +1048,9 @@ pub async fn batch_reject(
             .await
             .unwrap_or(false)
     {
-        return Err(AppError::Unauthorized);
+        return Err(AppError::Forbidden(
+            "You do not have permission to batch-reject governance requests.".into(),
+        ));
     }
 
     let ip = req.peer_addr().map(|a| a.to_string()).unwrap_or_default();
@@ -1154,7 +1164,9 @@ pub async fn undo_request(
             .await
             .unwrap_or(false)
     {
-        return Err(AppError::Unauthorized);
+        return Err(AppError::Forbidden(
+            "You do not have permission to undo governance requests.".into(),
+        ));
     }
 
     let request_id = path.into_inner();

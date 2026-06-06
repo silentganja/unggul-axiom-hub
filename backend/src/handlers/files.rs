@@ -382,7 +382,11 @@ pub async fn update_classification(
             .await
             .unwrap_or(false)
     {
-        return Err(AppError::Unauthorized);
+        return Err(AppError::Forbidden(
+            "You do not have permission to change file classification directly. \
+             Please submit a Governance request."
+                .into(),
+        ));
     }
 
     if !crate::models::file::VALID_CLASSIFICATIONS.contains(&body.classification.as_str()) {
@@ -555,7 +559,9 @@ pub async fn rename_file(
                     .await
                     .unwrap_or(false);
             if !can_modify {
-                return Err(AppError::Unauthorized);
+                return Err(AppError::Forbidden(
+                    "You do not have permission to modify this file.".into(),
+                ));
             }
         }
     }
@@ -638,7 +644,9 @@ pub async fn delete_file(
                 .await
                 .unwrap_or(false);
         if !can_delete {
-            return Err(AppError::Unauthorized);
+            return Err(AppError::Forbidden(
+                "You do not have permission to delete this file.".into(),
+            ));
         }
     }
 
@@ -1445,7 +1453,9 @@ pub async fn upload_file(
                 .unwrap_or(false);
         if !can_classify {
             let _ = tokio::fs::remove_file(&temp_filepath).await;
-            return Err(AppError::Unauthorized);
+            return Err(AppError::Forbidden(
+                "You do not have permission to upload files with this classification.".into(),
+            ));
         }
     }
 

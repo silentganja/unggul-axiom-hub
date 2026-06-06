@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useId, useEffect } from "react";
 import {
@@ -42,6 +42,7 @@ export default function FileAccessSheet() {
   const [classSaving, setClassSaving] = useState(false);
   const [classSaved, setClassSaved] = useState(false);
   const [pendingClass, setPendingClass] = useState<string | null>(null);
+  const [classError, setClassError] = useState<string | null>(null);
 
   // Editor value: pending edit or actual file classification
   const editClass = pendingClass ?? activeFile?.classification ?? "TERBUKA";
@@ -97,13 +98,14 @@ export default function FileAccessSheet() {
   const handleSaveClassification = async () => {
     setClassSaving(true);
     setClassSaved(false);
+    setClassError(null);
     try {
       const updated = await filesApi.updateClassification(activeFile.id, editClass);
       updateFileInStore(activeFile.id, updated.classification as "RAHSIA" | "SULIT" | "TERHAD" | "TERBUKA");
       setPendingClass(null);
       setClassSaved(true);
     } catch (err) {
-      setShareError(err instanceof Error ? err.message : "Failed to update classification");
+      setClassError(err instanceof Error ? err.message : "Failed to update classification");
     } finally {
       setClassSaving(false);
     }
@@ -189,7 +191,7 @@ export default function FileAccessSheet() {
               <select
                 id={fileClassificationSelectId}
                 value={editClass}
-                onChange={(e) => { setPendingClass(e.target.value); setClassSaved(false); }}
+                onChange={(e) => { setPendingClass(e.target.value); setClassSaved(false); setClassError(null); }}
                 className="h-8 flex-grow max-w-[140px] px-2 rounded border border-input-border bg-input-bg text-xs text-foreground focus:outline-none focus:border-accent"
               >
                 <option value="TERBUKA">TERBUKA</option>
@@ -206,6 +208,11 @@ export default function FileAccessSheet() {
                 {classSaved ? "Saved" : "Save"}
               </button>
             </div>
+            {classError && (
+              <div className="flex items-start gap-1.5 rounded border border-destructive/30 bg-destructive/5 px-3 py-2 text-[10px] text-destructive font-mono">
+                {classError}
+              </div>
+            )}
             <p className="text-[10px] text-foreground-subtle leading-relaxed">
               * Classification changes are audited. For restricted files, use the Governance Board.
             </p>

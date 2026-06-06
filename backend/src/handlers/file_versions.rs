@@ -33,7 +33,9 @@ pub async fn list_versions(
         .map_err(AppError::Database)?;
 
     if !has_access {
-        return Err(AppError::Unauthorized);
+        return Err(AppError::Forbidden(
+            "You do not have access to this file's versions.".into(),
+        ));
     }
 
     let versions: Vec<FileVersion> = sqlx::query_as(
@@ -71,7 +73,9 @@ pub async fn restore_version(
             .ok_or(AppError::NotFound)?;
 
     if owner != Some(user.id) {
-        return Err(AppError::Unauthorized);
+        return Err(AppError::Forbidden(
+            "You do not own this file and cannot restore versions.".into(),
+        ));
     }
 
     // Get the version to restore
