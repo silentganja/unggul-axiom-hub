@@ -465,6 +465,16 @@ pub async fn delete_user(
         ));
     }
 
+    // Clear any file locks held by this user before deletion.
+    // This prevents orphaned locks that would block other users from modifying those files.
+    let _ = sqlx::query(
+        "UPDATE files SET locked_by = NULL, locked_at = NULL, lock_reason = NULL WHERE locked_by = $1",
+    )
+    .bind(user_id)
+    .execute(pool.get_ref())
+    .await
+    .map_err(AppError::Database)?;
+
     let deleted = sqlx::query("DELETE FROM users WHERE id = $1")
         .bind(user_id)
         .execute(pool.get_ref())

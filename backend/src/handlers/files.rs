@@ -430,9 +430,14 @@ pub async fn update_classification(
                 }
             }
             None => {
-                return Err(AppError::Conflict(
-                    "File is locked by a deleted user. Contact an administrator.".into(),
-                ));
+                // Locker account was deleted — orphaned lock, auto-clear and proceed
+                tracing::warn!(file_id = %file_id, "Auto-clearing orphaned lock from deleted user");
+                let _ = sqlx::query(
+                    "UPDATE files SET locked_by = NULL, locked_at = NULL, lock_reason = NULL WHERE id = $1",
+                )
+                .bind(file_id)
+                .execute(pool.get_ref())
+                .await;
             }
         }
     }
@@ -528,9 +533,14 @@ pub async fn rename_file(
                 }
             }
             None => {
-                return Err(AppError::Conflict(
-                    "File is locked by a deleted user. Contact an administrator.".into(),
-                ));
+                // Locker account was deleted — orphaned lock, auto-clear and proceed
+                tracing::warn!(file_id = %file_id, "Auto-clearing orphaned lock from deleted user");
+                let _ = sqlx::query(
+                    "UPDATE files SET locked_by = NULL, locked_at = NULL, lock_reason = NULL WHERE id = $1",
+                )
+                .bind(file_id)
+                .execute(pool.get_ref())
+                .await;
             }
         }
     }
@@ -956,9 +966,14 @@ pub async fn move_files(
                     }
                 }
                 None => {
-                    return Err(AppError::Conflict(
-                        "File is locked by a deleted user. Contact an administrator.".into(),
-                    ));
+                    // Locker account was deleted — orphaned lock, auto-clear and proceed
+                    tracing::warn!(file_id = %file_id, "Auto-clearing orphaned lock from deleted user");
+                    let _ = sqlx::query(
+                        "UPDATE files SET locked_by = NULL, locked_at = NULL, lock_reason = NULL WHERE id = $1",
+                    )
+                    .bind(file_id)
+                    .execute(pool.get_ref())
+                    .await;
                 }
             }
         }
