@@ -170,7 +170,10 @@ async fn fetch_group(pool: &PgPool, group_id: Uuid) -> Result<RoleGroup, AppErro
 
 // ── Helper: fetch permissions for a group ─────────────────────────────────────
 
-async fn fetch_group_permissions(pool: &PgPool, group_id: Uuid) -> Result<Vec<Permission>, AppError> {
+async fn fetch_group_permissions(
+    pool: &PgPool,
+    group_id: Uuid,
+) -> Result<Vec<Permission>, AppError> {
     sqlx::query_as(
         "SELECT p.id, p.key, p.description
          FROM permissions p
@@ -420,13 +423,12 @@ pub async fn set_group_permissions(
 
     // Validate all permission IDs exist
     if !body.permission_ids.is_empty() {
-        let valid_count: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM permissions WHERE id = ANY($1)",
-        )
-        .bind(&body.permission_ids)
-        .fetch_one(pool.get_ref())
-        .await
-        .map_err(AppError::Database)?;
+        let valid_count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM permissions WHERE id = ANY($1)")
+                .bind(&body.permission_ids)
+                .fetch_one(pool.get_ref())
+                .await
+                .map_err(AppError::Database)?;
 
         if valid_count != body.permission_ids.len() as i64 {
             return Err(AppError::BadRequest(
@@ -529,13 +531,11 @@ pub async fn set_group_users(
 
     // Validate all user IDs exist
     if !body.user_ids.is_empty() {
-        let valid_count: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM users WHERE id = ANY($1)",
-        )
-        .bind(&body.user_ids)
-        .fetch_one(pool.get_ref())
-        .await
-        .map_err(AppError::Database)?;
+        let valid_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM users WHERE id = ANY($1)")
+            .bind(&body.user_ids)
+            .fetch_one(pool.get_ref())
+            .await
+            .map_err(AppError::Database)?;
 
         if valid_count != body.user_ids.len() as i64 {
             return Err(AppError::BadRequest(
@@ -608,8 +608,7 @@ pub async fn list_user_group_summaries(
     .map_err(AppError::Database)?;
 
     // Group by user_id
-    let mut map: std::collections::HashMap<Uuid, Vec<String>> =
-        std::collections::HashMap::new();
+    let mut map: std::collections::HashMap<Uuid, Vec<String>> = std::collections::HashMap::new();
     for row in rows {
         map.entry(row.user_id).or_default().push(row.group_name);
     }
@@ -636,12 +635,11 @@ pub async fn list_user_groups(
     let user_id = path.into_inner();
 
     // Verify the user exists
-    let user_exists: bool =
-        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)")
-            .bind(user_id)
-            .fetch_one(pool.get_ref())
-            .await
-            .map_err(AppError::Database)?;
+    let user_exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)")
+        .bind(user_id)
+        .fetch_one(pool.get_ref())
+        .await
+        .map_err(AppError::Database)?;
 
     if !user_exists {
         return Err(AppError::NotFound);
@@ -679,13 +677,16 @@ pub async fn create_permission(
     req: HttpRequest,
     body: web::Json<CreatePermissionRequest>,
 ) -> Result<HttpResponse, AppError> {
-    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:manage").await?;
+    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:manage")
+        .await?;
 
     let key = body.key.trim().to_lowercase().replace(' ', "_");
     let description = body.description.trim().to_string();
 
     if key.is_empty() || description.is_empty() {
-        return Err(AppError::BadRequest("key and description are required".into()));
+        return Err(AppError::BadRequest(
+            "key and description are required".into(),
+        ));
     }
 
     let perm: Permission = sqlx::query_as(
@@ -712,7 +713,8 @@ pub async fn create_permission(
         "PERMISSION_CREATE",
         &format!("{} ({})", perm.id, key),
         &ip,
-    ).await;
+    )
+    .await;
 
     Ok(HttpResponse::Created().json(perm))
 }
@@ -730,7 +732,8 @@ pub async fn update_permission(
     path: web::Path<Uuid>,
     body: web::Json<UpdatePermissionRequest>,
 ) -> Result<HttpResponse, AppError> {
-    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:manage").await?;
+    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:manage")
+        .await?;
 
     let perm_id = path.into_inner();
     let description = body.description.trim().to_string();
@@ -753,7 +756,8 @@ pub async fn update_permission(
         "PERMISSION_UPDATE",
         &perm_id.to_string(),
         &ip,
-    ).await;
+    )
+    .await;
 
     Ok(HttpResponse::Ok().json(perm))
 }
@@ -764,7 +768,8 @@ pub async fn delete_permission(
     req: HttpRequest,
     path: web::Path<Uuid>,
 ) -> Result<HttpResponse, AppError> {
-    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:manage").await?;
+    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:manage")
+        .await?;
 
     let perm_id = path.into_inner();
 
@@ -785,7 +790,8 @@ pub async fn delete_permission(
         "PERMISSION_DELETE",
         &perm_id.to_string(),
         &ip,
-    ).await;
+    )
+    .await;
 
     Ok(HttpResponse::NoContent().finish())
 }
@@ -806,12 +812,11 @@ pub async fn list_custom_roles(
     pool: web::Data<PgPool>,
     _admin: AdminUser,
 ) -> Result<HttpResponse, AppError> {
-    let roles: Vec<CustomRoleEntry> = sqlx::query_as(
-        "SELECT role_key, label, level FROM custom_roles ORDER BY level DESC",
-    )
-    .fetch_all(pool.get_ref())
-    .await
-    .map_err(AppError::Database)?;
+    let roles: Vec<CustomRoleEntry> =
+        sqlx::query_as("SELECT role_key, label, level FROM custom_roles ORDER BY level DESC")
+            .fetch_all(pool.get_ref())
+            .await
+            .map_err(AppError::Database)?;
     Ok(HttpResponse::Ok().json(roles))
 }
 
@@ -824,7 +829,9 @@ pub struct CreateCustomRoleRequest {
     pub level: i16,
 }
 
-fn default_role_level() -> i16 { 1 }
+fn default_role_level() -> i16 {
+    1
+}
 
 pub async fn create_custom_role(
     pool: web::Data<PgPool>,
@@ -832,13 +839,16 @@ pub async fn create_custom_role(
     req: HttpRequest,
     body: web::Json<CreateCustomRoleRequest>,
 ) -> Result<HttpResponse, AppError> {
-    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:manage").await?;
+    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:manage")
+        .await?;
 
     let role_key = body.role_key.trim().to_lowercase().replace(' ', "_");
     let label = body.label.trim().to_string();
 
     if role_key.is_empty() || label.is_empty() {
-        return Err(AppError::BadRequest("roleKey and label are required".into()));
+        return Err(AppError::BadRequest(
+            "roleKey and label are required".into(),
+        ));
     }
 
     let role: CustomRoleEntry = sqlx::query_as(
@@ -866,7 +876,8 @@ pub async fn create_custom_role(
         "CUSTOM_ROLE_CREATE",
         &role_key,
         &ip,
-    ).await;
+    )
+    .await;
 
     Ok(HttpResponse::Created().json(role))
 }
@@ -877,7 +888,8 @@ pub async fn delete_custom_role(
     req: HttpRequest,
     path: web::Path<String>,
 ) -> Result<HttpResponse, AppError> {
-    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:manage").await?;
+    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:manage")
+        .await?;
 
     let role_key = path.into_inner();
 
@@ -904,7 +916,8 @@ pub async fn delete_custom_role(
         "CUSTOM_ROLE_DELETE",
         &role_key,
         &ip,
-    ).await;
+    )
+    .await;
 
     Ok(HttpResponse::NoContent().finish())
 }
@@ -954,7 +967,8 @@ pub async fn set_role_implicit_permissions(
     path: web::Path<String>,
     body: web::Json<SetRoleImplicitPermissionsRequest>,
 ) -> Result<HttpResponse, AppError> {
-    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:manage").await?;
+    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:manage")
+        .await?;
 
     let role_key = path.into_inner();
 
@@ -996,7 +1010,8 @@ pub async fn set_role_implicit_permissions(
         "ROLE_IMPLICIT_PERMS",
         &format!("{} ({} perms)", role_key, body.permission_ids.len()),
         &ip,
-    ).await;
+    )
+    .await;
 
     Ok(HttpResponse::Ok().json(serde_json::json!({ "status": "ok" })))
 }
@@ -1040,7 +1055,8 @@ pub async fn set_user_permissions(
     path: web::Path<Uuid>,
     body: web::Json<SetUserPermissionsRequest>,
 ) -> Result<HttpResponse, AppError> {
-    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:manage").await?;
+    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:manage")
+        .await?;
 
     let user_id = path.into_inner();
 
@@ -1072,7 +1088,8 @@ pub async fn set_user_permissions(
         "USER_PERMISSIONS_SET",
         &format!("{} ({} perms)", user_id, body.permission_ids.len()),
         &ip,
-    ).await;
+    )
+    .await;
 
     Ok(HttpResponse::Ok().json(serde_json::json!({ "status": "ok" })))
 }

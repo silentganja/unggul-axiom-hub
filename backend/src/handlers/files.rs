@@ -1,4 +1,4 @@
-﻿use crate::{
+use crate::{
     app_middleware::auth::AuthUser,
     errors::AppError,
     models::file::{CreateFolderReq, FileListResponse, FileNode, ListFilesQuery, RenameFileReq},
@@ -397,8 +397,12 @@ pub async fn update_classification(
     if let Some((locker, locker_role)) = lock_info {
         match locker_role {
             Some(role) => {
-                let user_lvl = user::get_role_level(pool.get_ref(), &user.role).await.unwrap_or(0);
-                let locker_lvl = user::get_role_level(pool.get_ref(), &role).await.unwrap_or(0);
+                let user_lvl = user::get_role_level(pool.get_ref(), &user.role)
+                    .await
+                    .unwrap_or(0);
+                let locker_lvl = user::get_role_level(pool.get_ref(), &role)
+                    .await
+                    .unwrap_or(0);
                 if locker != Some(user.id)
                     && user_lvl < locker_lvl
                     && !user::user_has_permission(
@@ -492,8 +496,12 @@ pub async fn rename_file(
     if let Some((locker, locker_role)) = lock_info {
         match locker_role {
             Some(role) => {
-                let user_lvl = user::get_role_level(pool.get_ref(), &user.role).await.unwrap_or(0);
-                let locker_lvl = user::get_role_level(pool.get_ref(), &role).await.unwrap_or(0);
+                let user_lvl = user::get_role_level(pool.get_ref(), &user.role)
+                    .await
+                    .unwrap_or(0);
+                let locker_lvl = user::get_role_level(pool.get_ref(), &role)
+                    .await
+                    .unwrap_or(0);
                 if locker != Some(user.id)
                     && user_lvl < locker_lvl
                     && !user::user_has_permission(
@@ -529,12 +537,18 @@ pub async fn rename_file(
 
     if let Some(ref cls) = file_class {
         if cls != "TERBUKA" {
-            let can_modify = user::user_has_permission(
-                pool.get_ref(), user.id, &user.role, "files:classify",
-            ).await.unwrap_or(false)
-                || user::user_has_permission(
-                    pool.get_ref(), user.id, &user.role, "files:write",
-                ).await.unwrap_or(false);
+            let can_modify =
+                user::user_has_permission(pool.get_ref(), user.id, &user.role, "files:classify")
+                    .await
+                    .unwrap_or(false)
+                    || user::user_has_permission(
+                        pool.get_ref(),
+                        user.id,
+                        &user.role,
+                        "files:write",
+                    )
+                    .await
+                    .unwrap_or(false);
             if !can_modify {
                 return Err(AppError::Unauthorized);
             }
@@ -634,21 +648,20 @@ pub async fn delete_file(
                     .map_err(AppError::Database)?;
 
             let locker_level = if let Some(ref role) = locker_role {
-                user::get_role_level(pool.get_ref(), role).await.unwrap_or(0)
+                user::get_role_level(pool.get_ref(), role)
+                    .await
+                    .unwrap_or(0)
             } else {
                 0
             };
-            let user_lvl = user::get_role_level(pool.get_ref(), &user.role).await.unwrap_or(0);
+            let user_lvl = user::get_role_level(pool.get_ref(), &user.role)
+                .await
+                .unwrap_or(0);
 
             if user_lvl < locker_level
-                && !user::user_has_permission(
-                    pool.get_ref(),
-                    user.id,
-                    &user.role,
-                    "files:delete",
-                )
-                .await
-                .unwrap_or(false)
+                && !user::user_has_permission(pool.get_ref(), user.id, &user.role, "files:delete")
+                    .await
+                    .unwrap_or(false)
             {
                 return Err(AppError::Conflict(
                     "This file is locked by a higher authority and cannot be deleted".into(),
@@ -907,8 +920,12 @@ pub async fn move_files(
         if let Some((locker, locker_role)) = lock_info {
             match locker_role {
                 Some(role) => {
-                    let user_lvl = user::get_role_level(pool.get_ref(), &user.role).await.unwrap_or(0);
-                    let locker_lvl = user::get_role_level(pool.get_ref(), &role).await.unwrap_or(0);
+                    let user_lvl = user::get_role_level(pool.get_ref(), &user.role)
+                        .await
+                        .unwrap_or(0);
+                    let locker_lvl = user::get_role_level(pool.get_ref(), &role)
+                        .await
+                        .unwrap_or(0);
                     if locker != Some(user.id)
                         && user_lvl < locker_lvl
                         && !user::user_has_permission(
@@ -1310,14 +1327,9 @@ pub async fn upload_file(
 
                     // Stream chunks directly to a temp file to avoid buffering large
                     // uploads in memory. Size is enforced per-chunk against the limit.
-                    let mut tmp = tokio::fs::File::create(&temp_filepath)
-                        .await
-                        .map_err(|e| {
-                            AppError::Internal(anyhow::anyhow!(
-                                "Failed to create temp file: {}",
-                                e
-                            ))
-                        })?;
+                    let mut tmp = tokio::fs::File::create(&temp_filepath).await.map_err(|e| {
+                        AppError::Internal(anyhow::anyhow!("Failed to create temp file: {}", e))
+                    })?;
 
                     let mut first_bytes: Vec<u8> = Vec::new();
 
@@ -1351,9 +1363,11 @@ pub async fn upload_file(
                     }
 
                     // Flush and sync the temp file
-                    tokio::io::AsyncWriteExt::flush(&mut tmp).await.map_err(|e| {
-                        AppError::Internal(anyhow::anyhow!("Failed to flush temp file: {}", e))
-                    })?;
+                    tokio::io::AsyncWriteExt::flush(&mut tmp)
+                        .await
+                        .map_err(|e| {
+                            AppError::Internal(anyhow::anyhow!("Failed to flush temp file: {}", e))
+                        })?;
                     drop(tmp);
 
                     // Validate file type by magic bytes on the captured prefix
@@ -1366,14 +1380,12 @@ pub async fn upload_file(
                     // does buffer the file in memory — but only after the size limit
                     // has already been enforced above.
                     if let Some(ref enc_key) = config.encryption_key {
-                        let plaintext = tokio::fs::read(&temp_filepath)
-                            .await
-                            .map_err(|e| {
-                                AppError::Internal(anyhow::anyhow!(
-                                    "Failed to read temp file for encryption: {}",
-                                    e
-                                ))
-                            })?;
+                        let plaintext = tokio::fs::read(&temp_filepath).await.map_err(|e| {
+                            AppError::Internal(anyhow::anyhow!(
+                                "Failed to read temp file for encryption: {}",
+                                e
+                            ))
+                        })?;
                         let ciphertext = crate::utils::crypto::encrypt(enc_key, &plaintext)?;
                         tokio::fs::write(&temp_filepath, &ciphertext)
                             .await

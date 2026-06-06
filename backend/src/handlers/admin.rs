@@ -1,4 +1,4 @@
-﻿use crate::{
+use crate::{
     app_middleware::{admin::AdminUser, rate_limit},
     errors::AppError,
     models::user::{self, User, UserProfile},
@@ -106,7 +106,8 @@ pub async fn create_user(
     admin: AdminUser,
     body: web::Json<CreateUserRequest>,
 ) -> Result<HttpResponse, AppError> {
-    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:manage").await?;
+    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:manage")
+        .await?;
     let email = body.email.trim().to_lowercase();
     let full_name = body.full_name.trim().to_string();
     let role = body.role.trim().to_string();
@@ -176,7 +177,8 @@ pub async fn update_user(
     path: web::Path<Uuid>,
     body: web::Json<UpdateUserRequest>,
 ) -> Result<HttpResponse, AppError> {
-    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:manage").await?;
+    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:manage")
+        .await?;
     let user_id = path.into_inner();
 
     // Fetch the existing user first
@@ -280,7 +282,8 @@ pub async fn delete_user(
     admin: AdminUser,
     path: web::Path<Uuid>,
 ) -> Result<HttpResponse, AppError> {
-    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:delete").await?;
+    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:delete")
+        .await?;
     let user_id = path.into_inner();
 
     // Prevent deleting the last chief/director
@@ -451,7 +454,8 @@ pub async fn reset_user_password(
     path: web::Path<Uuid>,
     body: web::Json<AdminResetPasswordRequest>,
 ) -> Result<HttpResponse, AppError> {
-    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:manage").await?;
+    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:manage")
+        .await?;
     let user_id = path.into_inner();
     password::validate_password_strength(&body.new_password)
         .map_err(|msg| AppError::BadRequest(msg.into()))?;
@@ -476,7 +480,8 @@ pub async fn toggle_user_active(
     admin: AdminUser,
     path: web::Path<Uuid>,
 ) -> Result<HttpResponse, AppError> {
-    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:manage").await?;
+    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:manage")
+        .await?;
     let user_id = path.into_inner();
     // Prevent deactivating the last active chief/director
     let target: Option<(String, bool)> =
@@ -520,7 +525,8 @@ pub async fn list_all_shares(
     pool: web::Data<PgPool>,
     admin: AdminUser,
 ) -> Result<HttpResponse, AppError> {
-    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "shares:manage").await?;
+    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "shares:manage")
+        .await?;
     #[derive(serde::Serialize, sqlx::FromRow)]
     #[serde(rename_all = "camelCase")]
     struct AdminShareRow {
@@ -572,7 +578,8 @@ pub async fn revoke_share(
     admin: AdminUser,
     path: web::Path<Uuid>,
 ) -> Result<HttpResponse, AppError> {
-    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "shares:manage").await?;
+    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "shares:manage")
+        .await?;
     let share_id = path.into_inner();
 
     let deleted = sqlx::query("DELETE FROM file_shares WHERE id = $1")
@@ -655,7 +662,8 @@ pub async fn force_delete_file(
     config: web::Data<AppConfig>,
     path: web::Path<Uuid>,
 ) -> Result<HttpResponse, AppError> {
-    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "files:delete").await?;
+    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "files:delete")
+        .await?;
     let file_id = path.into_inner();
     // Read the file record first to verify it exists
     let file_exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM files WHERE id = $1)")
@@ -1057,7 +1065,8 @@ pub async fn storage_breakdown(
     pool: web::Data<PgPool>,
     admin: AdminUser,
 ) -> Result<HttpResponse, AppError> {
-    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "storage:manage").await?;
+    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "storage:manage")
+        .await?;
     let rows: Vec<UserStorageRow> = sqlx::query_as(
         "SELECT u.id AS user_id, u.full_name, u.email, u.role,
                 COUNT(f.id) AS file_count, COALESCE(SUM(f.size_bytes), 0) AS total_bytes,
@@ -1122,7 +1131,8 @@ pub async fn storage_analytics(
     pool: web::Data<PgPool>,
     admin: AdminUser,
 ) -> Result<HttpResponse, AppError> {
-    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "storage:manage").await?;
+    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "storage:manage")
+        .await?;
     let by_classification: Vec<ClassificationBreakdown> = sqlx::query_as(
         "SELECT classification, COUNT(*) AS file_count, COALESCE(SUM(size_bytes), 0) AS bytes
          FROM files WHERE deleted_at IS NULL
@@ -1350,7 +1360,8 @@ pub async fn bulk_create_users(
     admin: AdminUser,
     body: web::Json<BulkUsersRequest>,
 ) -> Result<HttpResponse, AppError> {
-    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:manage").await?;
+    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:manage")
+        .await?;
     let mut created = 0u32;
     let mut errors: Vec<String> = Vec::new();
     let valid_roles = user::fetch_valid_roles(pool.get_ref()).await?;
@@ -1403,7 +1414,8 @@ pub async fn bulk_role_update(
     admin: AdminUser,
     body: web::Json<BulkRoleUpdate>,
 ) -> Result<HttpResponse, AppError> {
-    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:manage").await?;
+    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:manage")
+        .await?;
     if !user::is_valid_role(pool.get_ref(), &body.new_role).await? {
         return Err(AppError::BadRequest("Invalid role".into()));
     }

@@ -61,22 +61,22 @@ impl FromRequest for AdminUser {
 
             let user_id = Uuid::parse_str(&claims.sub).map_err(|_| AppError::Unauthorized)?;
 
-            let has_access = user::user_has_permission(&pool, user_id, &claims.role, "admin:access")
-                .await
-                .unwrap_or(false);
+            let has_access =
+                user::user_has_permission(&pool, user_id, &claims.role, "admin:access")
+                    .await
+                    .unwrap_or(false);
 
             if !has_access {
                 return Err(AppError::Unauthorized);
             }
 
             // Fetch the user's email for audit display
-            let row: Option<(String, String)> = sqlx::query_as(
-                "SELECT email, role FROM users WHERE id = $1",
-            )
-            .bind(user_id)
-            .fetch_optional(&pool)
-            .await
-            .map_err(|_| AppError::Unauthorized)?;
+            let row: Option<(String, String)> =
+                sqlx::query_as("SELECT email, role FROM users WHERE id = $1")
+                    .bind(user_id)
+                    .fetch_optional(&pool)
+                    .await
+                    .map_err(|_| AppError::Unauthorized)?;
 
             let (email, user_role) = row.unwrap_or_else(|| (user_id.to_string(), "staff".into()));
 
@@ -108,9 +108,14 @@ impl AdminUser {
             Some(id) => id,
             None => return true,
         };
-        user::user_has_permission(pool, uid, self.role.as_deref().unwrap_or(""), permission_key)
-            .await
-            .unwrap_or(false)
+        user::user_has_permission(
+            pool,
+            uid,
+            self.role.as_deref().unwrap_or(""),
+            permission_key,
+        )
+        .await
+        .unwrap_or(false)
     }
 }
 

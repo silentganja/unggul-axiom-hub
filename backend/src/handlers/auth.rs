@@ -226,8 +226,7 @@ pub async fn me_permissions(
     let implicit = crate::models::user::implicit_permissions(pool.get_ref(), &user.role)
         .await
         .unwrap_or_default();
-    let mut all_perms: std::collections::BTreeSet<String> =
-        implicit.into_iter().collect();
+    let mut all_perms: std::collections::BTreeSet<String> = implicit.into_iter().collect();
     for k in custom_keys {
         all_perms.insert(k);
     }
@@ -514,10 +513,7 @@ pub struct TeamMember {
     pub department: Option<String>,
 }
 
-pub async fn my_team(
-    pool: web::Data<PgPool>,
-    user: AuthUser,
-) -> Result<HttpResponse, AppError> {
+pub async fn my_team(pool: web::Data<PgPool>, user: AuthUser) -> Result<HttpResponse, AppError> {
     let members: Vec<TeamMember> = sqlx::query_as(
         "SELECT id, full_name, email, role, active, department
          FROM users

@@ -328,7 +328,13 @@ pub async fn approve_request(
     let request_id = path.into_inner();
 
     // Fetch the pending request info first so we can check supervisor status
-    type RequestInfo = (String, Option<Uuid>, Option<serde_json::Value>, String, Uuid);
+    type RequestInfo = (
+        String,
+        Option<Uuid>,
+        Option<serde_json::Value>,
+        String,
+        Uuid,
+    );
     let request_info: Option<RequestInfo> = sqlx::query_as(
         "SELECT type, target_file_id, metadata, title, requested_by
          FROM governance_requests
@@ -356,8 +362,13 @@ pub async fn approve_request(
     let can_act = has_approve_perm
         || (is_supervisor
             && user::user_has_permission(
-                pool.get_ref(), user.id, &user.role, "governance:approve",
-            ).await.unwrap_or(false));
+                pool.get_ref(),
+                user.id,
+                &user.role,
+                "governance:approve",
+            )
+            .await
+            .unwrap_or(false));
     if !can_act {
         return Err(AppError::Unauthorized);
     }

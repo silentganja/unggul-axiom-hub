@@ -1,4 +1,4 @@
-﻿use crate::{
+use crate::{
     app_middleware::auth::AuthUser,
     errors::AppError,
     models::share::{
@@ -92,22 +92,27 @@ pub async fn share_file(
     // ── Classification check: restricted files can only be shared with
     //     users who have files:classify permission or director+ base role ─
     if file_classification != "TERBUKA" {
-        let recipient: Option<(Uuid, String)> = sqlx::query_as(
-            "SELECT id, role FROM users WHERE email = $1",
-        )
-        .bind(&recipient_email)
-        .fetch_optional(pool.get_ref())
-        .await
-        .map_err(AppError::Database)?;
+        let recipient: Option<(Uuid, String)> =
+            sqlx::query_as("SELECT id, role FROM users WHERE email = $1")
+                .bind(&recipient_email)
+                .fetch_optional(pool.get_ref())
+                .await
+                .map_err(AppError::Database)?;
 
         if let Some((recipient_id, recipient_role)) = recipient {
             let can_receive = user::can_govern_classified(&recipient_role)
                 || user::user_has_permission(
-                    pool.get_ref(), recipient_id, &recipient_role, "files:classify",
-                ).await.unwrap_or(false);
+                    pool.get_ref(),
+                    recipient_id,
+                    &recipient_role,
+                    "files:classify",
+                )
+                .await
+                .unwrap_or(false);
             if !can_receive {
                 return Err(AppError::BadRequest(
-                    "Recipient lacks clearance for classified files. Use governance to share.".into(),
+                    "Recipient lacks clearance for classified files. Use governance to share."
+                        .into(),
                 ));
             }
         } else {
@@ -127,8 +132,12 @@ pub async fn share_file(
     if let Some((locker, locker_role)) = lock_info {
         match locker_role {
             Some(role) => {
-                let user_lvl = user::get_role_level(pool.get_ref(), &user.role).await.unwrap_or(0);
-                let locker_lvl = user::get_role_level(pool.get_ref(), &role).await.unwrap_or(0);
+                let user_lvl = user::get_role_level(pool.get_ref(), &user.role)
+                    .await
+                    .unwrap_or(0);
+                let locker_lvl = user::get_role_level(pool.get_ref(), &role)
+                    .await
+                    .unwrap_or(0);
                 if locker != Some(user.id)
                     && user_lvl < locker_lvl
                     && !user::user_has_permission(

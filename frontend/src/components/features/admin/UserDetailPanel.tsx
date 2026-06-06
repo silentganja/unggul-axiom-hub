@@ -300,6 +300,7 @@ export default function UserDetailPanel({ userId, onBack, onRefresh }: Props) {
         )}
 
         <PasswordResetModal
+          key={isPasswordModalOpen ? "open" : "closed"}
           open={isPasswordModalOpen}
           onClose={() => setIsPasswordModalOpen(false)}
           onSubmit={async (password) => {

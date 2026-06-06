@@ -670,6 +670,7 @@ function AdminDashboardView() {
       )}
 
       <PasswordResetModal
+        key={passwordResetUserId ?? "closed"}
         open={passwordResetUserId !== null}
         onClose={() => setPasswordResetUserId(null)}
         onSubmit={handleResetPassword}

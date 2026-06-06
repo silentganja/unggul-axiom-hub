@@ -10,7 +10,6 @@ import {
   Permission,
   RoleGroupSummary,
   RoleGroupDetail,
-  RoleGroupUser,
   AdminUserEntry,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -75,7 +74,6 @@ export default function RoleBuilderTab() {
   // ── Selection state ───────────────────────────────────────────────────────
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<RoleGroupDetail | null>(null);
-  const [groupUsers, setGroupUsers] = useState<RoleGroupUser[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
 
   // ── Edit state ────────────────────────────────────────────────────────────
@@ -160,19 +158,17 @@ export default function RoleBuilderTab() {
     setIsDirty(false);
     resetFilters();
     try {
-      const [d, u] = await Promise.all([
+      const [d, users] = await Promise.all([
         adminApi.getRoleGroup(id),
         adminApi.listRoleGroupUsers(id),
       ]);
       setDetail(d);
-      setGroupUsers(u);
       setEditName(d.name);
       setEditDescription(d.description);
       setSelectedPermIds(new Set(d.permissions.map(p => p.id)));
-      setSelectedUserIds(new Set(u.map(u => u.userId)));
+      setSelectedUserIds(new Set(users.map(u => u.userId)));
     } catch {
       setDetail(null);
-      setGroupUsers([]);
     } finally {
       setDetailLoading(false);
     }
@@ -394,7 +390,6 @@ export default function RoleBuilderTab() {
       if (selectedId === deleteTarget.id) {
         setSelectedId(null);
         setDetail(null);
-        setGroupUsers([]);
       }
       setDeleteTarget(null);
       await fetchGroups();

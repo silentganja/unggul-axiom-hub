@@ -22,11 +22,9 @@ export default function PasswordResetModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Focus the input after the modal renders
   useEffect(() => {
     if (open) {
-      setPassword("");
-      setIsSubmitting(false);
-      // Focus the input after the modal renders
       requestAnimationFrame(() => inputRef.current?.focus());
     }
   }, [open]);

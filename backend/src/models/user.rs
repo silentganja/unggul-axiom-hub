@@ -1,4 +1,4 @@
-﻿use chrono::{DateTime, Utc};
+use chrono::{DateTime, Utc};
 use serde::Serialize;
 use uuid::Uuid;
 
@@ -65,14 +65,13 @@ pub async fn get_role_level(
     role: &str,
 ) -> Result<u8, crate::errors::AppError> {
     // Check custom_roles table first
-    let db_level: Option<i16> = sqlx::query_scalar(
-        "SELECT level FROM custom_roles WHERE role_key = $1",
-    )
-    .bind(role)
-    .fetch_optional(pool)
-    .await
-    .map_err(crate::errors::AppError::Database)?
-    .flatten();
+    let db_level: Option<i16> =
+        sqlx::query_scalar("SELECT level FROM custom_roles WHERE role_key = $1")
+            .bind(role)
+            .fetch_optional(pool)
+            .await
+            .map_err(crate::errors::AppError::Database)?
+            .flatten();
 
     if let Some(lvl) = db_level {
         return Ok(lvl as u8);
@@ -150,15 +149,28 @@ pub async fn implicit_permissions(
     // Fall back to hardcoded for known base roles
     Ok(match role {
         "chief" | "director" => vec![
-            "files:read".into(), "files:write".into(), "files:delete".into(),
-            "files:classify".into(), "users:read".into(), "users:manage".into(),
-            "users:delete".into(), "governance:approve".into(), "governance:reject".into(),
-            "admin:access".into(), "shares:manage".into(), "audit:read".into(),
-            "storage:manage".into(), "config:read".into(),
+            "files:read".into(),
+            "files:write".into(),
+            "files:delete".into(),
+            "files:classify".into(),
+            "users:read".into(),
+            "users:manage".into(),
+            "users:delete".into(),
+            "governance:approve".into(),
+            "governance:reject".into(),
+            "admin:access".into(),
+            "shares:manage".into(),
+            "audit:read".into(),
+            "storage:manage".into(),
+            "config:read".into(),
         ],
         "officer" => vec![
-            "files:read".into(), "files:write".into(), "users:read".into(),
-            "governance:approve".into(), "governance:reject".into(), "audit:read".into(),
+            "files:read".into(),
+            "files:write".into(),
+            "users:read".into(),
+            "governance:approve".into(),
+            "governance:reject".into(),
+            "audit:read".into(),
         ],
         _ => vec![],
     })
