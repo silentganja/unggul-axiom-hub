@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect } from "react";
 import {
@@ -167,18 +167,18 @@ export default function ExecutiveOverview() {
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       {/* ── Session Status Bar ── */}
-      <div className="w-full bg-background-panel/40 border border-border/30 px-4 py-1.5 rounded-sm flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.18em] text-foreground-subtle select-none">
+      <div className="w-full bg-background-panel/40 border border-border/30 px-6 py-3 rounded-lg flex flex-col md:flex-row md:items-center justify-between gap-3 font-mono text-xs uppercase tracking-wider text-foreground-subtle select-none">
         <div className="flex items-center gap-2">
-          <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
+          <span className="h-2 w-2 rounded-full bg-success animate-pulse" />
           <span>SESSION ACTIVE</span>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center gap-4">
           <span>{user?.fullName || user?.email || "-"}</span>
-          <span className="text-foreground-subtle/30">|</span>
+          <span className="text-foreground-subtle/30 hidden md:inline">|</span>
           <span>ROLE: {user?.role || "-"}</span>
-          <span className="text-foreground-subtle/30">|</span>
+          <span className="text-foreground-subtle/30 hidden md:inline">|</span>
           <span className="flex items-center gap-1.5">
-            <Lock size={9} className="text-accent" /> SECURE
+            <Lock size={12} className="text-accent" /> SECURE
           </span>
         </div>
       </div>
@@ -186,73 +186,73 @@ export default function ExecutiveOverview() {
       {/* ── Metrics Grid ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Total Files */}
-        <div className="border border-border/30 rounded-sm bg-background-panel/35 backdrop-blur-sm p-4 flex flex-col justify-between h-[105px] select-none hover:border-accent/40 transition-colors">
-          <span className="font-mono text-[8px] font-bold uppercase tracking-widest text-foreground-subtle">
+        <div className="border border-border/35 rounded-xl bg-background-panel/35 backdrop-blur-sm p-5 flex flex-col justify-between h-[120px] select-none hover:border-accent/40 transition-colors shadow-sm">
+          <span className="font-sans text-[10px] font-bold uppercase tracking-wider text-foreground-subtle">
             Total Files
           </span>
-          <div className="text-2xl font-bold font-mono tracking-tight text-foreground mt-1">
+          <div className="text-3xl font-bold font-sans tracking-tight text-foreground mt-2">
             {totalFiles.toLocaleString()}
           </div>
-          <div className="flex items-center gap-1 text-[9px] font-mono text-foreground-muted mt-auto pt-2 border-t border-border/10">
-            <Folder size={10} className="text-accent" />
+          <div className="flex items-center gap-2 text-[10px] font-sans text-foreground-muted mt-auto pt-3 border-t border-border/10">
+            <Folder size={12} className="text-accent" />
             <span>{totalFolders} folder{totalFolders !== 1 ? "s" : ""}</span>
           </div>
         </div>
 
         {/* Pending Signatures */}
-        <div className="border border-border/30 rounded-sm bg-background-panel/35 backdrop-blur-sm p-4 flex flex-col justify-between h-[105px] select-none hover:border-accent/40 transition-colors">
-          <span className="font-mono text-[8px] font-bold uppercase tracking-widest text-foreground-subtle">
+        <div className="border border-border/35 rounded-xl bg-background-panel/35 backdrop-blur-sm p-5 flex flex-col justify-between h-[120px] select-none hover:border-accent/40 transition-colors shadow-sm">
+          <span className="font-sans text-[10px] font-bold uppercase tracking-wider text-foreground-subtle">
             Pending Signatures
           </span>
-          <div className="text-2xl font-bold font-mono tracking-tight text-foreground mt-1 flex items-baseline gap-2">
+          <div className="text-3xl font-bold font-sans tracking-tight text-foreground mt-2 flex items-baseline justify-between gap-2">
             <span>{pendingCount}</span>
             {pendingCount > 0 && (
-              <span className="text-[10px] font-sans font-normal text-warning bg-warning/15 px-1.5 py-0.5 rounded border border-warning/20 leading-none">
+              <span className="text-xs font-sans font-medium text-warning bg-warning/10 px-2 py-0.5 rounded-md border border-warning/20 leading-none">
                 Action Required
               </span>
             )}
           </div>
-          <div className="flex items-center gap-1.5 text-[8px] font-bold font-mono mt-auto pt-2 border-t border-border/10">
+          <div className="flex items-center gap-2 text-[10px] font-bold font-sans mt-auto pt-3 border-t border-border/10">
             {pendingCount > 0 ? (
               <>
-                <span className="relative flex h-2 w-2">
+                <span className="relative flex h-2.5 w-2.5">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-warning opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-warning" />
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-warning" />
                 </span>
-                <span className="text-warning/80 uppercase">Awaiting Authorization</span>
+                <span className="text-warning/80 uppercase tracking-wide">Awaiting Authorization</span>
               </>
             ) : (
-              <span className="text-success flex items-center gap-1 uppercase">
-                <CheckCircle size={10} /> All Satisfied
+              <span className="text-success flex items-center gap-1.5 uppercase tracking-wide">
+                <CheckCircle size={12} /> All Satisfied
               </span>
             )}
           </div>
         </div>
 
         {/* Storage Used */}
-        <div className="border border-border/30 rounded-sm bg-background-panel/35 backdrop-blur-sm p-4 flex flex-col justify-between h-[105px] select-none hover:border-accent/40 transition-colors">
-          <span className="font-mono text-[8px] font-bold uppercase tracking-widest text-foreground-subtle">
+        <div className="border border-border/35 rounded-xl bg-background-panel/35 backdrop-blur-sm p-5 flex flex-col justify-between h-[120px] select-none hover:border-accent/40 transition-colors shadow-sm">
+          <span className="font-sans text-[10px] font-bold uppercase tracking-wider text-foreground-subtle">
             Storage Used
           </span>
-          <div className="text-2xl font-bold font-mono tracking-tight text-foreground mt-1">
+          <div className="text-3xl font-bold font-sans tracking-tight text-foreground mt-2">
             {formatStorage(totalStorageBytes)}
           </div>
-          <div className="flex items-center justify-between text-[8px] font-mono text-foreground-subtle mt-auto pt-2 border-t border-border/10">
-            <span className="flex items-center gap-1">
-              <HardDrive size={10} /> {totalFiles + totalFolders} object{totalFiles + totalFolders !== 1 ? "s" : ""}
+          <div className="flex items-center justify-between text-[10px] font-sans text-foreground-subtle mt-auto pt-3 border-t border-border/10">
+            <span className="flex items-center gap-1.5">
+              <HardDrive size={12} /> {totalFiles + totalFolders} object{totalFiles + totalFolders !== 1 ? "s" : ""}
             </span>
           </div>
         </div>
 
         {/* Shared with Me */}
-        <div className="border border-border/30 rounded-sm bg-background-panel/35 backdrop-blur-sm p-4 flex flex-col justify-between h-[105px] select-none hover:border-accent/40 transition-colors">
-          <span className="font-mono text-[8px] font-bold uppercase tracking-widest text-foreground-subtle">
+        <div className="border border-border/35 rounded-xl bg-background-panel/35 backdrop-blur-sm p-5 flex flex-col justify-between h-[120px] select-none hover:border-accent/40 transition-colors shadow-sm">
+          <span className="font-sans text-[10px] font-bold uppercase tracking-wider text-foreground-subtle">
             Shared with Me
           </span>
-          <div className="text-2xl font-bold font-mono tracking-tight text-foreground mt-1">
+          <div className="text-3xl font-bold font-sans tracking-tight text-foreground mt-2">
             {sharedFiles.length}
           </div>
-          <div className="flex items-center text-[9px] font-mono text-foreground-muted mt-auto pt-2 border-t border-border/10">
+          <div className="flex items-center text-[10px] font-sans text-foreground-muted mt-auto pt-3 border-t border-border/10">
             <span>Files from colleagues</span>
           </div>
         </div>
@@ -261,42 +261,42 @@ export default function ExecutiveOverview() {
       {/* ── Analytics & Trends ── */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         {/* Weekly Activity mini chart */}
-        <div className="lg:col-span-5 border border-border/30 rounded-sm bg-background-panel/35 backdrop-blur-sm p-4 select-none">
-          <div className="flex items-center justify-between mb-3">
+        <div className="lg:col-span-5 border border-border/20 rounded-xl bg-background-panel/35 backdrop-blur-sm p-5 select-none shadow-sm">
+          <div className="flex items-center justify-between mb-4">
             <div>
-              <span className="font-mono text-[8px] font-bold uppercase tracking-widest text-foreground-subtle">
+              <span className="font-sans text-[10px] font-bold uppercase tracking-wider text-foreground-subtle">
                 Files Added This Week
               </span>
-              <div className="text-lg font-bold font-mono tracking-tight text-foreground mt-0.5">
+              <div className="text-2xl font-bold font-sans tracking-tight text-foreground mt-1">
                 {filesThisWeek}
               </div>
             </div>
           </div>
-          <div className="flex items-end gap-1.5 h-16 mt-1">
+          <div className="flex items-end gap-2 h-20 mt-2">
             {dailyCounts.map((count, i) => (
-              <div key={i} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end">
-                <span className="text-[7px] font-mono text-foreground-subtle/60 leading-none">{count || ""}</span>
+              <div key={i} className="flex-1 flex flex-col items-center gap-2 h-full justify-end">
+                <span className="text-[9px] font-sans text-foreground-subtle/70 leading-none">{count || ""}</span>
                 <div
-                  className="w-full rounded-t-sm bg-accent/40 hover:bg-accent/60 transition-colors"
-                  style={{ height: `${Math.max(8, (count / maxDaily) * 48)}px` }}
+                  className="w-full rounded-t bg-accent/40 hover:bg-accent/60 transition-colors cursor-pointer"
+                  style={{ height: `${Math.max(8, (count / maxDaily) * 56)}px` }}
                 />
-                <span className="text-[7px] font-mono text-foreground-subtle/50 leading-none">{dailyLabels[i]}</span>
+                <span className="text-[9px] font-sans text-foreground-subtle/50 leading-none">{dailyLabels[i]}</span>
               </div>
             ))}
           </div>
         </div>
 
         {/* Governance Analytics */}
-        <div className="lg:col-span-4 border border-border/30 rounded-sm bg-background-panel/35 backdrop-blur-sm p-4 select-none">
-          <span className="font-mono text-[8px] font-bold uppercase tracking-widest text-foreground-subtle">
+        <div className="lg:col-span-4 border border-border/20 rounded-xl bg-background-panel/35 backdrop-blur-sm p-5 select-none shadow-sm">
+          <span className="font-sans text-[10px] font-bold uppercase tracking-wider text-foreground-subtle">
             Governance Analytics
           </span>
 
           {/* Requests by type - mini bar chart */}
-          <div className="mt-3 space-y-2">
-            <span className="text-[7px] font-mono uppercase tracking-wider text-foreground-subtle/70">By Type</span>
+          <div className="mt-4 space-y-2">
+            <span className="text-[9px] font-sans font-semibold uppercase tracking-wider text-foreground-subtle/70">By Type</span>
             {govTypeLabels.length === 0 ? (
-              <p className="text-[10px] font-mono text-foreground-subtle py-2 text-center">
+              <p className="text-xs font-sans text-foreground-subtle py-2 text-center">
                 No governance requests
               </p>
             ) : (
@@ -304,14 +304,14 @@ export default function ExecutiveOverview() {
                 const count = govTypeValues[i];
                 const pct = maxGovType > 0 ? (count / maxGovType) * 100 : 0;
                 return (
-                  <div key={label} className="space-y-0.5">
-                    <div className="flex items-center justify-between text-[9px] font-mono">
+                  <div key={label} className="space-y-1">
+                    <div className="flex items-center justify-between text-xs font-sans">
                       <span className="text-foreground-subtle uppercase tracking-wider">{label.replace("_", " ")}</span>
-                      <span className="font-bold text-foreground">{count}</span>
+                      <span className="font-semibold text-foreground">{count}</span>
                     </div>
-                    <div className="h-3 w-full bg-background-subtle/60 rounded-sm overflow-hidden border border-border/10">
+                    <div className="h-2.5 w-full bg-background-subtle/60 rounded-full overflow-hidden border border-border/10">
                       <div
-                        className={`h-full rounded-sm transition-all duration-300 ${typeColorMap[label] || "bg-accent/60"}`}
+                        className={`h-full rounded-full transition-all duration-300 ${typeColorMap[label] || "bg-accent/60"}`}
                         style={{ width: `${Math.max(4, pct)}%` }}
                       />
                     </div>
@@ -322,17 +322,17 @@ export default function ExecutiveOverview() {
           </div>
 
           {/* Approval rate - horizontal stacked bar */}
-          <div className="mt-4 space-y-1.5">
-            <span className="text-[7px] font-mono uppercase tracking-wider text-foreground-subtle/70">Approval Rate</span>
+          <div className="mt-4 space-y-2">
+            <span className="text-[9px] font-sans font-semibold uppercase tracking-wider text-foreground-subtle/70">Approval Rate</span>
             {totalProcessed === 0 ? (
-              <p className="text-[10px] font-mono text-foreground-subtle py-1 text-center">No processed requests</p>
+              <p className="text-xs font-sans text-foreground-subtle py-1 text-center">No processed requests</p>
             ) : (
               <>
-                <div className="flex items-center justify-between text-[9px] font-mono">
-                  <span className="text-success">{approvedCount} Approved</span>
-                  <span className="text-destructive">{rejectedCount} Rejected</span>
+                <div className="flex items-center justify-between text-xs font-sans">
+                  <span className="text-success font-medium">{approvedCount} Approved</span>
+                  <span className="text-destructive font-medium">{rejectedCount} Rejected</span>
                 </div>
-                <div className="h-4 w-full bg-background-subtle/60 rounded-sm overflow-hidden border border-border/10 flex">
+                <div className="h-3 w-full bg-background-subtle/60 rounded-full overflow-hidden border border-border/10 flex">
                   <div
                     className="h-full bg-success/60 transition-all duration-300"
                     style={{ width: `${approvalRate}%` }}
@@ -342,7 +342,7 @@ export default function ExecutiveOverview() {
                     style={{ width: `${100 - approvalRate}%` }}
                   />
                 </div>
-                <div className="flex items-center justify-between text-[9px] font-mono">
+                <div className="flex items-center justify-between text-xs font-sans">
                   <span className="font-bold text-foreground">{approvalRate}%</span>
                   <span className="text-foreground-subtle">{totalProcessed} total</span>
                 </div>
@@ -352,26 +352,26 @@ export default function ExecutiveOverview() {
         </div>
 
         {/* Storage distribution hint */}
-        <div className="lg:col-span-3 border border-border/30 rounded-sm bg-background-panel/35 backdrop-blur-sm p-4 select-none">
-          <span className="font-mono text-[8px] font-bold uppercase tracking-widest text-foreground-subtle">
+        <div className="lg:col-span-3 border border-border/20 rounded-xl bg-background-panel/35 backdrop-blur-sm p-5 select-none shadow-sm">
+          <span className="font-sans text-[10px] font-bold uppercase tracking-wider text-foreground-subtle">
             Storage Overview
           </span>
-          <div className="mt-3 space-y-2">
-            <div className="flex items-center justify-between text-[9px] font-mono">
+          <div className="mt-4 space-y-3">
+            <div className="flex items-center justify-between text-xs font-sans">
               <span className="text-foreground-subtle">Used</span>
-              <span className="font-bold text-foreground">{formatStorage(totalStorageBytes)}</span>
+              <span className="font-semibold text-foreground font-mono">{formatStorage(totalStorageBytes)}</span>
             </div>
-            <div className="flex items-center justify-between text-[9px] font-mono">
+            <div className="flex items-center justify-between text-xs font-sans">
               <span className="text-foreground-subtle">Files</span>
-              <span className="font-bold text-foreground">{totalFiles}</span>
+              <span className="font-semibold text-foreground">{totalFiles}</span>
             </div>
-            <div className="flex items-center justify-between text-[9px] font-mono">
+            <div className="flex items-center justify-between text-xs font-sans">
               <span className="text-foreground-subtle">Folders</span>
-              <span className="font-bold text-foreground">{totalFolders}</span>
+              <span className="font-semibold text-foreground">{totalFolders}</span>
             </div>
-            <div className="flex items-center justify-between text-[9px] font-mono">
+            <div className="flex items-center justify-between text-xs font-sans">
               <span className="text-foreground-subtle">Pending Gov</span>
-              <span className="font-bold text-foreground">{pendingCount}</span>
+              <span className="font-semibold text-foreground">{pendingCount}</span>
             </div>
           </div>
         </div>
@@ -380,46 +380,46 @@ export default function ExecutiveOverview() {
       {/* ── Split Layout: Governance Queue vs Recent Files ── */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Governance / Approval Queue */}
-        <div className="lg:col-span-7 border border-border/30 rounded-sm bg-background-panel/20 backdrop-blur-sm p-5 flex flex-col justify-between min-h-[380px]">
+        <div className="lg:col-span-7 border border-border/20 rounded-xl bg-background-panel/20 backdrop-blur-sm p-6 flex flex-col justify-between min-h-[380px] shadow-sm">
           <div className="space-y-4">
-            <div className="border-b border-border/20 pb-3 flex items-center justify-between">
+            <div className="border-b border-border/20 pb-4 flex items-center justify-between">
               <div>
-                <h2 className="text-sm font-bold tracking-tight text-foreground font-serif">
+                <h2 className="text-base font-bold tracking-tight text-foreground font-sans">
                   Corporate Governance Queue
                 </h2>
-                <p className="text-[10px] text-foreground-subtle font-mono mt-0.5">
+                <p className="text-xs text-foreground-subtle font-sans mt-0.5">
                   Restricted sign-off requests requiring C-Suite authorization.
                 </p>
               </div>
-              <span className="h-5 px-2 rounded-full bg-accent-subtle border border-accent/20 text-[9px] font-mono font-bold text-accent flex items-center justify-center">
+              <span className="h-6 px-3 rounded-full bg-accent/10 border border-accent/20 text-xs font-sans font-bold text-accent flex items-center justify-center">
                 {pendingCount} Pending
               </span>
             </div>
 
             {pendingCount === 0 ? (
-              <div className="py-14 text-center space-y-3">
-                <div className="mx-auto h-9 w-9 rounded-full bg-success/10 border border-success/20 flex items-center justify-center">
-                  <CheckCircle className="text-success" size={18} />
+              <div className="py-16 text-center space-y-4">
+                <div className="mx-auto h-10 w-10 rounded-full bg-success/10 border border-success/20 flex items-center justify-center">
+                  <CheckCircle className="text-success" size={20} />
                 </div>
                 <div className="space-y-1">
-                  <h3 className="text-xs font-semibold text-foreground">All Protocols Satisfied</h3>
-                  <p className="text-[10px] text-foreground-subtle max-w-xs mx-auto leading-normal">
+                  <h3 className="text-sm font-semibold text-foreground font-sans">All Protocols Satisfied</h3>
+                  <p className="text-xs text-foreground-subtle max-w-xs mx-auto leading-relaxed font-sans">
                     There are currently no active approval tasks or locking blocks on files within your domain.
                   </p>
                 </div>
               </div>
             ) : (
-              <div className="space-y-2.5 max-h-[300px] overflow-y-auto pr-1">
+              <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
                 {pendingTasks.map((task) => {
                   return (
                     <div
                       key={task.id}
-                      className="p-3 rounded-sm border border-border/30 bg-background-panel/40 backdrop-blur-sm transition-all duration-300 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
+                      className="p-4 rounded-lg border border-border/20 bg-background-panel/50 backdrop-blur-sm transition-all duration-300 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
                     >
-                      <div className="space-y-1.5 flex-1 min-w-0">
+                      <div className="space-y-2 flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <span className={cn(
-                            "px-1.5 py-0.5 rounded-sm text-[8px] font-bold tracking-wider font-mono uppercase border",
+                            "px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wider font-sans uppercase border",
                             task.type === "FILE_LOCK" && "bg-destructive/15 text-destructive border-destructive/25",
                             task.type === "FILE_UNLOCK" && "bg-success/15 text-success border-success/25",
                             task.type === "CLASSIFICATION" && "bg-warning/15 text-warning border-warning/25",
@@ -428,26 +428,26 @@ export default function ExecutiveOverview() {
                           )}>
                             {task.type.replace("_", " ")}
                           </span>
-                          <span className="font-mono text-[9px] text-foreground-subtle">{task.timestamp}</span>
+                          <span className="font-mono text-xs text-foreground-subtle">{task.timestamp}</span>
                         </div>
-                        <h4 className="text-xs font-bold text-foreground truncate max-w-sm">{task.title}</h4>
-                        <div className="flex items-center gap-3 text-[10px] text-foreground-muted font-mono leading-none">
+                        <h4 className="text-sm font-bold text-foreground truncate max-w-sm font-sans">{task.title}</h4>
+                        <div className="flex items-center gap-3 text-xs text-foreground-muted font-sans leading-none">
                           <span className="flex items-center gap-1">
-                            <User size={10} className="text-foreground-subtle" />
+                            <User size={12} className="text-foreground-subtle" />
                             {task.requestedBy}
                           </span>
                           <span className="text-foreground-subtle/30">|</span>
                           <span className="font-bold text-foreground">{task.amountValue}</span>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 shrink-0 self-end sm:self-center font-mono">
+                      <div className="flex items-center gap-2 shrink-0 self-end sm:self-center font-sans">
                         <button
                           onClick={() => {
                             setConfirmModal({ show: true, taskId: task.id, action: "REJECT" });
                             setConfirmReason("");
                             setConfirmError(null);
                           }}
-                          className="h-7 px-3 rounded-sm border border-destructive/25 text-destructive bg-destructive/5 hover:bg-destructive/15 transition-all text-[10px] font-bold tracking-wider uppercase cursor-pointer"
+                          className="h-9 px-4 rounded-md border border-destructive/30 text-destructive bg-destructive/5 hover:bg-destructive/10 transition-colors text-xs font-semibold uppercase cursor-pointer"
                         >
                           Decline
                         </button>
@@ -457,7 +457,7 @@ export default function ExecutiveOverview() {
                             setConfirmReason("");
                             setConfirmError(null);
                           }}
-                          className="h-7 px-3 rounded-sm border border-success/30 text-success bg-success/5 hover:bg-success/20 transition-all text-[10px] font-bold tracking-wider uppercase flex items-center gap-1 cursor-pointer"
+                          className="h-9 px-4 rounded-md border border-success/30 text-success bg-success/5 hover:bg-success/10 transition-colors text-xs font-semibold uppercase flex items-center gap-1.5 cursor-pointer"
                         >
                           Approve
                         </button>
@@ -469,65 +469,65 @@ export default function ExecutiveOverview() {
             )}
           </div>
 
-          <div className="border-t border-border/10 pt-3 flex justify-between items-center text-[9px] font-mono text-foreground-subtle select-none mt-4">
+          <div className="border-t border-border/10 pt-4 flex justify-between items-center text-xs font-sans font-medium text-foreground-subtle select-none mt-4">
             <span>GOVERNANCE REGISTER</span>
-            <span className="flex items-center gap-0.5">
-              <Shield size={10} className="text-accent" /> ACTIVE
+            <span className="flex items-center gap-1 text-accent font-semibold">
+              <Shield size={12} className="text-accent" /> ACTIVE
             </span>
           </div>
         </div>
 
         {/* Recent Secure Files */}
-        <div className="lg:col-span-5 border border-border/30 rounded-sm bg-background-panel/20 backdrop-blur-sm p-5 flex flex-col justify-between min-h-[380px]">
+        <div className="lg:col-span-5 border border-border/20 rounded-xl bg-background-panel/20 backdrop-blur-sm p-6 flex flex-col justify-between min-h-[380px] shadow-sm">
           <div className="space-y-4">
-            <div className="border-b border-border/20 pb-3">
-              <h2 className="text-sm font-bold tracking-tight text-foreground font-serif">
+            <div className="border-b border-border/20 pb-4">
+              <h2 className="text-base font-bold tracking-tight text-foreground font-sans">
                 Recent Files
               </h2>
-              <p className="text-[10px] text-foreground-subtle font-mono mt-0.5">
+              <p className="text-xs text-foreground-subtle font-sans mt-0.5">
                 Recently modified corporate documents in your repository.
               </p>
             </div>
 
             <div className="divide-y divide-border/10 max-h-[300px] overflow-y-auto pr-1">
               {recentFiles.length === 0 ? (
-                <div className="py-12 text-center">
-                  <File className="mx-auto text-foreground-subtle/30 mb-2" size={20} />
-                  <p className="text-[10px] text-foreground-subtle font-mono">No files yet</p>
+                <div className="py-16 text-center space-y-2">
+                  <File className="mx-auto text-foreground-subtle/30" size={24} />
+                  <p className="text-xs text-foreground-subtle font-sans">No files yet</p>
                 </div>
               ) : (
                 recentFiles.map((file) => (
                   <div
                     key={file.id}
-                    className="py-2.5 flex items-center justify-between gap-3 group/row transition-all"
+                    className="py-3 flex items-center justify-between gap-3 group/row transition-all hover:bg-background-subtle/10 px-2 rounded-lg"
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="h-7 w-7 rounded border border-border/20 bg-background/30 flex items-center justify-center shrink-0">
+                      <div className="h-8 w-8 rounded-lg border border-border/20 bg-background/50 flex items-center justify-center shrink-0">
                         {getFileIcon(file)}
                       </div>
                       <div className="min-w-0">
-                        <h4 className="text-xs font-semibold text-foreground truncate max-w-[160px] sm:max-w-[200px]">
+                        <h4 className="text-xs font-semibold text-foreground truncate max-w-[160px] sm:max-w-[200px] font-sans">
                           {file.name}
                         </h4>
-                        <p className="text-[9px] text-foreground-subtle font-mono mt-0.5 flex items-center gap-1.5">
-                          <span>{file.size}</span>
+                        <p className="text-xs text-foreground-subtle font-sans mt-0.5 flex items-center gap-1.5">
+                          <span className="font-mono text-[10px]">{file.size}</span>
                           <span>&bull;</span>
-                          <span>{file.modifiedAt}</span>
+                          <span className="font-mono text-[10px]">{file.modifiedAt}</span>
                         </p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       {file.lockedBy && (
                         <span title={`LOCKED: ${file.lockReason || ''} (${file.lockedBy})`}>
-                          <Lock size={10} className="text-accent fill-accent/15 cursor-help" />
+                          <Lock size={12} className="text-accent fill-accent/15 cursor-help" />
                         </span>
                       )}
                       <button
                         onClick={() => handleOpenFile(file)}
-                        className="h-6 w-14 rounded-sm border border-border/60 hover:border-accent hover:bg-accent-subtle/20 text-foreground-muted hover:text-accent transition-all text-[9px] font-bold tracking-wider font-mono uppercase flex items-center justify-center gap-0.5 cursor-pointer"
+                        className="h-8 w-16 rounded-md border border-border bg-background hover:bg-background-subtle/50 text-foreground transition-all text-xs font-semibold font-sans uppercase flex items-center justify-center gap-1 cursor-pointer"
                       >
                         <span>View</span>
-                        <ArrowRight size={10} />
+                        <ArrowRight size={12} />
                       </button>
                     </div>
                   </div>
@@ -536,7 +536,7 @@ export default function ExecutiveOverview() {
             </div>
           </div>
 
-          <div className="border-t border-border/10 pt-3 flex justify-between items-center text-[9px] font-mono text-foreground-subtle select-none mt-4">
+          <div className="border-t border-border/10 pt-4 flex justify-between items-center text-xs font-sans font-medium text-foreground-subtle select-none mt-4">
             <span>REPOSITORY</span>
             <span className="text-success font-bold">
               {totalFiles + totalFolders} items
@@ -546,20 +546,20 @@ export default function ExecutiveOverview() {
       </div>
 
       {/* ── Activity Feed ── */}
-      <div className="border border-border/30 rounded-sm bg-background-panel/20 backdrop-blur-sm p-5">
-        <div className="border-b border-border/20 pb-3 mb-3">
-          <h2 className="text-sm font-bold tracking-tight text-foreground font-serif">Recent Activity</h2>
-          <p className="text-[10px] text-foreground-subtle font-mono mt-0.5">Latest actions, shares, and governance events.</p>
+      <div className="border border-border/20 rounded-xl bg-background-panel/20 backdrop-blur-sm p-6 shadow-sm">
+        <div className="border-b border-border/20 pb-4 mb-4">
+          <h2 className="text-base font-bold tracking-tight text-foreground font-sans">Recent Activity</h2>
+          <p className="text-xs text-foreground-subtle font-sans mt-0.5">Latest actions, shares, and governance events.</p>
         </div>
         <div className="divide-y divide-border/10 max-h-[220px] overflow-y-auto">
           {activityEntries.length === 0 ? (
-            <p className="py-6 text-center text-[10px] text-foreground-subtle font-mono">No recent activity</p>
+            <p className="py-6 text-center text-xs text-foreground-subtle font-sans">No recent activity</p>
           ) : (
             activityEntries.slice(0, 15).map((entry) => (
-              <div key={entry.id} className="py-2 flex items-center justify-between gap-3 text-[10px] font-mono">
+              <div key={entry.id} className="py-2.5 flex items-center justify-between gap-3 text-xs font-sans">
                 <div className="flex items-center gap-2 min-w-0">
                   <span className={cn(
-                    "px-1.5 py-0.5 rounded-sm text-[8px] font-bold tracking-wider uppercase border shrink-0",
+                    "px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wider uppercase border shrink-0 font-sans",
                     entry.action.includes("SHARED") && "bg-info/10 text-info border-info/20",
                     entry.action.includes("UPLOAD") && "bg-success/10 text-success border-success/20",
                     entry.action.includes("GOV_APPROVED") && "bg-success/10 text-success border-success/20",
@@ -569,10 +569,10 @@ export default function ExecutiveOverview() {
                     entry.action.includes("TRASH") && "bg-destructive/10 text-destructive border-destructive/20",
                     (!entry.action.includes("SHARED") && !entry.action.includes("UPLOAD") && !entry.action.includes("GOV") && !entry.action.includes("LOCK") && !entry.action.includes("DELETE") && !entry.action.includes("TRASH")) && "bg-background-muted/40 text-foreground-subtle border-border/40"
                   )}>{entry.action.replace(/_/g, " ")}</span>
-                  <span className="truncate text-foreground-muted">{entry.targetResource || "-"}</span>
-                  {entry.actor && <span className="text-foreground-subtle/60 hidden sm:inline">by {entry.actor}</span>}
+                  <span className="truncate text-foreground-muted font-sans">{entry.targetResource || "-"}</span>
+                  {entry.actor && <span className="text-foreground-subtle/60 hidden sm:inline font-sans">by {entry.actor}</span>}
                 </div>
-                <span className="text-foreground-subtle/60 shrink-0">{formatTimestamp(entry.occurredAt)}</span>
+                <span className="text-foreground-subtle/60 shrink-0 font-mono text-[10px]">{formatTimestamp(entry.occurredAt)}</span>
               </div>
             ))
           )}
@@ -582,41 +582,41 @@ export default function ExecutiveOverview() {
       {/* ── Confirm / Reason Modal ── */}
       {confirmModal?.show && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-background/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="w-full max-w-sm rounded-sm border border-border/80 bg-background-panel shadow-none p-5 space-y-4">
-            <div className="flex items-start gap-3">
+          <div className="w-full max-w-md rounded-xl border border-border/40 bg-background-panel shadow-2xl shadow-black/20 p-6 space-y-6">
+            <div className="flex items-start gap-3.5">
               <div className={cn(
-                "h-8 w-8 rounded-full flex items-center justify-center shrink-0",
+                "h-10 w-10 rounded-full flex items-center justify-center shrink-0",
                 confirmModal.action === "APPROVE"
                   ? "bg-success/10 border border-success/20"
                   : "bg-destructive/10 border border-destructive/20"
               )}>
-                <AlertTriangle size={14} className={cn(
+                <AlertTriangle size={18} className={cn(
                   confirmModal.action === "APPROVE" ? "text-success" : "text-destructive"
                 )} />
               </div>
               <div className="space-y-1">
-                <h3 className="text-sm font-semibold text-foreground font-serif">
+                <h3 className="text-lg font-bold text-foreground font-sans">
                   {confirmModal.action === "APPROVE" ? "Approve" : "Decline"} Request
                 </h3>
-                <p className="text-[10px] text-foreground-subtle font-mono">
+                <p className="text-xs text-foreground-subtle font-sans">
                   This action requires a written justification.
                 </p>
               </div>
             </div>
 
-            <div className="rounded-sm border border-warning/20 bg-warning/5 px-3 py-2 text-[9px] font-mono text-foreground-subtle flex items-start gap-2">
-              <AlertTriangle size={10} className="text-warning shrink-0 mt-0.5" />
+            <div className="rounded-lg border border-warning/20 bg-warning/5 px-4 py-3 text-xs text-foreground-subtle flex items-start gap-2.5 font-sans">
+              <AlertTriangle size={14} className="text-warning shrink-0 mt-0.5" />
               <span>This action cannot be undone - though you may use the Undo option on completed requests.</span>
             </div>
 
             {confirmError && (
-              <div className="flex items-start gap-2 rounded border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
-                <AlertCircle size={12} className="mt-0.5 shrink-0" /><span>{confirmError}</span>
+              <div className="flex items-start gap-2.5 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-xs text-destructive font-sans">
+                <AlertCircle size={14} className="mt-0.5 shrink-0" /><span>{confirmError}</span>
               </div>
             )}
 
             <div>
-              <label className="block text-[9px] font-bold font-mono uppercase text-foreground-subtle mb-1">
+              <label className="block text-xs font-semibold font-sans uppercase tracking-wider text-foreground-subtle mb-1.5">
                 Reason <span className="text-destructive">*</span>
               </label>
               <textarea
@@ -624,19 +624,19 @@ export default function ExecutiveOverview() {
                 placeholder="Provide a detailed reason (minimum 10 characters)..."
                 value={confirmReason}
                 onChange={(e) => setConfirmReason(e.target.value)}
-                className="w-full px-2.5 py-1.5 rounded-sm border border-border bg-background text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-accent resize-none"
+                className="w-full px-3.5 py-2.5 rounded-lg border border-border bg-background text-sm text-foreground placeholder:text-foreground-subtle/40 focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent resize-none transition-all duration-200"
                 autoFocus
               />
-              <p className="text-[8px] font-mono text-foreground-subtle/60 mt-1">
+              <p className="text-[10px] font-mono text-foreground-subtle/60 mt-1.5">
                 {confirmReason.length}/10 characters minimum
               </p>
             </div>
 
-            <div className="flex items-center justify-end gap-2 text-[10px] font-bold font-mono pt-2">
+            <div className="flex items-center justify-end gap-3 pt-2">
               <button
                 type="button"
                 onClick={() => { setConfirmModal(null); setConfirmReason(""); setConfirmError(null); }}
-                className="h-8 px-3 rounded-sm border border-transparent bg-transparent text-foreground-subtle hover:text-foreground hover:bg-background-subtle/50 transition-colors cursor-pointer"
+                className="h-10 px-4 rounded-lg text-sm font-semibold font-sans text-foreground-subtle hover:text-foreground hover:bg-background-subtle/50 transition-colors cursor-pointer"
               >
                 Cancel
               </button>
@@ -644,13 +644,13 @@ export default function ExecutiveOverview() {
                 onClick={handleConfirmAction}
                 disabled={confirmLoading || confirmReason.trim().length < 10}
                 className={cn(
-                  "h-8 px-4 rounded-sm font-mono text-[11px] font-bold uppercase tracking-wider disabled:opacity-50 cursor-pointer",
+                  "h-10 px-5 rounded-lg font-sans text-sm font-semibold tracking-wide transition-colors cursor-pointer disabled:opacity-50",
                   confirmModal.action === "APPROVE"
                     ? "btn-shimmer text-accent-foreground"
-                    : "border border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors"
+                    : "border border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive transition-colors"
                 )}
               >
-                {confirmLoading ? <Loader2 size={12} className="animate-spin" /> : confirmModal.action === "APPROVE" ? "Confirm Approve" : "Confirm Decline"}
+                {confirmLoading ? <Loader2 size={14} className="animate-spin" /> : confirmModal.action === "APPROVE" ? "Confirm Approve" : "Confirm Decline"}
               </button>
             </div>
           </div>

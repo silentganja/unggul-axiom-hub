@@ -420,30 +420,30 @@ export default function RoleBuilderTab() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-sm font-bold text-foreground font-serif">Role Builder</h2>
-          <p className="text-[10px] text-foreground-subtle font-mono mt-0.5">
+          <h2 className="text-base font-bold text-foreground font-serif">Role Builder</h2>
+          <p className="text-xs text-foreground-subtle mt-1">
             Manage groups, permissions, roles, and user assignments.
           </p>
         </div>
         {subTab === "groups" && (
           <button
             onClick={() => { setCreateName(""); setCreateDescription(""); setCreateError(null); setIsCreateOpen(true); }}
-            className="flex items-center gap-1.5 h-8 px-3 rounded border border-accent/30 text-accent bg-accent/5 hover:bg-accent/15 text-[10px] font-bold uppercase font-mono tracking-wider transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 h-9 px-4 rounded-md border border-accent/30 text-accent bg-accent/5 hover:bg-accent/15 text-xs font-semibold tracking-wider font-sans uppercase transition-colors cursor-pointer"
           >
-            <Plus size={12} /> New Group
+            <Plus size={14} /> New Group
           </button>
         )}
       </div>
 
       {/* Sub-tabs */}
-      <div className="flex items-center gap-1.5 font-mono text-[10px] font-bold select-none border-b border-border/20 pb-2">
+      <div className="flex items-center gap-2 font-sans text-xs font-semibold select-none border-b border-border/20 pb-3">
         {(["groups", "permissions", "roles"] as SubTab[]).map(t => (
           <button key={t} onClick={() => { setSubTab(t); if (t === "roles") fetchCustomRoles(); }}
-            className={cn("px-3 py-1 rounded-sm border uppercase transition-colors cursor-pointer capitalize",
+            className={cn("h-9 px-4 rounded-md border uppercase transition-colors cursor-pointer font-bold tracking-wide",
               subTab === t ? "bg-accent/10 border-accent/20 text-accent" : "border-border/30 text-foreground-subtle hover:text-foreground hover:bg-background-subtle/50"
             )}>{t}</button>
         ))}
@@ -451,17 +451,17 @@ export default function RoleBuilderTab() {
 
       {subTab === "groups" && (
       /* Two-panel layout */
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 min-h-[500px]">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 min-h-[500px]">
         {/* Left: Group List */}
-        <div className="border border-border/40 rounded bg-background-panel/40 overflow-hidden">
-          <div className="px-4 py-2.5 border-b border-border/30 bg-background-panel/80">
-            <span className="font-mono text-[10px] font-bold tracking-wider text-foreground-subtle uppercase">
+        <div className="border border-border/20 rounded-lg bg-background-panel/40 overflow-hidden">
+          <div className="px-5 py-4 border-b border-border/30 bg-background-panel/80">
+            <span className="font-sans text-xs font-bold tracking-wider text-foreground-subtle uppercase">
               Groups ({groups.length})
             </span>
           </div>
           <div className="divide-y divide-border/10 max-h-[600px] overflow-y-auto">
             {groups.length === 0 ? (
-              <div className="p-8 text-center text-[10px] font-mono text-foreground-subtle">
+              <div className="p-8 text-center text-xs font-mono text-foreground-subtle">
                 No role groups yet. Create one to get started.
               </div>
             ) : (
@@ -470,42 +470,42 @@ export default function RoleBuilderTab() {
                   key={g.id}
                   onClick={() => selectGroup(g.id)}
                   className={cn(
-                    "w-full text-left px-4 py-3 transition-colors cursor-pointer block",
+                    "w-full text-left px-5 py-4 transition-colors cursor-pointer block",
                     selectedId === g.id
                       ? "bg-accent/10 border-l-2 border-accent"
                       : "hover:bg-background-subtle/30 border-l-2 border-transparent"
                   )}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-foreground font-sans truncate pr-2">
+                    <span className="text-sm font-bold text-foreground font-sans truncate pr-2">
                       {g.name}
                     </span>
-                    <div className="flex items-center gap-0.5 shrink-0">
+                    <div className="flex items-center gap-1 shrink-0">
                       <button
                         onClick={e => handleDuplicate(g.id, e)}
-                        className="h-6 w-6 rounded flex items-center justify-center text-foreground-subtle/40 hover:text-accent hover:bg-accent/10 transition-colors cursor-pointer"
+                        className="h-7 w-7 rounded-md flex items-center justify-center text-foreground-subtle/40 hover:text-accent hover:bg-accent/10 transition-colors cursor-pointer"
                         title="Duplicate group"
                       >
-                        <Copy size={10} />
+                        <Copy size={12} />
                       </button>
                       <button
                         onClick={e => {
                           e.stopPropagation();
                           setDeleteTarget(g);
                         }}
-                        className="h-6 w-6 rounded flex items-center justify-center text-foreground-subtle/40 hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
+                        className="h-7 w-7 rounded-md flex items-center justify-center text-foreground-subtle/40 hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
                         title="Delete group"
                       >
-                        <Trash2 size={11} />
+                        <Trash2 size={12} />
                       </button>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 mt-1 text-[9px] font-mono text-foreground-subtle">
+                  <div className="flex items-center gap-3 mt-1.5 text-xs font-mono text-foreground-subtle">
                     <span className="flex items-center gap-1">
-                      <Key size={9} /> {g.permissionCount}
+                      <Key size={11} /> {g.permissionCount}
                     </span>
                     <span className="flex items-center gap-1">
-                      <Users size={9} /> {g.userCount}
+                      <Users size={11} /> {g.userCount}
                     </span>
                   </div>
                 </button>
@@ -515,25 +515,25 @@ export default function RoleBuilderTab() {
         </div>
 
         {/* Right: Detail / Edit */}
-        <div className="lg:col-span-2 border border-border/40 rounded bg-background-panel/40 overflow-hidden">
+        <div className="lg:col-span-2 border border-border/20 rounded-lg bg-background-panel/40 overflow-hidden">
           {!selectedId || !detail ? (
-            <div className="flex flex-col items-center justify-center py-16 gap-3 text-foreground-subtle">
-              <Shield size={32} className="opacity-30" />
-              <p className="font-mono text-[11px] uppercase tracking-wider">
+            <div className="flex flex-col items-center justify-center py-20 gap-3 text-foreground-subtle">
+              <Shield size={36} className="opacity-30" />
+              <p className="font-sans text-xs font-bold uppercase tracking-wider">
                 Select a group or create a new one
               </p>
             </div>
           ) : detailLoading ? (
-            <div className="flex items-center justify-center py-16">
-              <Loader2 size={18} className="animate-spin text-accent" />
+            <div className="flex items-center justify-center py-20">
+              <Loader2 size={24} className="animate-spin text-accent" />
             </div>
           ) : (
             <div className="flex flex-col h-full">
               {/* Detail header */}
-              <div className="px-4 py-3 border-b border-border/30 bg-background-panel/80 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Shield size={14} className="text-accent" />
-                  <span className="text-xs font-bold text-foreground font-sans">
+              <div className="px-5 py-4 border-b border-border/30 bg-background-panel/80 flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <Shield size={16} className="text-accent" />
+                  <span className="text-sm font-bold text-foreground font-sans">
                     Editing: {detail.name}
                   </span>
                 </div>
@@ -541,12 +541,12 @@ export default function RoleBuilderTab() {
                   <button
                     onClick={handleSave}
                     disabled={isSaving}
-                    className="flex items-center gap-1.5 h-7 px-3 rounded border border-accent/30 text-accent bg-accent/5 hover:bg-accent/15 text-[9px] font-bold uppercase font-mono tracking-wider transition-colors cursor-pointer disabled:opacity-50"
+                    className="flex items-center gap-1.5 h-9 px-4 rounded-md border border-accent/30 text-accent bg-accent/5 hover:bg-accent/15 text-xs font-semibold uppercase tracking-wider transition-colors cursor-pointer disabled:opacity-50"
                   >
                     {isSaving ? (
-                      <Loader2 size={10} className="animate-spin" />
+                      <Loader2 size={12} className="animate-spin" />
                     ) : (
-                      <Save size={10} />
+                      <Save size={12} />
                     )}
                     Save Changes
                   </button>
@@ -554,22 +554,22 @@ export default function RoleBuilderTab() {
               </div>
 
               {/* Scrollable content */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-5">
+              <div className="flex-1 overflow-y-auto p-6 space-y-6">
                 {/* Name & Description */}
-                <div className="space-y-3">
+                <div className="space-y-4">
                   <div>
-                    <label className="block text-[9px] font-bold font-mono uppercase text-foreground-subtle mb-1">
+                    <label className="block text-xs font-bold font-sans uppercase text-foreground-subtle mb-1.5">
                       Group Name
                     </label>
                     <input
                       type="text"
                       value={editName}
                       onChange={e => { setEditName(e.target.value); setIsDirty(true); }}
-                      className="h-8 w-full px-2.5 rounded-sm border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent"
+                      className="h-10 w-full px-3 rounded-md border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent"
                     />
                   </div>
                   <div>
-                    <label className="block text-[9px] font-bold font-mono uppercase text-foreground-subtle mb-1">
+                    <label className="block text-xs font-bold font-sans uppercase text-foreground-subtle mb-1.5">
                       Description
                     </label>
                     <input
@@ -577,26 +577,26 @@ export default function RoleBuilderTab() {
                       value={editDescription}
                       onChange={e => { setEditDescription(e.target.value); setIsDirty(true); }}
                       placeholder="What this group is for..."
-                      className="h-8 w-full px-2.5 rounded-sm border border-border bg-background text-sm text-foreground placeholder:text-foreground-subtle/40 focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent"
+                      className="h-10 w-full px-3 rounded-md border border-border bg-background text-sm text-foreground placeholder:text-foreground-subtle/40 focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent"
                     />
                   </div>
                 </div>
 
                 {/* Template Presets */}
                 <div>
-                  <div className="flex items-center gap-1.5 mb-2">
-                    <Zap size={11} className="text-accent" />
-                    <span className="text-[10px] font-bold font-mono uppercase text-foreground-subtle tracking-wider">
+                  <div className="flex items-center gap-1.5 mb-2.5">
+                    <Zap size={13} className="text-accent" />
+                    <span className="text-xs font-bold font-sans uppercase text-foreground-subtle tracking-wider">
                       Quick Presets
                     </span>
                   </div>
-                  <div className="flex flex-wrap gap-1.5">
+                  <div className="flex flex-wrap gap-2">
                     {PRESETS.map(p => (
                       <button
                         key={p.label}
                         type="button"
                         onClick={() => applyPreset(p)}
-                        className="h-6 px-2 rounded-sm border border-accent/25 text-accent bg-accent/5 hover:bg-accent/15 text-[8px] font-bold uppercase font-mono tracking-wider transition-colors cursor-pointer"
+                        className="h-8 px-3 rounded-md border border-accent/25 text-accent bg-accent/5 hover:bg-accent/15 text-xs font-semibold tracking-wider font-sans uppercase transition-colors cursor-pointer"
                       >
                         {p.label}
                       </button>
@@ -606,33 +606,33 @@ export default function RoleBuilderTab() {
 
                 {/* Permissions by category */}
                 <div>
-                  <div className="flex items-center gap-1.5 mb-2">
-                    <Key size={11} className="text-accent" />
-                    <span className="text-[10px] font-bold font-mono uppercase text-foreground-subtle tracking-wider">
+                  <div className="flex items-center gap-1.5 mb-3">
+                    <Key size={13} className="text-accent" />
+                    <span className="text-xs font-bold font-sans uppercase text-foreground-subtle tracking-wider">
                       Permissions ({selectedPermIds.size})
                     </span>
                   </div>
-                  <div className="space-y-3">
+                  <div className="space-y-4">
                     {PERM_CATEGORIES.map(cat => {
                       const catPerms = permissions.filter(p => cat.keys.includes(p.key));
                       if (catPerms.length === 0) return null;
                       const catIds = catPerms.map(p => p.id);
                       const allSelected = catIds.every(id => selectedPermIds.has(id));
                       return (
-                        <div key={cat.label}>
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-[9px] font-bold font-mono uppercase text-foreground-subtle/70 tracking-wider">
+                        <div key={cat.label} className="border border-border/10 rounded-md p-3.5 bg-background/10">
+                          <div className="flex items-center justify-between mb-2 pb-1 border-b border-border/10">
+                            <span className="text-xs font-bold font-sans uppercase text-foreground-subtle tracking-wider">
                               {cat.label}
                             </span>
                             <button
                               type="button"
                               onClick={() => toggleCategory(cat.keys)}
-                              className="text-[8px] font-mono text-accent hover:text-accent-hover transition-colors cursor-pointer bg-transparent border-none"
+                              className="text-xs font-bold font-sans text-accent hover:text-accent-hover transition-colors cursor-pointer bg-transparent border-none"
                             >
                               {allSelected ? "Deselect All" : "Select All"}
                             </button>
                           </div>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                             {catPerms.map(perm => {
                               const isSelected = selectedPermIds.has(perm.id);
                               return (
@@ -642,7 +642,7 @@ export default function RoleBuilderTab() {
                                   onClick={() => togglePermission(perm.id)}
                                   title={`${perm.key}: ${perm.description}`}
                                   className={cn(
-                                    "flex items-center gap-1.5 px-2 py-1 rounded-sm border text-left transition-colors cursor-pointer",
+                                    "flex items-center gap-2 px-3 py-2.5 rounded-md border text-left transition-colors cursor-pointer",
                                     isSelected
                                       ? "border-accent/30 bg-accent/10 text-accent"
                                       : "border-border/20 bg-background/30 text-foreground-subtle hover:border-border/50"
@@ -650,16 +650,16 @@ export default function RoleBuilderTab() {
                                 >
                                   <div
                                     className={cn(
-                                      "h-3 w-3 rounded-sm border flex items-center justify-center shrink-0",
+                                      "h-4 w-4 rounded-md border flex items-center justify-center shrink-0",
                                       isSelected
                                         ? "border-accent bg-accent text-accent-foreground"
                                         : "border-border bg-background"
                                     )}
                                   >
-                                    {isSelected && <Check size={8} strokeWidth={3} />}
+                                    {isSelected && <Check size={10} strokeWidth={3} />}
                                   </div>
                                   <div className="min-w-0">
-                                    <span className="text-[9px] font-mono font-bold block truncate">
+                                    <span className="text-xs font-mono font-bold block truncate">
                                       {perm.key.replace(/^.+:/, "")}
                                     </span>
                                   </div>
@@ -675,36 +675,36 @@ export default function RoleBuilderTab() {
 
                 {/* User assignment */}
                 <div>
-                  <div className="flex items-center gap-1.5 mb-2">
-                    <Users size={11} className="text-accent" />
-                    <span className="text-[10px] font-bold font-mono uppercase text-foreground-subtle tracking-wider">
+                  <div className="flex items-center gap-1.5 mb-3">
+                    <Users size={13} className="text-accent" />
+                    <span className="text-xs font-bold font-sans uppercase text-foreground-subtle tracking-wider">
                       Assigned Users ({selectedUserIds.size})
                     </span>
                   </div>
                   {/* Search filter */}
-                  <div className="relative mb-2">
-                    <span className="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none text-foreground-subtle">
-                      <Search size={10} />
+                  <div className="relative mb-3">
+                    <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-foreground-subtle">
+                      <Search size={12} />
                     </span>
                     <input
                       type="text"
                       value={userSearch}
                       onChange={e => setUserSearch(e.target.value)}
                       placeholder="Search users..."
-                      className="h-7 w-full pl-7 pr-2.5 rounded-sm border border-input-border bg-input-bg text-[10px] font-mono text-foreground placeholder:text-foreground-subtle/50 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent-ring"
+                      className="h-9 w-full pl-9 pr-3 rounded-md border border-input-border bg-input-bg text-xs font-sans text-foreground placeholder:text-foreground-subtle/50 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent-ring"
                     />
                     {userSearch && (
                       <button
                         onClick={() => setUserSearch("")}
-                        className="absolute right-0 top-0 h-7 w-7 flex items-center justify-center text-foreground-subtle hover:text-foreground cursor-pointer"
+                        className="absolute right-0 top-0 h-9 w-9 flex items-center justify-center text-foreground-subtle hover:text-foreground cursor-pointer"
                       >
-                        <X size={10} />
+                        <X size={12} />
                       </button>
                     )}
                   </div>
-                  <div className="border border-border/30 rounded-sm divide-y divide-border/10 max-h-[220px] overflow-y-auto">
+                  <div className="border border-border/20 rounded-md divide-y divide-border/10 max-h-[250px] overflow-y-auto">
                     {allUsers.length === 0 ? (
-                      <div className="p-4 text-center text-[10px] font-mono text-foreground-subtle">
+                       <div className="p-4 text-center text-xs font-mono text-foreground-subtle">
                         No users available.
                       </div>
                     ) : (() => {
@@ -716,7 +716,7 @@ export default function RoleBuilderTab() {
                       );
                       if (filtered.length === 0) {
                         return (
-                          <div className="p-4 text-center text-[10px] font-mono text-foreground-subtle">
+                          <div className="p-4 text-center text-xs font-mono text-foreground-subtle">
                             No users match &quot;{userSearch}&quot;
                           </div>
                         );
@@ -728,35 +728,35 @@ export default function RoleBuilderTab() {
                             key={user.id}
                             onClick={() => toggleUser(user.id)}
                             className={cn(
-                              "w-full flex items-center justify-between px-3 py-2 text-left transition-colors cursor-pointer",
+                              "w-full flex items-center justify-between px-4 py-3 text-left transition-colors cursor-pointer",
                               isSelected
                                 ? "bg-accent/10"
                                 : "hover:bg-background-subtle/30"
                             )}
                           >
-                            <div className="flex items-center gap-2 min-w-0">
+                            <div className="flex items-center gap-3 min-w-0">
                               <div
                                 className={cn(
-                                  "h-3.5 w-3.5 rounded-sm border flex items-center justify-center shrink-0",
+                                  "h-4 w-4 rounded-md border flex items-center justify-center shrink-0",
                                   isSelected
                                     ? "border-accent bg-accent text-accent-foreground"
                                     : "border-border bg-background"
                                 )}
                               >
-                                {isSelected && <Check size={9} strokeWidth={3} />}
+                                {isSelected && <Check size={10} strokeWidth={3} />}
                               </div>
                               <div className="min-w-0">
-                                <span className="text-[10px] font-mono font-bold text-foreground block truncate">
+                                <span className="text-xs font-sans font-bold text-foreground block truncate">
                                   {user.fullName}
                                 </span>
-                                <span className="text-[8px] font-mono text-foreground-subtle block truncate">
+                                <span className="text-xs font-sans text-foreground-subtle block truncate">
                                   {user.email}
                                 </span>
                               </div>
                             </div>
                             <span
                               className={cn(
-                                "text-[8px] font-bold uppercase font-mono px-1.5 py-0.5 rounded-sm border shrink-0",
+                                "text-[10px] font-bold uppercase font-sans px-2.5 py-1 rounded-md border shrink-0",
                                 user.role === "chief"
                                   ? "bg-accent/15 text-accent border-accent/30"
                                   : user.role === "director"
@@ -781,46 +781,78 @@ export default function RoleBuilderTab() {
 
       {/* Permissions Management Panel */}
       {subTab === "permissions" && (
-        <div className="border border-border/40 rounded bg-background-panel/40 overflow-hidden">
-          <div className="px-4 py-2.5 border-b border-border/30 bg-background-panel/80 flex items-center justify-between">
-            <span className="font-mono text-[10px] font-bold tracking-wider text-foreground-subtle uppercase">
+        <div className="border border-border/30 rounded-lg bg-background-panel/40 overflow-hidden shadow-sm">
+          <div className="px-6 py-4 border-b border-border/30 bg-background-panel/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <span className="font-sans text-xs font-semibold tracking-wider text-foreground-subtle uppercase">
               Permissions ({permissions.length})
             </span>
-            <div className="flex items-center gap-2">
-              <input type="text" value={permCreateKey} onChange={e => setPermCreateKey(e.target.value)}
-                placeholder="key (e.g. files:lock)" className="h-7 w-40 px-2 rounded-sm border border-border bg-background text-[10px] font-mono focus:outline-none focus:ring-1 focus:ring-accent" />
-              <input type="text" value={permCreateDesc} onChange={e => setPermCreateDesc(e.target.value)}
-                placeholder="description" className="h-7 w-48 px-2 rounded-sm border border-border bg-background text-[10px] font-mono focus:outline-none focus:ring-1 focus:ring-accent" />
-              <button onClick={handleCreatePermission} disabled={permCreateLoading}
-                className="h-7 px-2.5 rounded-sm border border-accent/30 text-accent bg-accent/5 hover:bg-accent/15 text-[9px] font-bold uppercase font-mono transition-colors cursor-pointer disabled:opacity-50">
-                {permCreateLoading ? <Loader2 size={10} className="animate-spin" /> : "Create"}
+            <div className="flex flex-wrap items-center gap-2.5">
+              <input
+                type="text"
+                value={permCreateKey}
+                onChange={e => setPermCreateKey(e.target.value)}
+                placeholder="key (e.g. files:lock)"
+                className="h-9 w-48 px-3 rounded-md border border-border bg-background text-xs font-mono focus:outline-none focus:ring-1 focus:ring-accent"
+              />
+              <input
+                type="text"
+                value={permCreateDesc}
+                onChange={e => setPermCreateDesc(e.target.value)}
+                placeholder="description"
+                className="h-9 w-60 px-3 rounded-md border border-border bg-background text-xs font-sans placeholder:text-foreground-subtle/40 focus:outline-none focus:ring-1 focus:ring-accent"
+              />
+              <button
+                onClick={handleCreatePermission}
+                disabled={permCreateLoading}
+                className="h-9 px-4 rounded-md border border-accent/30 text-accent bg-accent/5 hover:bg-accent/10 text-xs font-semibold font-sans transition-colors cursor-pointer disabled:opacity-50 flex items-center justify-center"
+              >
+                {permCreateLoading ? <Loader2 size={14} className="animate-spin" /> : "Create"}
               </button>
             </div>
           </div>
           <div className="divide-y divide-border/10 max-h-[500px] overflow-y-auto">
             {permissions.map(p => (
-              <div key={p.id} className="px-4 py-2 flex items-center justify-between hover:bg-background-subtle/20">
+              <div key={p.id} className="px-6 py-4 flex items-center justify-between hover:bg-background-subtle/10 transition-colors">
                 <div>
-                  <span className="text-[10px] font-mono font-bold text-foreground">{p.key}</span>
+                  <span className="text-xs font-mono font-semibold text-foreground">{p.key}</span>
                   {editingPermId === p.id ? (
-                    <div className="flex items-center gap-1 mt-1">
-                      <input type="text" value={editingPermDesc} onChange={e => setEditingPermDesc(e.target.value)}
-                        className="h-6 w-64 px-1.5 rounded-sm border border-border bg-background text-[9px] font-mono focus:outline-none focus:ring-1 focus:ring-accent" />
-                      <button onClick={() => handleUpdatePermission(p.id)}
-                        className="h-6 px-2 rounded-sm bg-accent/10 text-accent text-[8px] font-bold uppercase font-mono cursor-pointer">Save</button>
-                      <button onClick={() => setEditingPermId(null)}
-                        className="h-6 px-2 rounded-sm text-[8px] font-mono text-foreground-subtle cursor-pointer">Cancel</button>
+                    <div className="flex flex-wrap items-center gap-2 mt-2">
+                      <input
+                        type="text"
+                        value={editingPermDesc}
+                        onChange={e => setEditingPermDesc(e.target.value)}
+                        className="h-9 w-72 px-3 rounded-md border border-border bg-background text-xs font-sans focus:outline-none focus:ring-1 focus:ring-accent"
+                      />
+                      <button
+                        onClick={() => handleUpdatePermission(p.id)}
+                        className="h-8 px-3 rounded-md bg-accent/10 hover:bg-accent/20 text-accent text-xs font-semibold font-sans transition-colors cursor-pointer"
+                      >
+                        Save
+                      </button>
+                      <button
+                        onClick={() => setEditingPermId(null)}
+                        className="h-8 px-3 rounded-md text-xs font-semibold font-sans text-foreground-subtle hover:text-foreground hover:bg-background-subtle/50 transition-colors cursor-pointer"
+                      >
+                        Cancel
+                      </button>
                     </div>
                   ) : (
-                    <span className="text-[9px] font-mono text-foreground-subtle block">{p.description}</span>
+                    <span className="text-xs font-sans text-foreground-subtle block mt-1">{p.description}</span>
                   )}
                 </div>
-                <div className="flex items-center gap-1">
-                  <button onClick={() => { setEditingPermId(p.id); setEditingPermDesc(p.description); }}
-                    className="h-6 px-2 rounded-sm border border-border/30 bg-background/40 text-[8px] font-mono text-foreground-subtle hover:text-foreground transition-colors cursor-pointer">Edit</button>
-                  <button onClick={() => handleDeletePermission(p.id)}
-                    className="h-6 w-6 rounded flex items-center justify-center text-foreground-subtle/40 hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer" title="Delete permission">
-                    <Trash2 size={10} />
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => { setEditingPermId(p.id); setEditingPermDesc(p.description); }}
+                    className="h-8 px-3 rounded-md border border-border bg-background text-xs font-sans text-foreground-subtle hover:text-foreground hover:bg-background-subtle/50 transition-colors cursor-pointer"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => handleDeletePermission(p.id)}
+                    className="h-8 w-8 rounded-md flex items-center justify-center border border-border bg-background text-foreground-subtle/60 hover:text-destructive hover:border-destructive/30 hover:bg-destructive/10 transition-all cursor-pointer"
+                    title="Delete permission"
+                  >
+                    <Trash2 size={14} />
                   </button>
                 </div>
               </div>
@@ -831,75 +863,112 @@ export default function RoleBuilderTab() {
 
       {/* Roles Management Panel */}
       {subTab === "roles" && (
-        <div className="border border-border/40 rounded bg-background-panel/40 overflow-hidden">
-          <div className="px-4 py-2.5 border-b border-border/30 bg-background-panel/80 flex items-center justify-between">
-            <span className="font-mono text-[10px] font-bold tracking-wider text-foreground-subtle uppercase">
+        <div className="border border-border/30 rounded-lg bg-background-panel/40 overflow-hidden shadow-sm">
+          <div className="px-6 py-4 border-b border-border/30 bg-background-panel/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <span className="font-sans text-xs font-semibold tracking-wider text-foreground-subtle uppercase">
               Custom Roles ({customRoles.length})
             </span>
-            <div className="flex items-center gap-2">
-              <input type="text" value={roleCreateKey} onChange={e => setRoleCreateKey(e.target.value)}
-                placeholder="key (e.g. manager)" className="h-7 w-28 px-2 rounded-sm border border-border bg-background text-[10px] font-mono focus:outline-none focus:ring-1 focus:ring-accent" />
-              <input type="text" value={roleCreateLabel} onChange={e => setRoleCreateLabel(e.target.value)}
-                placeholder="label" className="h-7 w-24 px-2 rounded-sm border border-border bg-background text-[10px] font-mono focus:outline-none focus:ring-1 focus:ring-accent" />
-              <input type="number" value={roleCreateLevel} onChange={e => setRoleCreateLevel(Number(e.target.value))} min={1} max={10}
-                className="h-7 w-14 px-1.5 rounded-sm border border-border bg-background text-[10px] font-mono focus:outline-none focus:ring-1 focus:ring-accent" />
-              <button onClick={handleCreateRole} disabled={roleCreateLoading}
-                className="h-7 px-2.5 rounded-sm border border-accent/30 text-accent bg-accent/5 hover:bg-accent/15 text-[9px] font-bold uppercase font-mono transition-colors cursor-pointer disabled:opacity-50">
-                {roleCreateLoading ? <Loader2 size={10} className="animate-spin" /> : "Create"}
+            <div className="flex flex-wrap items-center gap-2.5">
+              <input
+                type="text"
+                value={roleCreateKey}
+                onChange={e => setRoleCreateKey(e.target.value)}
+                placeholder="key (e.g. manager)"
+                className="h-9 w-36 px-3 rounded-md border border-border bg-background text-xs font-mono focus:outline-none focus:ring-1 focus:ring-accent"
+              />
+              <input
+                type="text"
+                value={roleCreateLabel}
+                onChange={e => setRoleCreateLabel(e.target.value)}
+                placeholder="label"
+                className="h-9 w-32 px-3 rounded-md border border-border bg-background text-xs font-sans placeholder:text-foreground-subtle/40 focus:outline-none focus:ring-1 focus:ring-accent"
+              />
+              <input
+                type="number"
+                value={roleCreateLevel}
+                onChange={e => setRoleCreateLevel(Number(e.target.value))}
+                min={1}
+                max={10}
+                className="h-9 w-20 px-3 rounded-md border border-border bg-background text-xs font-mono focus:outline-none focus:ring-1 focus:ring-accent"
+              />
+              <button
+                onClick={handleCreateRole}
+                disabled={roleCreateLoading}
+                className="h-9 px-4 rounded-md border border-accent/30 text-accent bg-accent/5 hover:bg-accent/10 text-xs font-semibold font-sans transition-colors cursor-pointer disabled:opacity-50 flex items-center justify-center"
+              >
+                {roleCreateLoading ? <Loader2 size={14} className="animate-spin" /> : "Create"}
               </button>
             </div>
           </div>
           <div className="divide-y divide-border/10 max-h-[500px] overflow-y-auto">
             {customRoles.length === 0 ? (
-              <div className="p-8 text-center text-[10px] font-mono text-foreground-subtle">
+              <div className="p-8 text-center text-xs font-sans text-foreground-subtle">
                 No custom roles yet. The 4 base roles (chief, director, officer, staff) are always available.
               </div>
             ) : (
               customRoles.map(r => (
                 <div key={r.roleKey}>
-                  <div className="px-4 py-2 flex items-center justify-between hover:bg-background-subtle/20">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-mono font-bold text-foreground">{r.roleKey}</span>
-                      <span className="text-[9px] font-mono text-foreground-subtle">{r.label}</span>
-                      <span className="text-[8px] font-mono text-accent bg-accent/10 border border-accent/20 px-1 py-0.5 rounded">Lv.{r.level}</span>
+                  <div className="px-6 py-4 flex items-center justify-between hover:bg-background-subtle/10 transition-colors">
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-xs font-mono font-semibold text-foreground">{r.roleKey}</span>
+                      <span className="text-xs font-sans text-foreground-subtle">{r.label}</span>
+                      <span className="text-[10px] font-sans text-accent bg-accent/10 border border-accent/20 px-2 py-0.5 rounded-md">Lv.{r.level}</span>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <button onClick={() => handleEditRolePerms(r.roleKey)}
-                        className="h-6 px-2 rounded-sm border border-border/30 bg-background/40 text-[8px] font-mono text-foreground-subtle hover:text-accent transition-colors cursor-pointer">
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleEditRolePerms(r.roleKey)}
+                        className="h-8 px-3 rounded-md border border-border bg-background text-xs font-sans text-foreground-subtle hover:text-foreground hover:bg-background-subtle/50 transition-colors cursor-pointer"
+                      >
                         Implicit Permissions
                       </button>
                       {!["chief", "director", "officer", "staff"].includes(r.roleKey) && (
-                        <button onClick={() => handleDeleteRole(r.roleKey)}
-                          className="h-6 w-6 rounded flex items-center justify-center text-foreground-subtle/40 hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer" title="Delete role">
-                          <Trash2 size={10} />
+                        <button
+                          onClick={() => handleDeleteRole(r.roleKey)}
+                          className="h-8 w-8 rounded-md flex items-center justify-center border border-border bg-background text-foreground-subtle/60 hover:text-destructive hover:border-destructive/30 hover:bg-destructive/10 transition-all cursor-pointer"
+                          title="Delete role"
+                        >
+                          <Trash2 size={14} />
                         </button>
                       )}
                     </div>
                   </div>
                   {editingRoleKey === r.roleKey && (
-                    <div className="px-4 py-3 bg-background/30 border-t border-border/20">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-[9px] font-mono font-bold text-foreground-subtle uppercase">Implicit Permissions for {r.roleKey}</span>
-                        <button onClick={handleSaveRolePerms}
-                          className="h-6 px-2 rounded-sm border border-accent/30 text-accent bg-accent/5 hover:bg-accent/15 text-[8px] font-bold uppercase font-mono cursor-pointer">Save</button>
+                    <div className="px-6 py-4 bg-background/30 border-t border-border/10">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-xs font-sans font-semibold text-foreground-subtle uppercase tracking-wider">Implicit Permissions for {r.roleKey}</span>
+                        <button
+                          onClick={handleSaveRolePerms}
+                          className="h-8 px-3 rounded-md bg-accent text-accent-foreground hover:bg-accent/90 text-xs font-semibold font-sans transition-colors cursor-pointer"
+                        >
+                          Save Changes
+                        </button>
                       </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-1">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                         {permissions.map(perm => {
                           const isSelected = editingRolePermIds.has(perm.id);
                           return (
-                            <button key={perm.id} type="button"
+                            <button
+                              key={perm.id}
+                              type="button"
                               onClick={() => setEditingRolePermIds(prev => {
                                 const next = new Set(prev);
                                 if (next.has(perm.id)) next.delete(perm.id); else next.add(perm.id);
                                 return next;
                               })}
-                              className={cn("flex items-center gap-1 px-2 py-1 rounded-sm border text-left transition-colors cursor-pointer text-[9px] font-mono",
-                                isSelected ? "border-accent/30 bg-accent/10 text-accent" : "border-border/20 bg-background/30 text-foreground-subtle hover:border-border/50"
-                              )}>
-                              <div className={cn("h-2.5 w-2.5 rounded-sm border flex items-center justify-center shrink-0",
-                                isSelected ? "border-accent bg-accent" : "border-border bg-background"
-                              )}>
-                                {isSelected && <Check size={7} strokeWidth={3} />}
+                              className={cn(
+                                "flex items-center gap-2 px-3 py-2 rounded-md border text-left transition-colors cursor-pointer text-xs font-mono",
+                                isSelected
+                                  ? "border-accent/30 bg-accent/10 text-accent"
+                                  : "border-border/20 bg-background/30 text-foreground-subtle hover:border-border/50"
+                              )}
+                            >
+                              <div
+                                className={cn(
+                                  "h-3.5 w-3.5 rounded-sm border flex items-center justify-center shrink-0",
+                                  isSelected ? "border-accent bg-accent" : "border-border bg-background"
+                                )}
+                              >
+                                {isSelected && <Check size={10} strokeWidth={3} />}
                               </div>
                               {perm.key.replace(/^.+:/, "")}
                             </button>
@@ -918,24 +987,24 @@ export default function RoleBuilderTab() {
       {/* ── Create Group Modal ── */}
       {isCreateOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="w-full max-w-sm rounded-sm border border-border/80 bg-background-panel shadow-none p-5 space-y-4">
-            <div className="space-y-1">
-              <h3 className="text-sm font-semibold text-foreground font-serif">
+          <div className="w-full max-w-md rounded-xl border border-border/40 bg-background-panel shadow-2xl shadow-black/20 p-6 space-y-6">
+            <div className="space-y-1.5">
+              <h3 className="text-lg font-bold text-foreground font-sans">
                 Create Role Group
               </h3>
-              <p className="text-[10px] text-foreground-subtle font-mono">
+              <p className="text-xs text-foreground-subtle font-sans">
                 Define a new custom role group with granular permissions.
               </p>
             </div>
             {createError && (
-              <div className="flex items-start gap-2 rounded border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
-                <AlertCircle size={12} className="mt-0.5 shrink-0" />
+              <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+                <AlertCircle size={14} className="mt-0.5 shrink-0" />
                 <span>{createError}</span>
               </div>
             )}
-            <div className="space-y-3">
+            <div className="space-y-4">
               <div>
-                <label className="block text-[9px] font-bold font-mono uppercase text-foreground-subtle mb-1">
+                <label className="block text-xs font-semibold font-sans uppercase tracking-wider text-foreground-subtle mb-1.5">
                   Name
                 </label>
                 <input
@@ -944,11 +1013,11 @@ export default function RoleBuilderTab() {
                   placeholder="e.g. Engineering Leads"
                   value={createName}
                   onChange={e => setCreateName(e.target.value)}
-                  className="h-8 w-full px-2.5 rounded-sm border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent"
+                  className="h-10 w-full px-3.5 rounded-lg border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition-all duration-200"
                 />
               </div>
               <div>
-                <label className="block text-[9px] font-bold font-mono uppercase text-foreground-subtle mb-1">
+                <label className="block text-xs font-semibold font-sans uppercase tracking-wider text-foreground-subtle mb-1.5">
                   Description
                 </label>
                 <input
@@ -956,15 +1025,15 @@ export default function RoleBuilderTab() {
                   placeholder="Optional description of this group"
                   value={createDescription}
                   onChange={e => setCreateDescription(e.target.value)}
-                  className="h-8 w-full px-2.5 rounded-sm border border-border bg-background text-sm text-foreground placeholder:text-foreground-subtle/40 focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent"
+                  className="h-10 w-full px-3.5 rounded-lg border border-border bg-background text-sm text-foreground placeholder:text-foreground-subtle/40 focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition-all duration-200"
                 />
               </div>
             </div>
-            <div className="flex items-center justify-end gap-2 text-[10px] font-bold font-mono pt-2">
+            <div className="flex items-center justify-end gap-3 pt-2">
               <button
                 type="button"
                 onClick={() => setIsCreateOpen(false)}
-                className="h-8 px-3 rounded-sm border border-transparent bg-transparent text-foreground-subtle hover:text-foreground hover:bg-background-subtle/50 transition-colors cursor-pointer"
+                className="h-10 px-4 rounded-lg text-sm font-semibold font-sans text-foreground-subtle hover:text-foreground hover:bg-background-subtle/50 transition-colors cursor-pointer"
               >
                 Cancel
               </button>
@@ -972,10 +1041,10 @@ export default function RoleBuilderTab() {
                 type="button"
                 onClick={handleCreate}
                 disabled={createLoading}
-                className="btn-shimmer h-8 px-4 rounded-sm font-mono text-[11px] font-bold uppercase tracking-wider text-accent-foreground disabled:opacity-50 cursor-pointer"
+                className="btn-shimmer h-10 px-5 rounded-lg font-sans text-sm font-semibold tracking-wide text-accent-foreground disabled:opacity-50 cursor-pointer"
               >
                 {createLoading ? (
-                  <Loader2 size={12} className="animate-spin" />
+                  <Loader2 size={14} className="animate-spin" />
                 ) : (
                   "Create Group"
                 )}
@@ -988,17 +1057,16 @@ export default function RoleBuilderTab() {
       {/* ── Delete Confirmation Modal ── */}
       {deleteTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="w-full max-w-sm rounded-sm border border-border/80 bg-background-panel shadow-none p-5 space-y-4">
-            <div className="space-y-1">
-              <h3 className="text-sm font-semibold text-destructive font-serif">
+          <div className="w-full max-w-md rounded-xl border border-border/40 bg-background-panel shadow-2xl shadow-black/20 p-6 space-y-6">
+            <div className="space-y-1.5">
+              <h3 className="text-lg font-bold text-destructive font-sans">
                 Delete Role Group
               </h3>
-              <p className="text-[10px] text-foreground-subtle font-mono">
-                This will permanently delete the group and remove all permission
-                and user assignments. This action cannot be undone.
+              <p className="text-xs text-foreground-subtle font-sans">
+                This will permanently delete the group and remove all permission and user assignments. This action cannot be undone.
               </p>
             </div>
-            <div className="p-3 border border-border/20 rounded bg-background/30 font-mono text-[10px] text-foreground space-y-1">
+            <div className="p-4 border border-border/20 rounded-lg bg-background/30 font-mono text-xs text-foreground space-y-1.5">
               <div>
                 <span className="text-foreground-subtle">Name:</span>{" "}
                 {deleteTarget.name}
@@ -1012,20 +1080,20 @@ export default function RoleBuilderTab() {
                 {deleteTarget.userCount}
               </div>
             </div>
-            <div className="flex items-center justify-end gap-2 text-[10px] font-bold font-mono">
+            <div className="flex items-center justify-end gap-3">
               <button
                 onClick={() => setDeleteTarget(null)}
-                className="h-8 px-3 rounded-sm border border-transparent bg-transparent text-foreground-subtle hover:text-foreground hover:bg-background-subtle/50 transition-colors cursor-pointer"
+                className="h-10 px-4 rounded-lg text-sm font-semibold font-sans text-foreground-subtle hover:text-foreground hover:bg-background-subtle/50 transition-colors cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 onClick={handleDelete}
                 disabled={deleteLoading}
-                className="h-8 px-4 rounded-sm border border-destructive/35 bg-destructive/10 hover:bg-destructive/20 text-destructive font-mono text-[11px] font-bold uppercase tracking-wider transition-colors disabled:opacity-50 cursor-pointer"
+                className="h-10 px-5 rounded-lg bg-destructive hover:bg-destructive/90 text-destructive-foreground text-sm font-semibold font-sans transition-colors disabled:opacity-50 cursor-pointer"
               >
                 {deleteLoading ? (
-                  <Loader2 size={12} className="animate-spin" />
+                  <Loader2 size={14} className="animate-spin" />
                 ) : (
                   "Delete Group"
                 )}

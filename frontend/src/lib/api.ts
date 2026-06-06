@@ -878,7 +878,7 @@ export interface StorageAnalytics {
     id: string;
     name: string;
     sizeBytes: number;
-    ownerId: string;
+    ownerId?: string;
     ownerName: string;
     classification: string;
   }>;
@@ -889,6 +889,7 @@ export interface StorageAnalytics {
   overQuotaUsers: Array<{
     userId: string;
     fullName: string;
+    email?: string;
     usedBytes: number;
     quotaBytes: number;
   }>;
@@ -1303,12 +1304,7 @@ export interface AllSharesRow {
   createdAt: string;
 }
 
-export interface StorageAnalytics {
-  byClassification: Array<{ classification: string; bytes: number; fileCount: number }>;
-  largestFiles: Array<{ id: string; name: string; ownerName: string; sizeBytes: number }>;
-  storageTrend: Array<{ date: string; bytes: number }>;
-  overQuotaUsers: Array<{ userId: string; fullName: string; email: string; usedBytes: number; quotaBytes: number }>;
-}
+
 
 export interface UserDetailActivity {
   id: string;
