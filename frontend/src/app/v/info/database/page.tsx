@@ -97,9 +97,107 @@ CREATE TABLE governance_requests (
           </pre>
         </div>
 
-        {/* Audit Logs */}
+        {/* Role Builder & Access Control */}
         <div className="border border-border/30 rounded-lg bg-background-panel/40 p-5 space-y-3 shadow-sm hover:border-border/60 transition-all duration-300">
-          <span className="block font-bold text-foreground text-sm sm:text-base font-sans border-b border-border/20 pb-1.5">3. Compliance Audit Ledger DDL</span>
+          <span className="block font-bold text-foreground text-sm sm:text-base font-sans border-b border-border/20 pb-1.5">3. Role Builder &amp; Granular Permissions DDL</span>
+          <pre className="p-4 rounded border border-border/20 bg-background/80 leading-relaxed overflow-x-auto whitespace-pre select-all shadow-inner text-[10px] sm:text-xs">
+{`CREATE TABLE permissions (
+    id          UUID         PRIMARY KEY DEFAULT uuid_generate_v4(),
+    key         VARCHAR(64)  NOT NULL UNIQUE,
+    description TEXT         NOT NULL
+);
+
+CREATE TABLE role_groups (
+    id          UUID         PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name        VARCHAR(128) NOT NULL,
+    description TEXT         NOT NULL DEFAULT '',
+    created_by  VARCHAR(128) NOT NULL,
+    created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE role_group_permissions (
+    role_group_id UUID NOT NULL REFERENCES role_groups (id) ON DELETE CASCADE,
+    permission_id UUID NOT NULL REFERENCES permissions (id) ON DELETE CASCADE,
+    PRIMARY KEY (role_group_id, permission_id)
+);
+
+CREATE TABLE user_role_groups (
+    user_id       UUID NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    role_group_id UUID NOT NULL REFERENCES role_groups (id) ON DELETE CASCADE,
+    PRIMARY KEY (user_id, role_group_id)
+);
+
+CREATE TABLE user_permissions (
+    user_id       UUID NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    permission_id UUID NOT NULL REFERENCES permissions (id) ON DELETE CASCADE,
+    PRIMARY KEY (user_id, permission_id)
+);
+
+CREATE TABLE custom_roles (
+    role_key    VARCHAR(32)  PRIMARY KEY,
+    label       VARCHAR(64)  NOT NULL,
+    level       SMALLINT     NOT NULL DEFAULT 1
+);
+
+CREATE TABLE role_implicit_permissions (
+    role_key      VARCHAR(32) NOT NULL REFERENCES custom_roles (role_key) ON DELETE CASCADE,
+    permission_id UUID        NOT NULL REFERENCES permissions (id) ON DELETE CASCADE,
+    PRIMARY KEY (role_key, permission_id)
+);`}
+          </pre>
+        </div>
+
+        {/* Credentials & Configuration */}
+        <div className="border border-border/30 rounded-lg bg-background-panel/40 p-5 space-y-3 shadow-sm hover:border-border/60 transition-all duration-300">
+          <span className="block font-bold text-foreground text-sm sm:text-base font-sans border-b border-border/20 pb-1.5">4. Credentials, Sessions &amp; Global Config DDL</span>
+          <pre className="p-4 rounded border border-border/20 bg-background/80 leading-relaxed overflow-x-auto whitespace-pre select-all shadow-inner text-[10px] sm:text-xs">
+{`CREATE TABLE webauthn_credentials (
+    id              UUID         PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id         UUID         NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    credential_id   TEXT         NOT NULL UNIQUE,
+    public_key      TEXT         NOT NULL,
+    sign_count      BIGINT       NOT NULL DEFAULT 0,
+    created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE user_sessions (
+    id         UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id    UUID        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    token      TEXT        NOT NULL UNIQUE,
+    expires_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE password_resets (
+    id          UUID         PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id     UUID         NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    token       VARCHAR(128) NOT NULL UNIQUE,
+    expires_at  TIMESTAMPTZ  NOT NULL,
+    used        BOOLEAN      NOT NULL DEFAULT FALSE,
+    created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE magic_links (
+    id          UUID         PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id     UUID         NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    token       VARCHAR(128) NOT NULL UNIQUE,
+    expires_at  TIMESTAMPTZ  NOT NULL,
+    used        BOOLEAN      NOT NULL DEFAULT FALSE,
+    created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE system_config (
+    key         VARCHAR(128) PRIMARY KEY,
+    value       TEXT NOT NULL,
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);`}
+          </pre>
+        </div>
+
+        {/* Audit, Favorites & Versions */}
+        <div className="border border-border/30 rounded-lg bg-background-panel/40 p-5 space-y-3 shadow-sm hover:border-border/60 transition-all duration-300">
+          <span className="block font-bold text-foreground text-sm sm:text-base font-sans border-b border-border/20 pb-1.5">5. Audit Ledger, Favorites &amp; Versions DDL</span>
           <pre className="p-4 rounded border border-border/20 bg-background/80 leading-relaxed overflow-x-auto whitespace-pre select-all shadow-inner text-[10px] sm:text-xs">
 {`CREATE TABLE audit_logs (
     id              UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -110,7 +208,23 @@ CREATE TABLE governance_requests (
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-/* Optimize audit search retrieval by indexing frequently filtered fields */
+CREATE TABLE favorites (
+    user_id    UUID        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    file_id    UUID        NOT NULL REFERENCES files (id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (user_id, file_id)
+);
+
+CREATE TABLE file_versions (
+    id             UUID          PRIMARY KEY DEFAULT uuid_generate_v4(),
+    file_id        UUID          NOT NULL REFERENCES files (id) ON DELETE CASCADE,
+    version_number INTEGER       NOT NULL,
+    size_bytes     BIGINT        NOT NULL DEFAULT 0,
+    storage_path   VARCHAR(1024) NOT NULL,
+    uploaded_by    UUID          REFERENCES users (id) ON DELETE SET NULL,
+    created_at     TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+);
+
 CREATE INDEX idx_audit_logs_user ON audit_logs(user_id);
 CREATE INDEX idx_audit_logs_created ON audit_logs(created_at DESC);`}
           </pre>

@@ -77,8 +77,8 @@ TRUNCATE users, files, governance_requests RESTART IDENTITY CASCADE;
 
 /* Seed base system users with WebAuthn identifiers */
 INSERT INTO users (id, email, role, full_name) VALUES
-('usr-8a2b-cf91', 'director@unggul.axiom', 'DIRECTOR', 'Ahmad Director'),
-('usr-2f9c-7721', 'staff@unggul.axiom', 'STAFF', 'Fauzan Staff');
+('usr-8a2b-cf91', 'director@unggul.axiom', 'director', 'Ahmad Director'),
+('usr-2f9c-7721', 'staff@unggul.axiom', 'staff', 'Fauzan Staff');
 
 /* Seed file explorer tree nodes */
 INSERT INTO files (id, name, classification, parent_id) VALUES

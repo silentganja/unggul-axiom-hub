@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useState, useMemo, useRef } from "react";
 import {
@@ -177,6 +177,125 @@ const tables: TableDefinition[] = [
         { name: "key", type: "VARCHAR(128)", isPk: true, description: "Setting lookup key." },
         { name: "value", type: "TEXT", nullable: false, description: "Configuration value settings string." },
         { name: "updated_at", type: "TIMESTAMPTZ", nullable: false, defaultValue: "NOW()", description: "Last configuration updated timestamp." }
+      ]
+    },
+    {
+      name: "permissions",
+      icon: <ShieldCheck size={16} />,
+      category: "System",
+      description: "System-wide granular permission keys. Used to enforce access controls on specific actions and assets.",
+      fields: [
+        { name: "id", type: "UUID", isPk: true, defaultValue: "uuid_generate_v4()", description: "Primary key identifier." },
+        { name: "key", type: "VARCHAR(64)", nullable: false, description: "Unique permission key string (e.g. 'files:read', 'users:manage')." },
+        { name: "description", type: "TEXT", nullable: false, description: "Human-readable explanation of the action this permission authorizes." }
+      ]
+    },
+    {
+      name: "role_groups",
+      icon: <ShieldCheck size={16} />,
+      category: "System",
+      description: "Group mappings (custom roles) configured by administrators. Serves as container collections of permission rules.",
+      fields: [
+        { name: "id", type: "UUID", isPk: true, defaultValue: "uuid_generate_v4()", description: "Primary key identifier." },
+        { name: "name", type: "VARCHAR(128)", nullable: false, description: "Name of the custom role group." },
+        { name: "description", type: "TEXT", nullable: false, defaultValue: "''", description: "Description detailing group role scope." },
+        { name: "created_by", type: "VARCHAR(128)", nullable: false, description: "Account identifying the creator." },
+        { name: "created_at", type: "TIMESTAMPTZ", nullable: false, defaultValue: "NOW()", description: "Timestamp when the role group was created." },
+        { name: "updated_at", type: "TIMESTAMPTZ", nullable: false, defaultValue: "NOW()", description: "Timestamp of last update." }
+      ]
+    },
+    {
+      name: "role_group_permissions",
+      icon: <ShieldCheck size={16} />,
+      category: "System",
+      description: "Junction table mapping permission grants to role groups.",
+      fields: [
+        { name: "role_group_id", type: "UUID", isPk: true, isFk: true, fkTarget: "role_groups.id", nullable: false, description: "Reference to role group." },
+        { name: "permission_id", type: "UUID", isPk: true, isFk: true, fkTarget: "permissions.id", nullable: false, description: "Reference to permission." }
+      ]
+    },
+    {
+      name: "user_role_groups",
+      icon: <ShieldCheck size={16} />,
+      category: "System",
+      description: "Junction table mapping users to role groups.",
+      fields: [
+        { name: "user_id", type: "UUID", isPk: true, isFk: true, fkTarget: "users.id", nullable: false, description: "Reference to user." },
+        { name: "role_group_id", type: "UUID", isPk: true, isFk: true, fkTarget: "role_groups.id", nullable: false, description: "Reference to role group." }
+      ]
+    },
+    {
+      name: "user_permissions",
+      icon: <ShieldCheck size={16} />,
+      category: "System",
+      description: "Junction table for direct user permission grants, bypassing group configuration.",
+      fields: [
+        { name: "user_id", type: "UUID", isPk: true, isFk: true, fkTarget: "users.id", nullable: false, description: "Reference to user." },
+        { name: "permission_id", type: "UUID", isPk: true, isFk: true, fkTarget: "permissions.id", nullable: false, description: "Reference to permission." }
+      ]
+    },
+    {
+      name: "custom_roles",
+      icon: <ShieldCheck size={16} />,
+      category: "System",
+      description: "Supported system clearance roles mapping to numeric clearance levels (e.g. staff, officer, director, chief).",
+      fields: [
+        { name: "role_key", type: "VARCHAR(32)", isPk: true, description: "Clearance key identifier (e.g. 'chief', 'director', 'officer', 'staff')." },
+        { name: "label", type: "VARCHAR(64)", nullable: false, description: "Human-readable name of the role." },
+        { name: "level", type: "SMALLINT", nullable: false, defaultValue: "1", description: "Clearance level integer (1=Staff, 2=Officer, 3=Director, 4=Chief)." }
+      ]
+    },
+    {
+      name: "role_implicit_permissions",
+      icon: <ShieldCheck size={16} />,
+      category: "System",
+      description: "Implicit permissions automatically granted to specific roles, such as admin panel access or audit logging logs.",
+      fields: [
+        { name: "role_key", type: "VARCHAR(32)", isPk: true, isFk: true, fkTarget: "custom_roles.role_key", nullable: false, description: "Reference to custom role." },
+        { name: "permission_id", type: "UUID", isPk: true, isFk: true, fkTarget: "permissions.id", nullable: false, description: "Reference to permission." }
+      ]
+    },
+    {
+      name: "magic_links",
+      icon: <Lock size={16} />,
+      category: "Identity",
+      description: "Temporary security tokens generated for user passwordless authentication.",
+      fields: [
+        { name: "id", type: "UUID", isPk: true, defaultValue: "uuid_generate_v4()", description: "Primary key identifier." },
+        { name: "user_id", type: "UUID", isFk: true, fkTarget: "users.id", nullable: false, description: "Reference to recipient user." },
+        { name: "token", type: "VARCHAR(128)", nullable: false, description: "Secure random magic login token." },
+        { name: "expires_at", type: "TIMESTAMPTZ", nullable: false, description: "Link expiration timestamp." },
+        { name: "used", type: "BOOLEAN", nullable: false, defaultValue: "FALSE", description: "Flag indicating if token has been verified." },
+        { name: "created_at", type: "TIMESTAMPTZ", nullable: false, defaultValue: "NOW()", description: "Timestamp token was issued." }
+      ]
+    },
+    {
+      name: "password_resets",
+      icon: <Lock size={16} />,
+      category: "Identity",
+      description: "Temporary secure tokens for credential reset workflow sequences.",
+      fields: [
+        { name: "id", type: "UUID", isPk: true, defaultValue: "uuid_generate_v4()", description: "Primary key identifier." },
+        { name: "user_id", type: "UUID", isFk: true, fkTarget: "users.id", nullable: false, description: "Reference to user." },
+        { name: "token", type: "VARCHAR(128)", nullable: false, description: "Secure random reset token." },
+        { name: "expires_at", type: "TIMESTAMPTZ", nullable: false, description: "Token expiration timestamp." },
+        { name: "used", type: "BOOLEAN", nullable: false, defaultValue: "FALSE", description: "Flag indicating if token has been verified." },
+        { name: "created_at", type: "TIMESTAMPTZ", nullable: false, defaultValue: "NOW()", description: "Timestamp token was issued." }
+      ]
+    },
+    {
+      name: "user_sessions",
+      icon: <Clock size={16} />,
+      category: "Identity",
+      description: "Stores active login sessions and device/IP context details for token validation.",
+      fields: [
+        { name: "id", type: "UUID", isPk: true, defaultValue: "uuid_generate_v4()", description: "Primary key identifier." },
+        { name: "user_id", type: "UUID", isFk: true, fkTarget: "users.id", nullable: false, description: "Reference to user." },
+        { name: "token_prefix", type: "VARCHAR(16)", nullable: false, description: "Session tracking prefix identifier." },
+        { name: "device", type: "VARCHAR(255)", nullable: false, defaultValue: "''", description: "Client browser user-agent info." },
+        { name: "ip", type: "VARCHAR(45)", nullable: false, defaultValue: "''", description: "Client IP address used at creation." },
+        { name: "created_at", type: "TIMESTAMPTZ", nullable: false, defaultValue: "NOW()", description: "Timestamp when session started." },
+        { name: "last_seen_at", type: "TIMESTAMPTZ", nullable: false, defaultValue: "NOW()", description: "Last observed activity timestamp." }
       ]
     }
 ];
