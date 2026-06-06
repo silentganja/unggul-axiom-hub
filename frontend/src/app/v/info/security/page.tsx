@@ -1,6 +1,6 @@
 "use client";
 
-import { Lock, Shield, ShieldCheck, Check, X, ShieldAlert } from "lucide-react";
+import { Lock, Shield, ShieldCheck, Check, X } from "lucide-react";
 
 export default function InfoSecurityPage() {
   const permissions = [

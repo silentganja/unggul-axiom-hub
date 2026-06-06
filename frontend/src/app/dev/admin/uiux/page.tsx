@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Loader2, Palette, Sliders, Shield, Type, Save, Check } from "lucide-react";
+import { Loader2, Palette, Sliders, Shield, Type, Save } from "lucide-react";
 import { adminApi } from "@/lib/api";
 import { useToastStore } from "@/components/ui/Toast";
 import { cn } from "@/lib/utils";
@@ -41,7 +41,7 @@ const THEME_PRESETS: ThemePreset[] = [
 ];
 
 export default function UIUXAdminPage() {
-  const [configMap, setConfigMap] = useState<Record<string, string>>({});
+  const [, setConfigMap] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -56,7 +56,6 @@ export default function UIUXAdminPage() {
   const [greetingHeader, setGreetingHeader] = useState("Strategic Portal");
 
   useEffect(() => {
-    setLoading(true);
     adminApi
       .getConfig()
       .then((config) => {

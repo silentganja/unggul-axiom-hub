@@ -168,7 +168,7 @@ export default function RoleBuilderTab() {
           return next;
         });
       }
-    } catch (err) {
+    } catch {
       useToastStore.getState().error("Failed to load audit details");
     } finally {
       setAuditLoading(false);

@@ -282,6 +282,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <div className="flex items-center gap-3">
               <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-accent/25 bg-accent-subtle shadow-[0_0_20px_rgba(205,127,50,0.15)] overflow-hidden shrink-0">
                 {uiLogoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
                   <img src={uiLogoUrl} alt="Logo" className="h-full w-full object-cover" />
                 ) : (
                   <Shield size={18} className="text-accent" strokeWidth={1.5} />
