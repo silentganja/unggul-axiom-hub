@@ -30,6 +30,7 @@ const _REFRESH_TOKEN_EXPIRY_DAYS: i64 = 7;
 pub const ADMIN_TOKEN_EXPIRY_HOURS: i64 = 8;
 
 /// Short-lived SSE token lifetime: 5 minutes.
+#[allow(dead_code)]
 pub const SSE_TOKEN_EXPIRY_MINUTES: i64 = 5;
 
 // ── Public API ───────────────────────────────────────────────────────────────
@@ -97,6 +98,7 @@ pub fn generate_admin_token(secret: &str, username: &str) -> Result<String, AppE
 
 /// Generate a short-lived JWT for SSE connections (5-minute expiry).
 /// This token is passed as a query parameter and is scoped to notifications only.
+#[allow(dead_code)]
 pub fn generate_sse_token(secret: &str, user_id: Uuid) -> Result<String, AppError> {
     let exp =
         (Utc::now() + chrono::Duration::minutes(SSE_TOKEN_EXPIRY_MINUTES)).timestamp() as usize;

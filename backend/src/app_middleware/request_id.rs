@@ -43,4 +43,4 @@ pub async fn request_id_middleware(
 
 /// Extractable request ID for use in handlers.
 #[derive(Debug, Clone)]
-pub struct RequestId(pub String);
+pub struct RequestId(#[allow(dead_code)] pub String);

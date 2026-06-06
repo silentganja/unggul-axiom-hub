@@ -1,7 +1,7 @@
 use crate::{
     app_middleware::auth::AuthUser, errors::AppError, models::notification::NotificationEvent,
 };
-use actix_web::{web, HttpRequest, HttpResponse};
+use actix_web::{web, HttpResponse};
 use futures_util::StreamExt;
 use std::collections::HashMap;
 use std::sync::LazyLock;
@@ -38,6 +38,7 @@ pub fn emit_notification_to(target_user_id: Option<Uuid>, event: NotificationEve
 }
 
 /// Emit a notification targeted at a specific user.
+#[allow(dead_code)]
 pub fn emit_notification_to_user(user_id: Uuid, event: NotificationEvent) {
     emit_notification_to(Some(user_id), event);
 }
@@ -61,7 +62,7 @@ pub fn emit_notification(event: NotificationEvent) {
 /// SSE token, not the main access JWT.
 pub async fn stream(
     user: AuthUser,
-    query: web::Query<HashMap<String, String>>,
+    _query: web::Query<HashMap<String, String>>,
 ) -> Result<HttpResponse, AppError> {
     let user_id = user.id;
 
