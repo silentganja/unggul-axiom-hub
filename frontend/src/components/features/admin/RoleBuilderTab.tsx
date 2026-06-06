@@ -11,6 +11,7 @@ import {
   RoleGroupSummary,
   RoleGroupDetail,
   AdminUserEntry,
+  UserGroupEntry,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -98,7 +99,7 @@ export default function RoleBuilderTab() {
   const [createError, setCreateError] = useState<string | null>(null);
 
   // ── Sub-tab ────────────────────────────────────────────────────────────────
-  type SubTab = "groups" | "permissions" | "roles";
+  type SubTab = "groups" | "permissions" | "roles" | "audit";
   const [subTab, setSubTab] = useState<SubTab>("groups");
 
   // ── Delete confirmation ───────────────────────────────────────────────────
@@ -120,6 +121,83 @@ export default function RoleBuilderTab() {
   const [roleCreateLoading, setRoleCreateLoading] = useState(false);
   const [editingRoleKey, setEditingRoleKey] = useState<string | null>(null);
   const [editingRolePermIds, setEditingRolePermIds] = useState<Set<string>>(new Set());
+
+  // ── Audit & Overrides state ───────────────────────────────────────────────
+  const [auditSelectedUserId, setAuditSelectedUserId] = useState<string | null>(null);
+  const [auditUserGroups, setAuditUserGroups] = useState<UserGroupEntry[]>([]);
+  const [auditGroupDetails, setAuditGroupDetails] = useState<Record<string, RoleGroupDetail>>({});
+  const [auditUserDirectPermIds, setAuditUserDirectPermIds] = useState<Set<string>>(new Set());
+  const [auditUserImplicitPermIds, setAuditUserImplicitPermIds] = useState<Set<string>>(new Set());
+  const [auditLoading, setAuditLoading] = useState(false);
+  const [auditSaving, setAuditSaving] = useState(false);
+  const [auditIsDirty, setAuditIsDirty] = useState(false);
+  const [auditSearchQuery, setAuditSearchQuery] = useState("");
+
+  const selectAuditUser = async (userId: string, userRole: string) => {
+    if (auditIsDirty) {
+      if (!confirm("You have unsaved direct overrides. Discard them and switch users?")) {
+        return;
+      }
+    }
+    setAuditSelectedUserId(userId);
+    setAuditLoading(true);
+    setAuditIsDirty(false);
+    try {
+      const [groups, directPerms, implicitPerms] = await Promise.all([
+        adminApi.listUserGroups(userId).catch(() => [] as UserGroupEntry[]),
+        adminApi.listUserPermissions(userId).catch(() => [] as Permission[]),
+        adminApi.getRoleImplicitPermissions(userRole).catch(() => [] as Permission[]),
+      ]);
+
+      setAuditUserGroups(groups);
+      setAuditUserDirectPermIds(new Set(directPerms.map(p => p.id)));
+      setAuditUserImplicitPermIds(new Set(implicitPerms.map(p => p.id)));
+
+      const missingGroupIds = groups.filter(g => !auditGroupDetails[g.id]).map(g => g.id);
+      if (missingGroupIds.length > 0) {
+        const details = await Promise.all(
+          missingGroupIds.map(id => adminApi.getRoleGroup(id).catch(() => null))
+        );
+        setAuditGroupDetails(prev => {
+          const next = { ...prev };
+          details.forEach((d, idx) => {
+            if (d) {
+              next[missingGroupIds[idx]] = d;
+            }
+          });
+          return next;
+        });
+      }
+    } catch (err) {
+      useToastStore.getState().error("Failed to load audit details");
+    } finally {
+      setAuditLoading(false);
+    }
+  };
+
+  const toggleAuditDirectPerm = (permId: string) => {
+    setAuditUserDirectPermIds(prev => {
+      const next = new Set(prev);
+      if (next.has(permId)) next.delete(permId);
+      else next.add(permId);
+      return next;
+    });
+    setAuditIsDirty(true);
+  };
+
+  const handleSaveAuditOverrides = async () => {
+    if (!auditSelectedUserId) return;
+    setAuditSaving(true);
+    try {
+      await adminApi.setUserPermissions(auditSelectedUserId, Array.from(auditUserDirectPermIds));
+      useToastStore.getState().success("Direct permission overrides saved");
+      setAuditIsDirty(false);
+    } catch (e) {
+      useToastStore.getState().error(e instanceof Error ? e.message : "Failed to save");
+    } finally {
+      setAuditSaving(false);
+    }
+  };
 
   // ── Fetch groups, permissions, and users on mount ─────────────────────────
   const fetchGroups = useCallback(async () => {
@@ -441,11 +519,11 @@ export default function RoleBuilderTab() {
 
       {/* Sub-tabs */}
       <div className="flex items-center gap-2 font-sans text-xs font-semibold select-none border-b border-border/20 pb-3">
-        {(["groups", "permissions", "roles"] as SubTab[]).map(t => (
+        {(["groups", "permissions", "roles", "audit"] as SubTab[]).map(t => (
           <button key={t} onClick={() => { setSubTab(t); if (t === "roles") fetchCustomRoles(); }}
             className={cn("h-9 px-4 rounded-md border uppercase transition-colors cursor-pointer font-bold tracking-wide",
               subTab === t ? "bg-accent/10 border-accent/20 text-accent" : "border-border/30 text-foreground-subtle hover:text-foreground hover:bg-background-subtle/50"
-            )}>{t}</button>
+            )}>{t === "audit" ? "User Audit" : t}</button>
         ))}
       </div>
 
@@ -980,6 +1058,324 @@ export default function RoleBuilderTab() {
                 </div>
               ))
             )}
+          </div>
+        </div>
+      )}
+
+      {subTab === "audit" && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 min-h-[500px]">
+          {/* Left: Searchable User Directory */}
+          <div className="border border-border/20 rounded-lg bg-background-panel/40 overflow-hidden flex flex-col">
+            <div className="px-5 py-4 border-b border-border/30 bg-background-panel/80">
+              <span className="font-sans text-xs font-bold tracking-wider text-foreground-subtle uppercase">
+                User Directory
+              </span>
+            </div>
+            {/* Search Box */}
+            <div className="p-4 border-b border-border/10 bg-background-panel/20">
+              <div className="relative">
+                <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-foreground-subtle">
+                  <Search size={12} />
+                </span>
+                <input
+                  type="text"
+                  value={auditSearchQuery}
+                  onChange={e => setAuditSearchQuery(e.target.value)}
+                  placeholder="Search users by name/email..."
+                  className="h-9 w-full pl-9 pr-8 rounded-md border border-border bg-background text-xs font-sans text-foreground placeholder:text-foreground-subtle/40 focus:outline-none focus:ring-1 focus:ring-accent"
+                />
+                {auditSearchQuery && (
+                  <button
+                    onClick={() => setAuditSearchQuery("")}
+                    className="absolute right-0 top-0 h-9 w-9 flex items-center justify-center text-foreground-subtle hover:text-foreground cursor-pointer"
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+            </div>
+            {/* Users List */}
+            <div className="divide-y divide-border/10 max-h-[500px] overflow-y-auto">
+              {(() => {
+                const filtered = allUsers.filter(u =>
+                  !auditSearchQuery ||
+                  u.fullName.toLowerCase().includes(auditSearchQuery.toLowerCase()) ||
+                  u.email.toLowerCase().includes(auditSearchQuery.toLowerCase())
+                );
+                if (filtered.length === 0) {
+                  return (
+                    <div className="p-8 text-center text-xs font-sans text-foreground-subtle">
+                      No users found.
+                    </div>
+                  );
+                }
+                return filtered.map(u => (
+                  <button
+                    key={u.id}
+                    onClick={() => selectAuditUser(u.id, u.role)}
+                    className={cn(
+                      "w-full text-left px-5 py-4 transition-colors cursor-pointer block",
+                      auditSelectedUserId === u.id
+                        ? "bg-accent/10 border-l-2 border-accent"
+                        : "hover:bg-background-subtle/30 border-l-2 border-transparent"
+                    )}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-bold text-foreground font-sans truncate pr-2">
+                        {u.fullName}
+                      </span>
+                      <span className={cn(
+                        "text-[9px] font-bold uppercase font-mono px-2 py-0.5 rounded border shrink-0",
+                        u.role === "chief"
+                          ? "bg-accent/15 text-accent border-accent/30"
+                          : u.role === "director"
+                            ? "bg-accent/10 text-accent border-accent/20"
+                            : "bg-info/10 text-info border-info/20"
+                      )}>
+                        {u.role}
+                      </span>
+                    </div>
+                    <div className="text-xs font-mono text-foreground-subtle mt-1 truncate">
+                      {u.email}
+                    </div>
+                  </button>
+                ));
+              })()}
+            </div>
+          </div>
+
+          {/* Right: Detail & Overrides */}
+          <div className="lg:col-span-2 border border-border/20 rounded-lg bg-background-panel/40 overflow-hidden flex flex-col">
+            {!auditSelectedUserId ? (
+              <div className="flex flex-col items-center justify-center py-20 gap-3 text-foreground-subtle">
+                <Users size={36} className="opacity-30" />
+                <p className="font-sans text-xs font-bold uppercase tracking-wider">
+                  Select a user to audit and override permissions
+                </p>
+              </div>
+            ) : auditLoading ? (
+              <div className="flex items-center justify-center py-20">
+                <Loader2 size={24} className="animate-spin text-accent" />
+              </div>
+            ) : (() => {
+              const auditedUser = allUsers.find(u => u.id === auditSelectedUserId);
+              if (!auditedUser) return null;
+
+              return (
+                <div className="flex flex-col h-full">
+                  {/* Header */}
+                  <div className="px-5 py-4 border-b border-border/30 bg-background-panel/80 flex items-center justify-between">
+                    <div className="min-w-0 mr-4">
+                      <span className="text-sm font-bold text-foreground font-sans block truncate">
+                        Audit: {auditedUser.fullName}
+                      </span>
+                      <span className="text-xs text-foreground-subtle font-sans truncate block">
+                        Base Role: <span className="font-bold uppercase font-mono text-accent/80 text-[11px]">{auditedUser.role}</span> (Lv.{
+                          auditedUser.role === "chief" ? 4 :
+                          auditedUser.role === "director" ? 3 :
+                          auditedUser.role === "officer" ? 2 : 1
+                        })
+                      </span>
+                    </div>
+                    {auditIsDirty && (
+                      <button
+                        onClick={handleSaveAuditOverrides}
+                        disabled={auditSaving}
+                        className="flex items-center gap-1.5 h-9 px-4 rounded-md border border-accent/30 text-accent bg-accent/5 hover:bg-accent/15 text-xs font-semibold uppercase tracking-wider transition-colors cursor-pointer disabled:opacity-50"
+                      >
+                        {auditSaving ? (
+                          <Loader2 size={12} className="animate-spin" />
+                        ) : (
+                          <Save size={12} />
+                        )}
+                        Save Overrides
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Scrollable Content */}
+                  <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                    {/* User Metadata */}
+                    <div className="p-4 border border-border/10 rounded-md bg-background/20 space-y-2.5 font-sans text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="text-foreground-subtle font-semibold">Email Address:</span>
+                        <span className="font-mono text-foreground font-semibold">{auditedUser.email}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-foreground-subtle font-semibold">Assigned Role Groups:</span>
+                        <span className="text-foreground font-semibold text-right max-w-[70%] truncate">
+                          {auditUserGroups.length === 0 ? (
+                            <span className="italic text-foreground-subtle/60">None</span>
+                          ) : (
+                            auditUserGroups.map(g => g.name).join(", ")
+                          )}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-foreground-subtle font-semibold">Direct Overrides Count:</span>
+                        <span className="font-mono text-accent font-bold">{auditUserDirectPermIds.size}</span>
+                      </div>
+                    </div>
+
+                    {/* Direct Overrides Editor */}
+                    <div className="border border-border/10 rounded-lg p-4 bg-background/10">
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <Shield size={13} className="text-accent" />
+                        <span className="text-xs font-bold font-sans uppercase text-foreground-subtle tracking-wider">
+                          Direct Overrides Configuration
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-foreground-subtle mb-4 leading-relaxed font-sans">
+                        Direct overrides let you bypass group membership and base role defaults to grant or revoke specific permissions directly for this user.
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {permissions.map(perm => {
+                          const isDirect = auditUserDirectPermIds.has(perm.id);
+                          return (
+                            <button
+                              key={perm.id}
+                              type="button"
+                              onClick={() => toggleAuditDirectPerm(perm.id)}
+                              className={cn(
+                                "flex items-center gap-2 px-3 py-2 rounded-md border text-left transition-colors cursor-pointer",
+                                isDirect
+                                  ? "border-accent/40 bg-accent/15 text-accent"
+                                  : "border-border/20 bg-background/30 text-foreground-subtle hover:border-border/50"
+                              )}
+                            >
+                              <div
+                                className={cn(
+                                  "h-3.5 w-3.5 rounded-sm border flex items-center justify-center shrink-0",
+                                  isDirect
+                                    ? "border-accent bg-accent text-accent-foreground"
+                                    : "border-border bg-background"
+                                )}
+                              >
+                                {isDirect && <Check size={10} strokeWidth={3} />}
+                              </div>
+                              <span className="text-[11px] font-mono font-bold truncate">
+                                {perm.key}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Effective Permissions Matrix */}
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-1.5 border-t border-border/10 pt-5">
+                        <Key size={13} className="text-accent" />
+                        <span className="text-xs font-bold font-sans uppercase text-foreground-subtle tracking-wider">
+                          Effective Permissions Matrix
+                        </span>
+                      </div>
+
+                      {PERM_CATEGORIES.map(cat => {
+                        const catPerms = permissions.filter(p => cat.keys.includes(p.key));
+                        if (catPerms.length === 0) return null;
+
+                        return (
+                          <div key={cat.label} className="border border-border/10 rounded-md p-3.5 bg-background/10">
+                            <div className="text-xs font-bold font-sans uppercase text-foreground-subtle tracking-wider mb-3 pb-1 border-b border-border/10">
+                              {cat.label}
+                            </div>
+                            <div className="space-y-2">
+                              {catPerms.map(perm => {
+                                const isChiefOrDirector = ["chief", "director", "admin_panel"].includes(auditedUser.role);
+                                const isOfficerFastPath = auditedUser.role === "officer" && [
+                                  "files:read",
+                                  "files:write",
+                                  "users:read",
+                                  "governance:approve",
+                                  "governance:reject",
+                                  "audit:read"
+                               ].includes(perm.key);
+
+                                const isRoleImplicit = auditUserImplicitPermIds.has(perm.id);
+                                const isDirectOverride = auditUserDirectPermIds.has(perm.id);
+
+                                const grantingGroups: string[] = [];
+                                auditUserGroups.forEach(g => {
+                                  const gDetail = auditGroupDetails[g.id];
+                                  if (gDetail && gDetail.permissions.some(p => p.id === perm.id)) {
+                                    grantingGroups.push(g.name);
+                                  }
+                                });
+
+                                const isGranted = isChiefOrDirector || isOfficerFastPath || isRoleImplicit || isDirectOverride || grantingGroups.length > 0;
+
+                                const sources: string[] = [];
+                                if (isChiefOrDirector) {
+                                  sources.push("Chief / Director role bypass (Full Access)");
+                                }
+                                if (isOfficerFastPath) {
+                                  sources.push("Officer base role default");
+                                }
+                                if (isRoleImplicit && !isChiefOrDirector && !isOfficerFastPath) {
+                                  sources.push("Base Role implicit grant");
+                                }
+                                grantingGroups.forEach(name => {
+                                  sources.push(`Inherited from Group: ${name}`);
+                                });
+                                if (isDirectOverride) {
+                                  sources.push("Directly Assigned Override");
+                                }
+
+                                return (
+                                  <div
+                                    key={perm.id}
+                                    className={cn(
+                                      "flex flex-col sm:flex-row sm:items-center justify-between p-2.5 rounded border gap-2",
+                                      isGranted
+                                        ? "border-accent/15 bg-accent/5"
+                                        : "border-border/10 bg-background/10"
+                                    )}
+                                  >
+                                    <div className="min-w-0">
+                                      <span className={cn(
+                                        "text-xs font-mono font-bold block",
+                                        isGranted ? "text-foreground" : "text-foreground-subtle/50"
+                                      )}>
+                                        {perm.key}
+                                      </span>
+                                      <span className="text-[10px] text-foreground-subtle font-sans block mt-0.5">
+                                        {perm.description}
+                                      </span>
+                                    </div>
+                                    <div className="flex flex-col items-end shrink-0 gap-1">
+                                      <span
+                                        className={cn(
+                                          "text-[9px] font-bold uppercase font-sans px-2 py-0.5 rounded",
+                                          isGranted
+                                            ? "bg-accent/20 text-accent"
+                                            : "bg-destructive/10 text-destructive border border-destructive/20"
+                                        )}
+                                      >
+                                        {isGranted ? "Granted" : "Denied"}
+                                      </span>
+                                      {isGranted && sources.length > 0 && (
+                                        <div className="flex flex-col items-end gap-0.5 text-[9px] text-foreground-subtle font-sans font-medium">
+                                          {sources.map((src, sIdx) => (
+                                            <span key={sIdx} className="text-right whitespace-nowrap bg-background-subtle/40 px-1 py-0.5 rounded text-[8px]">
+                                              {src}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </div>
       )}
