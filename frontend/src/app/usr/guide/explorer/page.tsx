@@ -61,7 +61,7 @@ export default function FileExplorerGuidePage() {
           Understanding Security Labels
         </h3>
         <p className="text-sm text-foreground-subtle leading-relaxed font-sans">
-          To protect company data, folders and files are marked with one of four security labels:
+          To enforce structural data isolation, all folders and files are bound to one of four security clearance classifications:
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {/* Terbuka */}
@@ -72,7 +72,7 @@ export default function FileExplorerGuidePage() {
               </span>
               <h4 className="text-sm font-bold text-foreground font-serif">Open / General</h4>
               <p className="text-sm text-foreground-subtle leading-relaxed font-sans">
-                General company templates, user manuals, and guides. Accessible to all staff members. You can upload, download, and share these files freely.
+                Open public tier. Applied to templates, manuals, and general corporate guides. Available to all authenticated system accounts.
               </p>
             </div>
             <span className="text-xs font-mono text-foreground-subtle/50 mt-2 block">Standard Security</span>
@@ -86,7 +86,7 @@ export default function FileExplorerGuidePage() {
               </span>
               <h4 className="text-sm font-bold text-foreground font-serif">Restricted</h4>
               <p className="text-sm text-foreground-subtle leading-relaxed font-sans">
-                Internal project files, guidelines, and departmental announcements. Restricted to internal company staff; cannot be shared externally.
+                Restricted internal level. Applied to internal policies, departmental announcements, and team wikis. Exposure outside the company domain is blocked.
               </p>
             </div>
             <span className="text-xs font-mono text-foreground-subtle/50 mt-2 block">Internal Use Only</span>
@@ -100,7 +100,7 @@ export default function FileExplorerGuidePage() {
               </span>
               <h4 className="text-sm font-bold text-foreground font-serif">Confidential</h4>
               <p className="text-sm text-foreground-subtle leading-relaxed font-sans">
-                Sensitive budgets, strategy drafts, and planning documents. Visible only to the owner and team members specifically invited to collaborate.
+                Confidential clearance rating. Contains sensitive budgets, project plans, and planning records. Direct sharing of SULIT files requires the recipient to have Director clearance or custom group override.
               </p>
             </div>
             <span className="text-xs font-mono text-foreground-subtle/50 mt-2 block">Confidential Clearance</span>
@@ -114,7 +114,7 @@ export default function FileExplorerGuidePage() {
               </span>
               <h4 className="text-sm font-bold text-foreground font-serif">Secret</h4>
               <p className="text-sm text-foreground-subtle leading-relaxed font-sans">
-                Executive minutes, strategic merger plans, and board-level documents. Restricted to department heads, directors, and executives.
+                Secret Board level. Reserved for strategic board agendas, corporate acquisitions, and key configurations. Read access is strictly validated against user clearance levels.
               </p>
             </div>
             <span className="text-xs font-mono text-foreground-subtle/50 mt-2 block">Executive Board Only</span>
@@ -139,7 +139,7 @@ export default function FileExplorerGuidePage() {
             <div className="space-y-0.5">
               <span className="font-bold text-foreground font-sans block text-sm">Viewer (View &amp; Read Only)</span>
               <p className="text-sm text-foreground-subtle leading-relaxed font-sans">
-                Can preview and download files. Cannot upload new versions, delete files, rename items, or invite others.
+                Granted read-only access. Authorized to preview and download assets. Blocked from renaming, uploading new versions, deleting items, or sharing.
               </p>
             </div>
             <span className="text-xs font-semibold text-foreground-subtle border border-border px-2 py-0.5 rounded uppercase h-fit w-fit select-none">
@@ -151,7 +151,7 @@ export default function FileExplorerGuidePage() {
             <div className="space-y-0.5">
               <span className="font-bold text-foreground font-sans block text-sm">Editor (Write &amp; Edit Permissions)</span>
               <p className="text-sm text-foreground-subtle leading-relaxed font-sans">
-                Can upload files, edit documents, add new versions, and rename files or folders. Cannot lower a file&apos;s security level or remove the owner.
+                Granted read-write privileges. Authorized to upload new file versions, modify names, create subfolders, and lock/unlock files. Cannot downgrade classification ratings or revoke the owner.
               </p>
             </div>
             <span className="text-xs font-semibold text-info border border-info/30 bg-info/5 px-2 py-0.5 rounded uppercase h-fit w-fit select-none">
@@ -163,7 +163,7 @@ export default function FileExplorerGuidePage() {
             <div className="space-y-0.5">
               <span className="font-bold text-foreground font-sans block text-sm">Owner (Full Control)</span>
               <p className="text-sm text-foreground-subtle leading-relaxed font-sans">
-                Complete control over the file or folder. Can delete files, permanently erase them, change security labels, and add or remove other collaborators.
+                Full control. Inherits complete administration rights, including permanent deletion authority, classification upgrades/downgrades, and sharing management.
               </p>
             </div>
             <span className="text-xs font-semibold text-accent border border-accent/30 bg-accent-subtle/30 px-2 py-0.5 rounded uppercase h-fit w-fit select-none">
@@ -180,14 +180,14 @@ export default function FileExplorerGuidePage() {
           <div className="flex items-center gap-2">
             <HardDrive size={15} className="text-accent" />
             <h3 className="font-mono text-xs font-bold text-foreground uppercase tracking-wider font-sans">
-              Personal Storage Space
+              Dynamic Storage Quotas
             </h3>
           </div>
           <p className="text-sm text-foreground-subtle leading-relaxed font-sans">
-            By default, all staff receive **100 GB** of file storage space. If you are close to running out of space, a warning message will appear on your screen. You can ask management to increase your quota if needed.
+            User storage limits are allocated dynamically via database quota parameters. By default, accounts are configured with a 5 GB limit (governed by the system default storage quota setting). Administrators can adjust limits individually via the storage tab in the admin console.
           </p>
           <div className="flex items-center gap-1.5 text-accent font-mono text-xs">
-            <Sparkles size={11} /> Clear your Trash regularly to save storage space.
+            <Sparkles size={11} /> Emptying the Trash permanently releases allocated storage blocks.
           </div>
         </div>
 
@@ -196,14 +196,14 @@ export default function FileExplorerGuidePage() {
           <div className="flex items-center gap-2">
             <Trash2 size={15} className="text-accent" />
             <h3 className="font-mono text-xs font-bold text-foreground uppercase tracking-wider font-sans">
-              Deletions &amp; Restoring Files
+              Deletions &amp; Recovery
             </h3>
           </div>
           <p className="text-sm text-foreground-subtle leading-relaxed font-sans">
-            Deleted files are moved to the Trash bin. They are kept safe there and can be restored back to their original folders at any time. Files in the Trash still count toward your storage quota until permanently deleted by an administrator.
+            Deleting an asset executes a soft-delete operation, recording a timestamp in the deleted_at column and hiding the row from active directory queries. Users can restore items to their original folders, restoring sharing configurations. Permanent hard deletion is audited.
           </p>
           <div className="flex items-center gap-1.5 text-accent font-mono text-xs">
-            <Clock size={11} /> Restoring a file preserves all previous sharing permissions.
+            <Clock size={11} /> Restoring files preserves prior access shares.
           </div>
         </div>
       </div>

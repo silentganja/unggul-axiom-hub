@@ -37,20 +37,20 @@ export default function GovernanceGuidePage() {
           </h3>
         </div>
         <p className="text-sm text-foreground-subtle leading-relaxed font-sans">
-          To prevent teammates from accidentally editing or overwriting files, you can lock a document. Here is how locks work based on your role in the company:
+          To maintain document write integrity during collaborative drafting cycles, users can lock files. The governance rules apply distinct behavior boundaries:
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1 font-sans text-sm">
           <div className="p-4 rounded border border-border/10 bg-background/25 space-y-2">
-            <span className="font-bold text-foreground block">How a Lock Protects Files</span>
+            <span className="font-bold text-foreground block">Concurrent Edit Prevention</span>
             <p className="text-sm text-foreground-muted leading-relaxed">
-              When a file is locked, standard users cannot edit, rename, move, or delete it. They will see an error message indicating the file is locked and showing who locked it.
+              When a document is locked, standard users (such as staff) are blocked from rename, relocate, edit, or delete actions. Collaborator updates return database conflict errors.
             </p>
           </div>
           <div className="p-4 rounded border border-border/10 bg-background/25 space-y-2">
-            <span className="font-bold text-accent block">Lock Hierarchy (Manager Override)</span>
+            <span className="font-bold text-accent block">Lock Hierarchy &amp; Override</span>
             <p className="text-sm text-foreground-muted leading-relaxed">
-              A user with a higher role can edit or unlock files locked by standard staff. E.g., if a staff member locks a draft, a department head or chief executive can still edit or unlock it directly if needed.
+              Bypass authority scales with clearance tiers. Users with director or chief roles can override, modify, or release locks set by staff accounts directly.
             </p>
           </div>
         </div>
@@ -138,18 +138,18 @@ export default function GovernanceGuidePage() {
           </h3>
         </div>
         <p className="text-sm text-foreground-subtle leading-relaxed font-sans">
-          The portal guards file security ratings through automated verification rules:
+          The backend validates classification transitions using parameterized verification queries executed inside database transaction scopes:
         </p>
         <div className="space-y-3 text-sm font-sans text-foreground-muted leading-relaxed">
           <p>
-            When you request to change a file&apos;s security rating, the system automatically checks the current label against the new label:
+            When a user requests to change a security classification rating, the handler executes a database row lock (`FOR UPDATE`) to fetch current classification states:
           </p>
           <ul className="list-style-type-disc pl-4 space-y-2 text-sm">
             <li>
-              <strong>Upgrading a Label:</strong> The system verifies you are changing the rating to a higher security label (e.g., from Open to Confidential, or Restricted to Secret). If the target rating is actually lower or identical, the request will be automatically rejected.
+              <strong>Classification Upgrades:</strong> The system validates that the target tier is strictly higher in clearance rank (e.g. from TERHAD to SULIT). Upgrades that match the current rank are rejected.
             </li>
             <li>
-              <strong>Downgrading a Label:</strong> The system verifies you are lowering the label (e.g., from Secret to Confidential). Lowering a label receives extra verification steps to protect company privacy.
+              <strong>Classification Downgrades:</strong> Considered high-risk operations. The system requires direct verification approval, restricting approvals to director+ accounts.
             </li>
           </ul>
         </div>

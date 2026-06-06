@@ -45,30 +45,30 @@ export default function ScenariosGuidePage() {
         {
           title: "Upload & Set Security Rating",
           desc: "Upload the document (for example, 'Q3 Budget.pdf') to your workspace. Select 'SULIT' (Confidential) in the upload panel to restrict general visibility.",
-          role: "Staff / Officer",
+          role: "staff / officer",
           badge: "Upload File",
-          mockLog: "POST /api/files/upload HTTP/1.1\nHost: hub.unggulaxiom.com\nContent-Type: multipart/form-data\n\n-> payload: { parentId: null, classification: 'SULIT', file: <Q3 Budget.pdf> }\n<- Response: 201 Created { id: 'f-8972', name: 'Q3 Budget.pdf', classification: 'SULIT' }"
+          mockLog: "POST /api/files/upload HTTP/1.1\nHost: hub.unggulaxiom.com\nContent-Type: multipart/form-data\n\n-> payload: { parent_id: 'fold-101-uuid', classification: 'SULIT', file: <Q3 Budget.pdf> }\n<- Response: 201 Created { id: 'f-8972', name: 'Q3 Budget.pdf', classification: 'SULIT' }"
         },
         {
           title: "Request a File Lock",
           desc: "Select the file, click 'Governance' in the actions menu, and submit a lock request stating: 'Prevent modifications during draft review'. This freezes the file.",
-          role: "Staff / Officer",
+          role: "staff / officer",
           badge: "Lock Request",
-          mockLog: "POST /api/governance/requests HTTP/1.1\n-> payload: { targetFileId: 'f-8972', type: 'FILE_LOCK', title: 'Lock Draft', metadata: { lockReason: 'Prevent modifications' } }\n<- Response: 201 Created { id: 'req-431', status: 'PENDING' }"
+          mockLog: "POST /api/governance/requests HTTP/1.1\n-> payload: { target_file_id: 'f-8972', type: 'FILE_LOCK', title: 'Lock Draft', description: 'Prevent modifications during draft review' }\n<- Response: 201 Created { id: 'req-431', status: 'PENDING' }"
         },
         {
           title: "Request to Increase Security Level",
           desc: "Submit a request to change the classification to 'RAHSIA' (Secret). This will restrict access strictly to board members and directors.",
-          role: "Staff / Officer",
+          role: "staff / officer",
           badge: "Upgrade Request",
-          mockLog: "POST /api/governance/requests HTTP/1.1\n-> payload: { targetFileId: 'f-8972', type: 'CLASSIFICATION_UPGRADE', title: 'Restrict to Board', metadata: { newClassification: 'RAHSIA' } }\n<- Response: 201 Created { id: 'req-432', status: 'PENDING' }"
+          mockLog: "POST /api/governance/requests HTTP/1.1\n-> payload: { target_file_id: 'f-8972', type: 'CLASSIFICATION_UPGRADE', title: 'Restrict to Board', metadata: { target_clearance: 'RAHSIA', reason: 'Board review target confirmed' } }\n<- Response: 201 Created { id: 'req-432', status: 'PENDING' }"
         },
         {
           title: "Supervisor Approval Gate",
           desc: "Your director reviews your submitted requests in their inbox, reads your reasons, and clicks 'Approve' to apply the changes.",
-          role: "Director / Chief",
+          role: "director / chief",
           badge: "Approval",
-          mockLog: "POST /api/governance/requests/req-431/approve HTTP/1.1\nAuthorization: Bearer USER_JWT\n-> payload: { reason: 'Lock approved for audit compliance' }\n<- Response: 200 OK { status: 'approved' }\n\nPOST /api/governance/requests/req-432/approve HTTP/1.1\nAuthorization: Bearer USER_JWT\n-> payload: { reason: 'Upgrade to RAHSIA approved for board review' }\n<- Response: 200 OK { status: 'approved' }"
+          mockLog: "POST /api/governance/requests/req-431/approve HTTP/1.1\nAuthorization: Bearer USER_JWT\n<- Response: 200 OK { status: 'approved' }\n\nPOST /api/governance/requests/req-432/approve HTTP/1.1\nAuthorization: Bearer USER_JWT\n<- Response: 200 OK { status: 'approved' }"
         }
       ],
       outcome: "The file is locked (cannot be renamed, moved, or deleted) and upgraded to Secret classification, securing it against unauthorized internal leakage."
@@ -82,30 +82,30 @@ export default function ScenariosGuidePage() {
         {
           title: "Create & Share Folder",
           desc: "Create a folder named 'Marketing Campaigns 2026'. Right-click the folder, choose 'Share', enter your team members' emails, and set their access to 'Editor'.",
-          role: "Folder Owner",
+          role: "folder owner",
           badge: "Share Settings",
-          mockLog: "POST /api/files/folders HTTP/1.1\n-> payload: { name: 'Marketing Campaigns 2026', parentId: null, classification: 'TERBUKA' }\n<- Response: 201 Created { id: 'fold-391', name: 'Marketing Campaigns 2026' }\n\nPOST /api/files/fold-391/shares HTTP/1.1\n-> payload: { email: 'colleague@unggulaxiom.com', role: 'editor' }\n<- Response: 200 OK { status: 'shared' }"
+          mockLog: "POST /api/files/folder HTTP/1.1\n-> payload: { name: 'Marketing Campaigns 2026', parent_id: null, classification: 'TERBUKA' }\n<- Response: 201 Created { id: 'fold-391', name: 'Marketing Campaigns 2026' }\n\nPOST /api/files/fold-391/share HTTP/1.1\n-> payload: { email: 'colleague@unggulaxiom.com', role: 'editor' }\n<- Response: 200 OK { status: 'shared' }"
         },
         {
           title: "Locking the File Temporary",
           desc: "When working on a shared file, lock the file to let your team know you are editing. This stops colleagues from overwriting your work.",
-          role: "Collaborator (Editor)",
+          role: "collaborator (editor)",
           badge: "Temporary Lock",
-          mockLog: "POST /api/governance/requests HTTP/1.1\n-> payload: { targetFileId: 'f-7128', type: 'FILE_LOCK', title: 'Lock for Editing' }\n<- Response: 201 Created { id: 'req-987', status: 'PENDING' }"
+          mockLog: "POST /api/governance/requests HTTP/1.1\n-> payload: { target_file_id: 'f-7128', type: 'FILE_LOCK', title: 'Lock for Editing' }\n<- Response: 201 Created { id: 'req-987', status: 'PENDING' }"
         },
         {
           title: "Upload the New Version",
           desc: "Once you finish editing locally, upload the new file version. The portal maintains all original folder sharing rules automatically.",
-          role: "Collaborator (Editor)",
+          role: "collaborator (editor)",
           badge: "Upload Revision",
-          mockLog: "POST /api/files/upload HTTP/1.1\nContent-Type: multipart/form-data\n-> payload: { parentId: 'fold-391', classification: 'TERBUKA', file: campaigns_draft_v2.docx }\n<- Response: 200 OK"
+          mockLog: "POST /api/files/upload HTTP/1.1\nContent-Type: multipart/form-data\n-> payload: { parent_id: 'fold-391', classification: 'TERBUKA', file: campaigns_draft_v2.docx }\n<- Response: 200 OK"
         },
         {
           title: "Release the File Lock",
           desc: "Unlock the file to let other editors work on it, keeping the team workflow active and transparent.",
-          role: "Collaborator (Editor)",
+          role: "collaborator (editor)",
           badge: "Unlock",
-          mockLog: "POST /api/governance/requests HTTP/1.1\n-> payload: { targetFileId: 'f-7128', type: 'FILE_UNLOCK', title: 'Unlock Revision' }\n<- Response: 201 Created { id: 'req-988', status: 'PENDING' }"
+          mockLog: "POST /api/governance/requests HTTP/1.1\n-> payload: { target_file_id: 'f-7128', type: 'FILE_UNLOCK', title: 'Unlock Revision' }\n<- Response: 201 Created { id: 'req-988', status: 'PENDING' }"
         }
       ],
       outcome: "Team members collaborate in real-time, completely protected from version conflicts, with all edits securely tracked in the activity feed."
@@ -119,21 +119,21 @@ export default function ScenariosGuidePage() {
         {
           title: "Soft Delete to Trash",
           desc: "Select obsolete files or drafts and click 'Delete' in the action bar. The files are marked as 'Trashed' and hidden from the standard file explorer.",
-          role: "File Owner / Admin",
+          role: "file owner",
           badge: "Soft Delete",
-          mockLog: "DELETE /api/files/f-1049 HTTP/1.1\n<- Response: 200 OK { fileId: 'f-1049', status: 'TRASHED' }"
+          mockLog: "DELETE /api/files/f-1049 HTTP/1.1\n<- Response: 200 OK { file_id: 'f-1049', status: 'TRASHED' }"
         },
         {
           title: "Restore a Deleted File",
           desc: "Open the Trash tab, select the file, and click 'Restore'. The file immediately goes back to its original folder with all sharing permissions intact.",
-          role: "File Owner",
+          role: "file owner",
           badge: "Restore",
           mockLog: "POST /api/files/f-1049/restore HTTP/1.1\n<- Response: 200 OK { status: 'restored' }"
         },
         {
           title: "Permanent Deletion",
           desc: "To delete the file forever, go to the Trash tab, select the file, and choose 'Permanently Delete'. This requires administrator review to avoid leaks.",
-          role: "Admin Only",
+          role: "chief only",
           badge: "Hard Delete",
           mockLog: "DELETE /api/files/f-1049/permanent HTTP/1.1\nAuthorization: Bearer USER_JWT\n<- Response: 200 OK { status: 'deleted' }"
         }

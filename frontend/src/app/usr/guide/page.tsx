@@ -16,25 +16,25 @@ export default function GuideIntroPage() {
   const portalFeatures = [
     {
       title: "File Explorer",
-      desc: "Upload, download, set security levels, and share files with your team.",
+      desc: "Manage documents, directory namespaces, stars, and shared assets under strict classification controls.",
       href: "/usr/guide/explorer",
       icon: <Folder size={18} className="text-accent" />,
     },
     {
       title: "Governance & Approvals",
-      desc: "Request permission to lock files or change their security levels through simple supervisor approvals.",
+      desc: "Submit, review, and execute transactionally-isolated resource governance workflow directives.",
       href: "/usr/guide/governance",
       icon: <Shield size={18} className="text-accent" />,
     },
     {
       title: "Security & Roles",
-      desc: "Learn about your account permissions and set up easy face or fingerprint sign-in.",
+      desc: "Understand base clearance configurations, dynamic permission groups, and biometric device setups.",
       href: "/usr/guide/roles",
       icon: <Users size={18} className="text-accent" />,
     },
     {
-      title: "Step-by-Step Examples",
-      desc: "Follow simple interactive walk-throughs of common daily tasks in the portal.",
+      title: "Operational Scenarios",
+      desc: "Walk through step-by-step simulations of real-world API handshakes and database executions.",
       href: "/usr/guide/scenarios",
       icon: <Play size={18} className="text-accent" />,
     },
@@ -51,7 +51,7 @@ export default function GuideIntroPage() {
           Welcome to the Strategic Portal
         </h2>
         <p className="text-sm text-foreground-muted leading-relaxed font-sans max-w-2xl">
-          The Strategic Portal is a secure space for storing corporate files, sharing work with team members, and collaborating safely. To keep company files secure, some actions (like changing file security ratings or editing locked files) follow a simple approval process.
+          The Strategic Portal is a security-hardened document repository and collaboration engine. Operating on an asynchronous Actix-Web systems layer, the platform coordinates resource lifecycle operations via cryptographic user session validations, role-based access control (RBAC), and transactional governance pipelines.
         </p>
       </div>
 
@@ -71,7 +71,7 @@ export default function GuideIntroPage() {
         <div className="border border-border/30 rounded bg-background-panel/40 p-4 space-y-2">
           <div className="flex items-center gap-2">
             <Sparkles size={14} className="text-accent" />
-            <h3 className="text-sm font-bold font-serif text-foreground">Safe File Storage</h3>
+            <h3 className="text-sm font-bold font-serif text-foreground">Cryptographic Storage</h3>
           </div>
           <p className="text-sm text-foreground-subtle leading-relaxed font-sans">
             Store documents securely, categorize them under clear security labels, and keep track of files easily. This helps protect valuable company plans and resources.
@@ -81,7 +81,7 @@ export default function GuideIntroPage() {
         <div className="border border-border/30 rounded bg-background-panel/40 p-4 space-y-2">
           <div className="flex items-center gap-2">
             <Shield size={14} className="text-accent" />
-            <h3 className="text-sm font-bold font-serif text-foreground">Guided Approvals</h3>
+            <h3 className="text-sm font-bold font-serif text-foreground">Transactional Integrity</h3>
           </div>
           <p className="text-sm text-foreground-subtle leading-relaxed font-sans">
             Major changes to sensitive files follow a guided review path. You can submit requests directly in the portal, and your supervisor can review and approve them in a few clicks.
@@ -129,19 +129,19 @@ export default function GuideIntroPage() {
           <div className="flex gap-3">
             <span className="font-bold text-accent shrink-0">STEP 01</span>
             <p className="font-sans text-sm leading-relaxed">
-              <strong>Log In:</strong> Sign in using your corporate email. You can also register a passkey to sign in quickly using your device fingerprint or face recognition (see <Link href="/usr/guide/roles" className="text-accent hover:underline">Section 4</Link>).
+              <strong>Biometric Enrollment:</strong> Scan your fingerprint or register face recognition details to register cryptographic WebAuthn credentials, enabling secure passwordless session creation (see <Link href="/usr/guide/roles" className="text-accent hover:underline">Section 4</Link>).
             </p>
           </div>
           <div className="flex gap-3">
             <span className="font-bold text-accent shrink-0">STEP 02</span>
             <p className="font-sans text-sm leading-relaxed">
-              <strong>Explore Files:</strong> Open the <Link href="/usr/guide/explorer" className="text-accent hover:underline">File Explorer</Link> to browse documents. Files marked Confidential or Secret are protected and visible to shared team members and management.
+              <strong>Namespace Discovery:</strong> Browse the directory structures on the <Link href="/usr/guide/explorer" className="text-accent hover:underline">File Explorer</Link>. Access to SULIT and RAHSIA classification blocks is filtered automatically based on your token parameters.
             </p>
           </div>
           <div className="flex gap-3">
             <span className="font-bold text-accent shrink-0">STEP 03</span>
             <p className="font-sans text-sm leading-relaxed">
-              <strong>Lock files while editing:</strong> If you are editing a file in a shared team folder, lock it first so colleagues know you are working on it and don&apos;t accidentally overwrite your edits.
+              <strong>Concurrent Write Safety:</strong> Lock files prior to modification. This registers a locked database status key, preventing simultaneous collaborator edits from overwriting your revision.
             </p>
           </div>
         </div>

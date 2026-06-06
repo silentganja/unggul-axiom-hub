@@ -9,18 +9,20 @@ import {
 
 export default function SecurityRolesGuidePage() {
   const permissions = [
-    { action: "Browse Open/Restricted Files", staff: true, officer: true, director: true, chief: true },
-    { action: "Upload/Edit Files (Own & Shared)", staff: true, officer: true, director: true, chief: true },
-    { action: "Lock/Unlock Own Files", staff: true, officer: true, director: true, chief: true },
-    { action: "Access Shared Folders", staff: true, officer: true, director: true, chief: true },
-    { action: "Access Confidential Files", staff: "Shared Only", officer: "Shared Only", director: true, chief: true },
-    { action: "Access Secret Board Files", staff: false, officer: false, director: true, chief: true },
-    { action: "Submit Lock/Upgrade Request", staff: true, officer: true, director: true, chief: true },
-    { action: "Approve Locks, Unlocks & Deletes", staff: false, officer: true, director: true, chief: true },
-    { action: "Approve Security Label Changes", staff: false, officer: false, director: true, chief: true },
-    { action: "Add/Remove User Accounts", staff: false, officer: false, director: true, chief: true },
-    { action: "Erase Files Globally", staff: false, officer: false, director: false, chief: true },
-    { action: "Change Global Settings", staff: false, officer: false, director: false, chief: true },
+    { action: "files:read", desc: "View and download files", staff: "Group Only", officer: true, director: true, chief: true },
+    { action: "files:write", desc: "Upload and edit files", staff: "Group Only", officer: true, director: true, chief: true },
+    { action: "files:delete", desc: "Soft-delete or purge file versions", staff: "Group Only", officer: "Group Only", director: true, chief: true },
+    { action: "files:classify", desc: "Change security classifications", staff: "Group Only", officer: "Group Only", director: true, chief: true },
+    { action: "users:read", desc: "View corporate user directory", staff: "Group Only", officer: true, director: true, chief: true },
+    { action: "users:manage", desc: "Create, update, and toggle users", staff: "Group Only", officer: "Group Only", director: true, chief: true },
+    { action: "users:delete", desc: "Permanently delete user accounts", staff: "Group Only", officer: "Group Only", director: true, chief: true },
+    { action: "governance:approve", desc: "Authorize governance requests", staff: "Group Only", officer: true, director: true, chief: true },
+    { action: "governance:reject", desc: "Decline governance requests", staff: "Group Only", officer: true, director: true, chief: true },
+    { action: "admin:access", desc: "Access administration panel", staff: "Group Only", officer: "Group Only", director: true, chief: true },
+    { action: "shares:manage", desc: "Manage document sharing records", staff: "Group Only", officer: "Group Only", director: true, chief: true },
+    { action: "audit:read", desc: "View compliance audit ledger logs", staff: "Group Only", officer: true, director: true, chief: true },
+    { action: "storage:manage", desc: "Configure global/user storage limits", staff: "Group Only", officer: "Group Only", director: true, chief: true },
+    { action: "config:read", desc: "Read global system configuration", staff: "Group Only", officer: "Group Only", director: true, chief: true },
   ];
 
   return (
@@ -34,7 +36,7 @@ export default function SecurityRolesGuidePage() {
           User Roles &amp; Security Levels
         </h2>
         <p className="text-sm text-foreground-muted leading-relaxed font-sans max-w-2xl">
-          The portal matches your account to one of four user roles, depending on your job duties. Your role determines what files you can see and what approvals you can issue.
+          The portal maps user identities to one of four clearance roles. These roles determine implicit permissions, while dynamic group memberships permit modular access escalation.
         </p>
       </div>
 
@@ -44,25 +46,25 @@ export default function SecurityRolesGuidePage() {
         <div className="space-y-4">
           <div className="border border-border/30 rounded bg-background-panel/40 p-4 space-y-2">
             <div className="flex items-center justify-between">
-              <span className="font-bold text-foreground font-serif text-sm">Staff Account</span>
+              <span className="font-bold text-foreground font-serif text-sm">staff account</span>
               <span className="font-mono text-[10px] font-bold border border-border/40 bg-background-muted/20 text-foreground-subtle px-1.5 py-0.5 rounded uppercase">
                 Tier 1
               </span>
             </div>
             <p className="text-sm text-foreground-subtle leading-relaxed">
-              Standard team member account. You can upload and edit documents, share items, and request file locks or classification overrides. You cannot approve requests or modify other users.
+              Standard team member clearance. staff accounts inherit no implicit permissions, relying entirely on dynamic group mappings configured by administrators.
             </p>
           </div>
 
           <div className="border border-border/30 rounded bg-background-panel/40 p-4 space-y-2">
             <div className="flex items-center justify-between">
-              <span className="font-bold text-info font-serif text-sm">Officer Account</span>
+              <span className="font-bold text-info font-serif text-sm">officer account</span>
               <span className="font-mono text-[10px] font-bold border border-info/30 bg-info/10 text-info px-1.5 py-0.5 rounded uppercase">
                 Tier 2
               </span>
             </div>
             <p className="text-sm text-foreground-subtle leading-relaxed">
-              Department supervisors. Officers manage team document folders and are authorized to review and approve standard file lock, unlock, move, and trash requests.
+              Supervisory account. officer accounts are authorized to manage team sharing groups and review standard file locking, unlocking, relocation, and deletion requests.
             </p>
           </div>
         </div>
@@ -71,25 +73,25 @@ export default function SecurityRolesGuidePage() {
         <div className="space-y-4">
           <div className="border border-border/30 rounded bg-background-panel/40 p-4 space-y-2">
             <div className="flex items-center justify-between">
-              <span className="font-bold text-accent/80 font-serif text-sm">Director Account</span>
+              <span className="font-bold text-accent/80 font-serif text-sm">director account</span>
               <span className="font-mono text-[10px] font-bold border border-accent/20 bg-accent/10 text-accent px-1.5 py-0.5 rounded uppercase">
                 Tier 3
               </span>
             </div>
             <p className="text-sm text-foreground-subtle leading-relaxed">
-              Department heads and directors. Directors have broad access to folders within their business unit, including Confidential and Secret Board documents. They can approve security label changes and manage staff accounts.
+              Senior executive account. director accounts inherit all 14 platform permissions implicitly, allowing full access to SULIT and RAHSIA classification segments, role building, and user management.
             </p>
           </div>
 
           <div className="border border-border/30 rounded bg-background-panel/40 p-4 space-y-2">
             <div className="flex items-center justify-between">
-              <span className="font-bold text-accent font-serif text-sm">Chief Account</span>
+              <span className="font-bold text-accent font-serif text-sm">chief account</span>
               <span className="font-mono text-[10px] font-bold border border-accent/30 bg-accent/15 text-accent px-1.5 py-0.5 rounded uppercase">
                 Tier 4
               </span>
             </div>
             <p className="text-sm text-foreground-subtle leading-relaxed">
-              Global system administrators. Chiefs have full access to override governance locks, change global system configurations, adjust storage space limits, and delete files permanently.
+              Global administrator clearance. chief accounts carry system override authority, including lock releases, global configurations management, quota modifications, and permanent hard deletions.
             </p>
           </div>
         </div>
@@ -104,7 +106,7 @@ export default function SecurityRolesGuidePage() {
           <table className="w-full text-left font-mono text-xs border-collapse">
             <thead>
               <tr className="bg-background-panel/60 border-b border-border/20 text-foreground-subtle select-none text-[11px] uppercase tracking-wider">
-                <th className="p-2.5">Portal Action</th>
+                <th className="p-2.5">Platform Permission Key</th>
                 <th className="p-2.5 text-center">Staff</th>
                 <th className="p-2.5 text-center">Officer</th>
                 <th className="p-2.5 text-center">Director</th>
@@ -114,7 +116,10 @@ export default function SecurityRolesGuidePage() {
             <tbody className="divide-y divide-border/10 text-xs">
               {permissions.map((row) => (
                 <tr key={row.action} className="hover:bg-background-panel/20 transition-colors">
-                  <td className="p-2.5 font-sans font-semibold text-foreground">{row.action}</td>
+                  <td className="p-2.5 font-sans text-foreground">
+                    <div className="font-mono text-xs font-bold text-accent">{row.action}</div>
+                    <div className="text-[10px] text-foreground-subtle/80 mt-0.5">{row.desc}</div>
+                  </td>
                   <td className="p-2.5 text-center">{renderCell(row.staff)}</td>
                   <td className="p-2.5 text-center">{renderCell(row.officer)}</td>
                   <td className="p-2.5 text-center">{renderCell(row.director)}</td>
