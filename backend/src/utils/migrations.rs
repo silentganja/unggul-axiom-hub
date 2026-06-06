@@ -435,17 +435,33 @@ pub async fn run_migrations(pool: &PgPool) {
             continue;
         }
 
-        // Run each SQL statement in the migration
+        // Run each SQL statement in the migration.
+        // Critical DDL failures are fatal — running with a mismatched schema
+        // is worse than crashing and alerting the operator.
         let mut all_ok = true;
         for stmt in statements {
             match sqlx::query(stmt).execute(pool).await {
                 Ok(_) => {}
                 Err(e) => {
+                    let is_critical = !stmt.to_lowercase().contains("select 1 as migration_documentation");
+                    if is_critical {
+                        panic!(
+                            "FATAL: Migration {version} ({description}) failed.\n\
+                             Statement: {stmt}\n\
+                             Error: {e}\n\
+                             The application cannot start with a mismatched schema. \
+                             Fix the error and restart.",
+                            version = version,
+                            description = description,
+                            stmt = stmt,
+                            e = e,
+                        );
+                    }
                     tracing::error!(
                         version = %version,
                         statement = %stmt,
                         error = %e,
-                        "Migration statement failed"
+                        "Non-critical migration statement failed (continuing)"
                     );
                     all_ok = false;
                 }

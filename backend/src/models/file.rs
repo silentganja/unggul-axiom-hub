@@ -1,4 +1,4 @@
-﻿use chrono::{DateTime, Utc};
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -84,6 +84,9 @@ impl CreateFolderReq {
         if self.name.trim().is_empty() {
             return Err("name must not be empty");
         }
+        if self.name.trim().len() > 255 {
+            return Err("name must be 255 characters or less");
+        }
         let classification = self.classification.as_deref().unwrap_or("TERBUKA");
         if !VALID_CLASSIFICATIONS.contains(&classification) {
             return Err("classification must be one of: RAHSIA, SULIT, TERHAD, TERBUKA");
@@ -96,6 +99,9 @@ impl RenameFileReq {
     pub fn validate(&self) -> Result<(), &'static str> {
         if self.new_name.trim().is_empty() {
             return Err("new_name must not be empty");
+        }
+        if self.new_name.trim().len() > 255 {
+            return Err("new_name must be 255 characters or less");
         }
         Ok(())
     }

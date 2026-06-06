@@ -1,4 +1,4 @@
-use crate::{errors::AppError, models::user};
+use crate::{errors::AppError, models::user, AppConfig};
 use actix_web::{dev::Payload, web, FromRequest, HttpRequest};
 use sqlx::PgPool;
 use std::pin::Pin;
@@ -39,13 +39,18 @@ impl FromRequest for AdminUser {
             .app_data::<web::Data<PgPool>>()
             .map(|d| d.get_ref().clone());
 
+        let jwt_secret = req
+            .app_data::<web::Data<AppConfig>>()
+            .map(|c| c.jwt_secret.clone());
+
         Box::pin(async move {
             let token = auth_header
                 .as_deref()
                 .and_then(|h| h.strip_prefix("Bearer "))
                 .ok_or(AppError::Unauthorized)?;
 
-            let claims = crate::utils::jwt::decode_token(token)?;
+            let secret = jwt_secret.ok_or(AppError::Unauthorized)?;
+            let claims = crate::utils::jwt::decode_token(&secret, token)?;
 
             // Path 1: Hardcoded admin token — full access, no further checks
             if claims.role == "admin_panel" {

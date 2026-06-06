@@ -107,6 +107,12 @@ pub async fn create_role_group(
     if name.is_empty() {
         return Err(AppError::BadRequest("Group name is required".into()));
     }
+    if name.len() > 128 {
+        return Err(AppError::BadRequest("Group name must be 128 characters or less".into()));
+    }
+    if description.len() > 1024 {
+        return Err(AppError::BadRequest("Group description must be 1024 characters or less".into()));
+    }
 
     let group: RoleGroup = sqlx::query_as(
         "INSERT INTO role_groups (name, description, created_by)
@@ -224,6 +230,17 @@ pub async fn update_role_group(
         .await?;
     let group_id = path.into_inner();
     let existing = fetch_group(pool.get_ref(), group_id).await?;
+
+    if let Some(ref name) = body.name {
+        if name.trim().len() > 128 {
+            return Err(AppError::BadRequest("Group name must be 128 characters or less".into()));
+        }
+    }
+    if let Some(ref desc) = body.description {
+        if desc.trim().len() > 1024 {
+            return Err(AppError::BadRequest("Group description must be 1024 characters or less".into()));
+        }
+    }
 
     let new_name = body
         .name
@@ -701,6 +718,12 @@ pub async fn create_permission(
             "key and description are required".into(),
         ));
     }
+    if key.len() > 255 {
+        return Err(AppError::BadRequest("Permission key must be 255 characters or less".into()));
+    }
+    if description.len() > 1024 {
+        return Err(AppError::BadRequest("Permission description must be 1024 characters or less".into()));
+    }
 
     let perm: Permission = sqlx::query_as(
         "INSERT INTO permissions (key, description) VALUES ($1, $2)
@@ -750,6 +773,10 @@ pub async fn update_permission(
 
     let perm_id = path.into_inner();
     let description = body.description.trim().to_string();
+
+    if description.len() > 1024 {
+        return Err(AppError::BadRequest("Permission description must be 1024 characters or less".into()));
+    }
 
     let perm: Permission = sqlx::query_as(
         "UPDATE permissions SET description = $1 WHERE id = $2

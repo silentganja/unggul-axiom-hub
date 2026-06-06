@@ -30,6 +30,7 @@ pub struct LoginResponse {
 pub async fn login(
     pool: web::Data<PgPool>,
     redis_client: web::Data<RedisClient>,
+    config: web::Data<crate::AppConfig>,
     req: HttpRequest,
     body: web::Json<LoginRequest>,
 ) -> Result<HttpResponse, AppError> {
@@ -44,6 +45,12 @@ pub async fn login(
         return Err(AppError::BadRequest(
             "email and password are required".into(),
         ));
+    }
+    if email.len() > 255 {
+        return Err(AppError::BadRequest("Email is too long".into()));
+    }
+    if body.password.len() > 128 {
+        return Err(AppError::BadRequest("Password is too long".into()));
     }
 
     let user: Option<User> = sqlx::query_as::<_, User>(
@@ -70,7 +77,7 @@ pub async fn login(
         return Err(AppError::Unauthorized);
     }
 
-    let access_token = jwt::generate_token(user.id, &user.role)?;
+    let access_token = jwt::generate_token(&config.jwt_secret, user.id, &user.role)?;
     let refresh_token = jwt::generate_refresh_token();
 
     crate::utils::redis::store_refresh_token_async(
@@ -289,6 +296,27 @@ pub async fn update_profile(
     user: AuthUser,
     body: web::Json<UpdateProfileRequest>,
 ) -> Result<HttpResponse, AppError> {
+    if let Some(ref name) = body.full_name {
+        if name.trim().len() > 255 {
+            return Err(AppError::BadRequest("Full name must be 255 characters or less".into()));
+        }
+    }
+    if let Some(ref dept) = body.department {
+        if dept.trim().len() > 255 {
+            return Err(AppError::BadRequest("Department must be 255 characters or less".into()));
+        }
+    }
+    if let Some(ref pwd) = body.new_password {
+        if pwd.len() > 128 {
+            return Err(AppError::BadRequest("New password must be 128 characters or less".into()));
+        }
+    }
+    if let Some(ref pwd) = body.current_password {
+        if pwd.len() > 128 {
+            return Err(AppError::BadRequest("Current password must be 128 characters or less".into()));
+        }
+    }
+
     let existing: Option<User> = sqlx::query_as::<_, User>(
         "SELECT id, email, password_hash, full_name, role, active, \
          storage_quota_bytes, avatar_data, department, supervisor_id, notification_prefs, created_at \
@@ -410,6 +438,7 @@ pub struct AvatarUploadRequest {
 
 pub async fn upload_avatar(
     pool: web::Data<PgPool>,
+    config: web::Data<crate::AppConfig>,
     user: AuthUser,
     body: web::Json<AvatarUploadRequest>,
 ) -> Result<HttpResponse, AppError> {
@@ -438,9 +467,23 @@ pub async fn upload_avatar(
         ));
     }
 
-    // Store the full data URL in the DB
+    // Write decoded binary data to disk
+    let avatar_dir = std::path::Path::new(&config.storage_path).join("avatars");
+    if !avatar_dir.exists() {
+        tokio::fs::create_dir_all(&avatar_dir)
+            .await
+            .map_err(|e| AppError::Internal(anyhow::Error::from(e)))?;
+    }
+    let avatar_file = avatar_dir.join(format!("{}.bin", user.id));
+    tokio::fs::write(&avatar_file, &decoded)
+        .await
+        .map_err(|e| AppError::Internal(anyhow::Error::from(e)))?;
+
+    let avatar_url = format!("/api/auth/avatar/{}", user.id);
+
+    // Store the endpoint path in the DB
     sqlx::query("UPDATE users SET avatar_data = $1 WHERE id = $2")
-        .bind(data_url)
+        .bind(&avatar_url)
         .bind(user.id)
         .execute(pool.get_ref())
         .await
@@ -458,7 +501,7 @@ pub async fn upload_avatar(
     .await
     .map_err(AppError::Database)?;
 
-    tracing::info!(user_id = %user.id, "Avatar uploaded");
+    tracing::info!(user_id = %user.id, "Avatar uploaded to disk and database updated");
     Ok(HttpResponse::Ok().json(profile))
 }
 
@@ -466,6 +509,7 @@ pub async fn upload_avatar(
 
 pub async fn delete_avatar(
     pool: web::Data<PgPool>,
+    config: web::Data<crate::AppConfig>,
     user: AuthUser,
 ) -> Result<HttpResponse, AppError> {
     sqlx::query("UPDATE users SET avatar_data = NULL WHERE id = $1")
@@ -473,6 +517,14 @@ pub async fn delete_avatar(
         .execute(pool.get_ref())
         .await
         .map_err(AppError::Database)?;
+
+    // Delete avatar binary from disk
+    let avatar_file = std::path::Path::new(&config.storage_path)
+        .join("avatars")
+        .join(format!("{}.bin", user.id));
+    if avatar_file.exists() {
+        let _ = tokio::fs::remove_file(avatar_file).await;
+    }
 
     let profile: UserProfile = sqlx::query_as::<_, UserProfile>(
         "SELECT u.id, u.email, u.full_name, u.role, u.active, u.storage_quota_bytes, \
@@ -487,6 +539,46 @@ pub async fn delete_avatar(
 
     tracing::info!(user_id = %user.id, "Avatar deleted");
     Ok(HttpResponse::Ok().json(profile))
+}
+
+// ── GET /api/auth/avatar/{user_id} ───────────────────────────────────────────
+
+fn detect_mime_type(bytes: &[u8]) -> &'static str {
+    if bytes.starts_with(&[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]) {
+        "image/png"
+    } else if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
+        "image/jpeg"
+    } else if bytes.starts_with(&[0x47, 0x49, 0x46, 0x38]) {
+        "image/gif"
+    } else if bytes.starts_with(&[0x52, 0x49, 0x46, 0x46]) && bytes.len() > 11 && &bytes[8..12] == b"WEBP" {
+        "image/webp"
+    } else {
+        "image/jpeg" // fallback
+    }
+}
+
+pub async fn get_avatar(
+    config: web::Data<crate::AppConfig>,
+    path: web::Path<Uuid>,
+) -> Result<HttpResponse, AppError> {
+    let user_id = path.into_inner();
+    let avatar_file = std::path::Path::new(&config.storage_path)
+        .join("avatars")
+        .join(format!("{}.bin", user_id));
+
+    if !avatar_file.exists() {
+        return Err(AppError::NotFound);
+    }
+
+    let bytes = tokio::fs::read(&avatar_file)
+        .await
+        .map_err(|e| AppError::Internal(anyhow::Error::from(e)))?;
+
+    let mime = detect_mime_type(&bytes);
+
+    Ok(HttpResponse::Ok()
+        .content_type(mime)
+        .body(bytes))
 }
 
 // ── GET /api/auth/notification-prefs ────────────────────────────────────────

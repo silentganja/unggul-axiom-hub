@@ -93,7 +93,10 @@ pub async fn list_files(
     let offset = ((page - 1) * per_page) as i64;
     let search = query.q.as_deref().unwrap_or("").trim();
 
-    // Validate sort column
+    // Validate sort column against an explicit whitelist (prevents SQL injection).
+    // ORDER BY identifiers cannot be parameterized in PostgreSQL, so we must
+    // interpolate them. The match guarantees only known-safe values reach the query.
+    #[allow(clippy::match_same_arms)]
     let sort_col = match query.sort.as_deref().unwrap_or("name") {
         "name" => "f.name",
         "size" => "f.size_bytes",
@@ -101,6 +104,7 @@ pub async fn list_files(
         "updated" => "f.updated_at",
         _ => "f.name",
     };
+    // Similarly, only allow ASC or DESC to be interpolated.
     let order = match query.order.as_deref().unwrap_or("asc") {
         "desc" => "DESC",
         _ => "ASC",
@@ -200,19 +204,21 @@ pub async fn list_files(
             .map_err(AppError::Database)?
     };
 
-    // Data query
+    // Data query — sort column and direction are validated against whitelists above.
+    // LIMIT and OFFSET use validated i64 integers that cannot contain SQL.
+    // The clauses (parent, search) are constructed from code-controlled strings.
     let data_sql = format!(
         "SELECT f.id, f.parent_id, f.owner_id, f.name, f.is_folder,
                 f.size_bytes, f.mime_type, f.classification, f.created_at, f.updated_at,
                 f.locked_by, f.locked_at, f.lock_reason
          FROM files f
          WHERE f.owner_id = $1 AND f.deleted_at IS NULL {parent} {search}
-         ORDER BY f.is_folder DESC, {sort_col} {order}
+         ORDER BY f.is_folder DESC, {sort} {dir}
          LIMIT {per_page} OFFSET {offset}",
         parent = parent_clause,
         search = search_clause,
-        sort_col = sort_col,
-        order = order,
+        sort = sort_col,
+        dir = order,
         per_page = per_page,
         offset = offset,
     );
@@ -226,7 +232,6 @@ pub async fn list_files(
             .await
             .map_err(AppError::Database)?
     } else if !search.is_empty() {
-        // No parent_id, SQL has $1 (owner_id) and $2 (search)
         sqlx::query_as::<_, FileNode>(&data_sql)
             .bind(user.id)
             .bind(search_param(search))
@@ -824,7 +829,7 @@ struct QuotaResponse {
     folder_count: i64,
 }
 
-const DEFAULT_QUOTA: i64 = 5 * 1024 * 1024 * 1024; // 100 GB
+const DEFAULT_QUOTA: i64 = 100 * 1024 * 1024 * 1024; // 100 GB
 
 pub async fn get_quota(pool: web::Data<PgPool>, user: AuthUser) -> Result<HttpResponse, AppError> {
     let used: i64 = sqlx::query_scalar(
@@ -1325,12 +1330,7 @@ pub async fn upload_file(
 
                     file_written = true;
 
-                    // Stream chunks directly to a temp file to avoid buffering large
-                    // uploads in memory. Size is enforced per-chunk against the limit.
-                    let mut tmp = tokio::fs::File::create(&temp_filepath).await.map_err(|e| {
-                        AppError::Internal(anyhow::anyhow!("Failed to create temp file: {}", e))
-                    })?;
-
+                    let mut plaintext_bytes: Vec<u8> = Vec::new();
                     let mut first_bytes: Vec<u8> = Vec::new();
 
                     while let Some(chunk) = field.next().await {
@@ -1352,50 +1352,25 @@ pub async fn upload_file(
                             first_bytes.extend_from_slice(&bytes[..needed.min(bytes.len())]);
                         }
 
-                        tokio::io::AsyncWriteExt::write_all(&mut tmp, &bytes)
-                            .await
-                            .map_err(|e| {
-                                AppError::Internal(anyhow::anyhow!(
-                                    "Failed to write chunk to disk: {}",
-                                    e
-                                ))
-                            })?;
+                        plaintext_bytes.extend_from_slice(&bytes);
                     }
-
-                    // Flush and sync the temp file
-                    tokio::io::AsyncWriteExt::flush(&mut tmp)
-                        .await
-                        .map_err(|e| {
-                            AppError::Internal(anyhow::anyhow!("Failed to flush temp file: {}", e))
-                        })?;
-                    drop(tmp);
 
                     // Validate file type by magic bytes on the captured prefix
                     if size_bytes > 0 && !first_bytes.is_empty() {
                         validate_magic_bytes(&first_bytes, mime_type.as_deref())?;
                     }
 
-                    // If encryption is configured, read the temp file back, encrypt,
-                    // and overwrite. AES-GCM requires the full plaintext, so this step
-                    // does buffer the file in memory — but only after the size limit
-                    // has already been enforced above.
-                    if let Some(ref enc_key) = config.encryption_key {
-                        let plaintext = tokio::fs::read(&temp_filepath).await.map_err(|e| {
-                            AppError::Internal(anyhow::anyhow!(
-                                "Failed to read temp file for encryption: {}",
-                                e
-                            ))
-                        })?;
-                        let ciphertext = crate::utils::crypto::encrypt(enc_key, &plaintext)?;
-                        tokio::fs::write(&temp_filepath, &ciphertext)
-                            .await
-                            .map_err(|e| {
-                                AppError::Internal(anyhow::anyhow!(
-                                    "Failed to write encrypted file: {}",
-                                    e
-                                ))
-                            })?;
-                    }
+                    // Encrypt if configured, else keep plaintext
+                    let final_bytes = if let Some(ref enc_key) = config.encryption_key {
+                        crate::utils::crypto::encrypt(enc_key, &plaintext_bytes)?
+                    } else {
+                        plaintext_bytes
+                    };
+
+                    // Write to temp_filepath exactly once
+                    tokio::fs::write(&temp_filepath, &final_bytes).await.map_err(|e| {
+                        AppError::Internal(anyhow::anyhow!("Failed to write file: {}", e))
+                    })?;
                 }
                 _ => {
                     // Ignore unknown fields
@@ -1438,7 +1413,7 @@ pub async fn upload_file(
 
     let quota_bytes = user_quota
         .filter(|&q| q > 0)
-        .unwrap_or(5 * 1024 * 1024 * 1024); // 100 GB default
+        .unwrap_or(DEFAULT_QUOTA);
 
     if used_bytes + size_bytes > quota_bytes {
         let _ = tokio::fs::remove_file(&temp_filepath).await;

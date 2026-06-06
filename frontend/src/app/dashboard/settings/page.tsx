@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect, useId, useRef } from "react";
 import { useRouter } from "next/navigation";
@@ -21,7 +21,7 @@ import {
   Building,
 } from "lucide-react";
 import { useAuthStore } from "@/store/useAuthStore";
-import { authApi, UpdateProfilePayload, webauthnApi, SessionInfo, ColleagueEntry } from "@/lib/api";
+import { authApi, UpdateProfilePayload, webauthnApi, SessionInfo, ColleagueEntry, getAvatarUrl } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 type SettingsTab = "profile" | "security" | "notifications" | "sessions";
@@ -126,10 +126,10 @@ export default function ProfileSettingsPage() {
       if (cancelled) return;
       setFullName(user.fullName);
       if (user.avatarData) {
-        setAvatarBase64(user.avatarData);
+        setAvatarBase64(getAvatarUrl(user.avatarData));
       } else {
         const cachedAvatar = localStorage.getItem("user-avatar");
-        if (cachedAvatar) setAvatarBase64(cachedAvatar);
+        if (cachedAvatar) setAvatarBase64(getAvatarUrl(cachedAvatar));
       }
     });
 

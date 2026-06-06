@@ -62,12 +62,21 @@ pub async fn admin_login(
         .unwrap_or_else(|| "unknown".to_string());
     rate_limit::check_sensitive_rate_limit(&redis_client, &ip).await?;
 
-    if body.username != config.admin_username || body.password != config.admin_password {
+    // Constant-time username check first, then Argon2id password verification
+    if body.username != config.admin_username {
+        return Err(AppError::Unauthorized);
+    }
+
+    let password_ok = password::verify_password(&body.password, &config.admin_password_hash)?;
+    if !password_ok {
+        tracing::warn!(ip = %ip, username = %body.username, "Failed admin login attempt");
         return Err(AppError::Unauthorized);
     }
 
     // Issue an admin-panel JWT with a reserved role that normal login never grants
-    let token = jwt::generate_admin_token(&body.username)?;
+    let token = jwt::generate_admin_token(&config.jwt_secret, &body.username)?;
+
+    tracing::info!(username = %body.username, ip = %ip, "Admin login successful");
 
     Ok(HttpResponse::Ok().json(AdminLoginResponse {
         token,
@@ -77,25 +86,111 @@ pub async fn admin_login(
 
 // â”€â”€ GET /api/admin/users â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ListUsersQuery {
+    pub page: Option<i64>,
+    pub per_page: Option<i64>,
+    pub q: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PaginatedUsersResponse {
+    pub users: Vec<UserProfile>,
+    pub total: i64,
+    pub page: i64,
+    pub per_page: i64,
+    pub total_pages: i64,
+}
+
 pub async fn list_users(
     pool: web::Data<PgPool>,
     admin: AdminUser,
+    query: web::Query<ListUsersQuery>,
 ) -> Result<HttpResponse, AppError> {
     crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:read").await?;
-    let users: Vec<UserProfile> = sqlx::query_as::<_, User>(
-        "SELECT id, email, password_hash, full_name, role, active,
-                supervisor_id, department, storage_quota_bytes, created_at
-         FROM users
-         ORDER BY created_at DESC",
-    )
-    .fetch_all(pool.get_ref())
-    .await
-    .map_err(AppError::Database)?
-    .into_iter()
-    .map(|u| u.into())
-    .collect();
 
-    Ok(HttpResponse::Ok().json(users))
+    if let Some(page) = query.page {
+        let page = page.max(1);
+        let per_page = query.per_page.unwrap_or(50).clamp(1, 200);
+        let offset = (page - 1) * per_page;
+        let search = query.q.as_deref().unwrap_or("").trim();
+
+        let (users_raw, total): (Vec<User>, i64) = if !search.is_empty() {
+            let search_pattern = format!("%{}%", search);
+            let count: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM users WHERE email ILIKE $1 OR full_name ILIKE $1"
+            )
+            .bind(&search_pattern)
+            .fetch_one(pool.get_ref())
+            .await
+            .map_err(AppError::Database)?;
+
+            let rows = sqlx::query_as::<_, User>(
+                "SELECT id, email, password_hash, full_name, role, active,
+                        supervisor_id, department, storage_quota_bytes, created_at
+                 FROM users
+                 WHERE email ILIKE $1 OR full_name ILIKE $1
+                 ORDER BY created_at DESC
+                 LIMIT $2 OFFSET $3"
+            )
+            .bind(&search_pattern)
+            .bind(per_page)
+            .bind(offset)
+            .fetch_all(pool.get_ref())
+            .await
+            .map_err(AppError::Database)?;
+
+            (rows, count)
+        } else {
+            let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM users")
+                .fetch_one(pool.get_ref())
+                .await
+                .map_err(AppError::Database)?;
+
+            let rows = sqlx::query_as::<_, User>(
+                "SELECT id, email, password_hash, full_name, role, active,
+                        supervisor_id, department, storage_quota_bytes, created_at
+                 FROM users
+                 ORDER BY created_at DESC
+                 LIMIT $1 OFFSET $2"
+            )
+            .bind(per_page)
+            .bind(offset)
+            .fetch_all(pool.get_ref())
+            .await
+            .map_err(AppError::Database)?;
+
+            (rows, count)
+        };
+
+        let users: Vec<UserProfile> = users_raw.into_iter().map(|u| u.into()).collect();
+        let total_pages = (total + per_page - 1) / per_page;
+
+        Ok(HttpResponse::Ok().json(PaginatedUsersResponse {
+            users,
+            total,
+            page,
+            per_page,
+            total_pages,
+        }))
+    } else {
+        let users: Vec<UserProfile> = sqlx::query_as::<_, User>(
+            "SELECT id, email, password_hash, full_name, role, active,
+                    supervisor_id, department, storage_quota_bytes, created_at
+             FROM users
+             ORDER BY created_at DESC",
+        )
+        .fetch_all(pool.get_ref())
+        .await
+        .map_err(AppError::Database)?
+        .into_iter()
+        .map(|u| u.into())
+        .collect();
+
+        Ok(HttpResponse::Ok().json(users))
+    }
 }
 
 // â”€â”€ POST /api/admin/users â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -116,6 +211,16 @@ pub async fn create_user(
         return Err(AppError::BadRequest(
             "email, password, and full_name are required".into(),
         ));
+    }
+
+    if email.len() > 320 || body.password.len() > 128 || full_name.len() > 255 {
+        return Err(AppError::BadRequest("input lengths exceed maximum limits".into()));
+    }
+
+    if let Some(ref dept) = body.department {
+        if dept.len() > 255 {
+            return Err(AppError::BadRequest("department name too long".into()));
+        }
     }
 
     password::validate_password_strength(&body.password)
@@ -192,6 +297,22 @@ pub async fn update_user(
     .map_err(AppError::Database)?;
 
     let existing = existing.ok_or(AppError::NotFound)?;
+
+    if let Some(ref name) = body.full_name {
+        if name.trim().len() > 255 {
+            return Err(AppError::BadRequest("full name too long".into()));
+        }
+    }
+    if let Some(ref pass) = body.password {
+        if !pass.is_empty() && pass.len() > 128 {
+            return Err(AppError::BadRequest("password too long".into()));
+        }
+    }
+    if let Some(ref dept) = body.department {
+        if dept.len() > 255 {
+            return Err(AppError::BadRequest("department name too long".into()));
+        }
+    }
 
     // Determine new values (fall back to existing)
     let new_full_name = body

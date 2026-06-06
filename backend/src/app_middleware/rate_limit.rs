@@ -1,4 +1,4 @@
-﻿// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 // Rate limiting helpers - Redis-backed sliding-window rate limiter.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -70,4 +70,37 @@ pub async fn check_action_rate_limit(
         return Err(AppError::TooManyRequests);
     }
     Ok(())
+}
+
+/// Global rate limiting middleware (100 requests per 60 seconds per IP).
+pub async fn global_rate_limit_middleware(
+    req: actix_web::dev::ServiceRequest,
+    next: actix_web::middleware::Next<impl actix_web::body::MessageBody + 'static>,
+) -> Result<actix_web::dev::ServiceResponse<impl actix_web::body::MessageBody>, actix_web::Error> {
+    let redis_client = match req.app_data::<web::Data<RedisClient>>() {
+        Some(client) => client,
+        None => return next.call(req).await,
+    };
+
+    let ip = req
+        .peer_addr()
+        .map(|addr| addr.ip().to_string())
+        .unwrap_or_else(|| "127.0.0.1".to_string());
+
+    let allowed = redis::check_rate_limit_async(
+        redis_client,
+        "global",
+        &ip,
+        100, // global max requests
+        60,  // global window seconds
+    )
+    .await
+    .unwrap_or(true);
+
+    if !allowed {
+        tracing::warn!(ip = %ip, "Global rate limit exceeded");
+        return Err(actix_web::error::ErrorTooManyRequests("Global rate limit exceeded"));
+    }
+
+    next.call(req).await
 }

@@ -10,6 +10,7 @@
 use actix_cors::Cors;
 use actix_web::middleware::Logger;
 use actix_web::{get, web, App, HttpResponse, HttpServer, Responder};
+use argon2::PasswordHash;
 use sqlx::postgres::PgPoolOptions;
 use std::env;
 use tracing::info;
@@ -38,8 +39,8 @@ pub struct AppConfig {
     pub storage_path: String,
     /// Admin panel login username.
     pub admin_username: String,
-    /// Admin panel login password.
-    pub admin_password: String,
+    /// Admin panel login password (Argon2id hashed).
+    pub admin_password_hash: String,
     /// Maximum allowed upload size in bytes.
     pub max_upload_size_bytes: i64,
     /// AES-256-GCM encryption key (32 raw bytes), or None to disable encryption.
@@ -70,9 +71,15 @@ async fn health_check(
         .await
         .is_ok();
 
-    let redis_ok = redis_client
-        .execute(|conn| redis::cmd("PING").query::<String>(conn))
-        .is_ok();
+    let redis_ok = match redis_client.get_conn().await {
+        Ok((_permit, mut conn)) => {
+            redis::cmd("PING")
+                .query_async::<_, String>(&mut conn)
+                .await
+                .is_ok()
+        }
+        Err(_) => false,
+    };
 
     let status = if db_ok && redis_ok { "ok" } else { "degraded" };
 
@@ -108,7 +115,20 @@ async fn main() -> std::io::Result<()> {
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let jwt_secret = env::var("JWT_SECRET").expect("JWT_SECRET must be set");
     let admin_username = env::var("ADMIN_USERNAME").expect("ADMIN_USERNAME must be set");
-    let admin_password = env::var("ADMIN_PASSWORD").expect("ADMIN_PASSWORD must be set");
+    let admin_password_raw = env::var("ADMIN_PASSWORD").expect("ADMIN_PASSWORD must be set");
+
+    // Hash the admin password with Argon2id at startup.
+    // The ADMIN_PASSWORD env var supports either a raw password (hashed on first boot)
+    // or a pre-computed Argon2id hash (starting with "$argon2id$").
+    let admin_password_hash = if admin_password_raw.starts_with("$argon2id$") {
+        // Pre-hashed — validate format before accepting
+        PasswordHash::new(&admin_password_raw)
+            .expect("ADMIN_PASSWORD starts with $argon2id$ but is not a valid PHC hash");
+        admin_password_raw
+    } else {
+        crate::utils::password::hash_password(&admin_password_raw)
+            .expect("Failed to hash admin password")
+    };
     let storage_path = env::var("STORAGE_PATH").unwrap_or_else(|_| "./uploads".to_string());
     let host = env::var("HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
     let port: u16 = env::var("PORT")
@@ -149,7 +169,7 @@ async fn main() -> std::io::Result<()> {
         jwt_secret,
         storage_path: storage_path.clone(),
         admin_username,
-        admin_password,
+        admin_password_hash,
         max_upload_size_bytes,
         encryption_key,
     };
@@ -157,6 +177,10 @@ async fn main() -> std::io::Result<()> {
     // ── Database pool ─────────────────────────────────────────────────────────
     let pool = PgPoolOptions::new()
         .max_connections(20)
+        .min_connections(4)
+        .acquire_timeout(std::time::Duration::from_secs(10))
+        .idle_timeout(std::time::Duration::from_secs(300))
+        .max_lifetime(std::time::Duration::from_secs(1800))
         .connect(&database_url)
         .await
         .expect("Failed to connect to PostgreSQL");
@@ -222,6 +246,8 @@ async fn main() -> std::io::Result<()> {
             .wrap(Logger::new(
                 "%a \"%r\" %s %b \"%{Referer}i\" \"%{User-Agent}i\" %T",
             ))
+            .wrap(actix_web::middleware::from_fn(app_middleware::request_id::request_id_middleware))
+            .wrap(actix_web::middleware::from_fn(app_middleware::rate_limit::global_rate_limit_middleware))
             // ── Shared state ──────────────────────────────────────────────────
             .app_data(pool_data.clone())
             .app_data(config_data.clone())
@@ -411,6 +437,7 @@ async fn main() -> std::io::Result<()> {
                     .route("/profile", web::put().to(handlers::auth::update_profile))
                     .route("/avatar", web::post().to(handlers::auth::upload_avatar))
                     .route("/avatar", web::delete().to(handlers::auth::delete_avatar))
+                    .route("/avatar/{user_id}", web::get().to(handlers::auth::get_avatar))
                     .route(
                         "/notification-prefs",
                         web::get().to(handlers::auth::get_notification_prefs),

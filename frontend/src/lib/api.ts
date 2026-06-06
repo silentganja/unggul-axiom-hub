@@ -1,9 +1,29 @@
-﻿// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 // Unggul Axiom Hub - API Client
 // Centralised fetch wrapper with JWT handling, auth redirects, and typed helpers.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+
+// Helper to set cookie client-side
+function setCookie(name: string, value: string, maxAgeSecs: number): void {
+  if (typeof document === "undefined") return;
+  document.cookie = `${name}=${encodeURIComponent(value)}; path=/; max-age=${maxAgeSecs}; SameSite=Lax`;
+}
+
+// Helper to delete cookie client-side
+function deleteCookie(name: string): void {
+  if (typeof document === "undefined") return;
+  document.cookie = `${name}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax`;
+}
+
+// ── Helper to resolve avatar URLs ──────────────────────────────────────────
+export function getAvatarUrl(avatarData: string | null | undefined): string | null {
+  if (!avatarData) return null;
+  if (avatarData.startsWith("data:")) return avatarData;
+  if (avatarData.startsWith("/")) return `${API_BASE}${avatarData}`;
+  return avatarData;
+}
 
 // ── Token management ─────────────────────────────────────────────────────────
 
@@ -14,6 +34,7 @@ export function getToken(): string | null {
 
 export function setToken(token: string): void {
   localStorage.setItem("auth-token", token);
+  setCookie("auth-token", token, 7 * 24 * 3600);
 }
 
 function getRefreshToken(): string | null {
@@ -30,6 +51,7 @@ export function clearToken(): void {
   localStorage.removeItem("auth-refresh-token");
   localStorage.removeItem("auth-user");
   localStorage.removeItem("unggul-favorites");
+  deleteCookie("auth-token");
 }
 
 // ── Token refresh logic ──────────────────────────────────────────────────────
@@ -88,11 +110,13 @@ function getAdminToken(): string | null {
 
 export function setAdminToken(token: string): void {
   localStorage.setItem("admin-token", token);
+  setCookie("admin-token", token, 7 * 24 * 3600);
 }
 
 export function clearAdminToken(): void {
   localStorage.removeItem("admin-token");
   localStorage.removeItem("admin-user");
+  deleteCookie("admin-token");
 }
 
 // ── Core fetch wrapper ───────────────────────────────────────────────────────
@@ -887,6 +911,22 @@ export const adminApi = {
     return apiFetch("/api/admin/users", {}, true);
   },
 
+  listUsersPaginated(options: { page: number; perPage: number; q?: string }): Promise<{
+    users: AdminUserEntry[];
+    total: number;
+    page: number;
+    perPage: number;
+    totalPages: number;
+  }> {
+    const params = new URLSearchParams();
+    params.set("page", String(options.page));
+    params.set("perPage", String(options.perPage));
+    if (options.q) {
+      params.set("q", options.q);
+    }
+    return apiFetch(`/api/admin/users?${params.toString()}`, {}, true);
+  },
+
   createUser(payload: AdminCreateUserPayload): Promise<AdminUserEntry> {
     return apiFetch("/api/admin/users", {
       method: "POST",
@@ -1341,27 +1381,65 @@ export interface NotificationEvent {
 export function subscribeToNotifications(
   onEvent: (event: NotificationEvent) => void
 ): () => void {
-  const token = getToken();
-  if (!token) return () => {};
+  let eventSource: EventSource | null = null;
+  let isClosed = false;
+  let reconnectTimeout: NodeJS.Timeout | null = null;
 
-  const eventSource = new EventSource(
-    `${API_BASE}/api/notifications/stream?token=${token}`
-  );
+  function connect() {
+    if (isClosed) return;
 
-  eventSource.onmessage = (msg) => {
-    try {
-      const event: NotificationEvent = JSON.parse(msg.data);
-      onEvent(event);
-    } catch {
-      // Ignore parse errors on heartbeat/comment lines
+    const token = getToken();
+    if (!token) return;
+
+    if (eventSource) {
+      eventSource.close();
+    }
+
+    eventSource = new EventSource(
+      `${API_BASE}/api/notifications/stream?token=${token}`
+    );
+
+    eventSource.onmessage = (msg) => {
+      try {
+        const event: NotificationEvent = JSON.parse(msg.data);
+        onEvent(event);
+      } catch {
+        // Ignore parse errors on heartbeat/comment lines
+      }
+    };
+
+    eventSource.onerror = () => {
+      if (isClosed) return;
+
+      // Close the current eventSource to avoid default reconnect
+      if (eventSource) {
+        eventSource.close();
+        eventSource = null;
+      }
+
+      // Wait 5 seconds, attempt token refresh, then reconnect
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+      reconnectTimeout = setTimeout(async () => {
+        const refreshed = await attemptTokenRefresh();
+        if (refreshed && !isClosed) {
+          connect();
+        } else if (!isClosed) {
+          // If refresh failed, retry again after backoff
+          connect();
+        }
+      }, 5000);
+    };
+  }
+
+  connect();
+
+  return () => {
+    isClosed = true;
+    if (reconnectTimeout) clearTimeout(reconnectTimeout);
+    if (eventSource) {
+      eventSource.close();
     }
   };
-
-  eventSource.onerror = () => {
-    // SSE will auto-reconnect; no action needed
-  };
-
-  return () => eventSource.close();
 }
 
 // ── Utilities ────────────────────────────────────────────────────────────────

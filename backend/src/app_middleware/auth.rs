@@ -1,5 +1,5 @@
-use crate::{errors::AppError, utils::jwt};
-use actix_web::{dev::Payload, FromRequest, HttpRequest};
+use crate::{errors::AppError, utils::jwt, AppConfig};
+use actix_web::{dev::Payload, web, FromRequest, HttpRequest};
 use std::future::{ready, Ready};
 use uuid::Uuid;
 
@@ -42,8 +42,13 @@ fn extract_auth_user(req: &HttpRequest) -> Result<AuthUser, AppError> {
         .strip_prefix("Bearer ")
         .ok_or(AppError::Unauthorized)?;
 
+    // Read JWT secret from AppConfig (cached, not env::var on every call)
+    let config = req
+        .app_data::<web::Data<AppConfig>>()
+        .ok_or(AppError::Unauthorized)?;
+
     // Decode & validate the JWT
-    let claims = jwt::decode_token(token)?;
+    let claims = jwt::decode_token(&config.jwt_secret, token)?;
 
     let user_id = Uuid::parse_str(&claims.sub).map_err(|_| AppError::Unauthorized)?;
 

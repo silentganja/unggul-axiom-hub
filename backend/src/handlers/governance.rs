@@ -126,7 +126,9 @@ pub async fn create_request(
             .map_err(AppError::Database)?
             .flatten();
 
-    crate::handlers::notifications::emit_notification(
+    // Notify the supervisor specifically; fall back to broadcast if no supervisor
+    crate::handlers::notifications::emit_notification_to(
+        supervisor_id,
         crate::models::notification::NotificationEvent::GovernanceRequested {
             request_id: request.id.to_string(),
             title: title.clone(),
@@ -605,8 +607,9 @@ pub async fn approve_request(
     )
     .await;
 
-    // ── Emit notification ──────────────────────────────────────────────────
-    crate::handlers::notifications::emit_notification(
+    // ── Emit notification to the original requester ─────────────────────────
+    crate::handlers::notifications::emit_notification_to(
+        Some(_requester_id),
         crate::models::notification::NotificationEvent::GovernanceUpdate {
             request_id: request_id.to_string(),
             status: "APPROVED".into(),

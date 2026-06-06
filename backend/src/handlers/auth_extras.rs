@@ -34,6 +34,7 @@ struct RefreshResponse {
 pub async fn refresh(
     pool: web::Data<PgPool>,
     redis_client: web::Data<RedisClient>,
+    config: web::Data<crate::AppConfig>,
     req: actix_web::HttpRequest,
     body: web::Json<RefreshRequest>,
 ) -> Result<HttpResponse, AppError> {
@@ -46,7 +47,7 @@ pub async fn refresh(
     };
 
     let user_uuid = Uuid::parse_str(&user_id).map_err(|_| AppError::Unauthorized)?;
-    let access_token = jwt::generate_token(user_uuid, &role)?;
+    let access_token = jwt::generate_token(&config.jwt_secret, user_uuid, &role)?;
     let new_refresh_token = jwt::generate_refresh_token();
 
     redis::store_refresh_token_async(&redis_client, &new_refresh_token, &user_id, &role).await?;
@@ -291,6 +292,7 @@ pub async fn request_magic_link(
 pub async fn verify_magic_link(
     pool: web::Data<PgPool>,
     redis_client: web::Data<RedisClient>,
+    config: web::Data<crate::AppConfig>,
     query: web::Query<MagicLinkVerify>,
 ) -> Result<HttpResponse, AppError> {
     let row: Option<(Uuid, String)> = sqlx::query_as(
@@ -310,7 +312,7 @@ pub async fn verify_magic_link(
         .await
         .map_err(AppError::Database)?;
 
-    let access_token = jwt::generate_token(user_id, &role)?;
+    let access_token = jwt::generate_token(&config.jwt_secret, user_id, &role)?;
     let refresh_token = jwt::generate_refresh_token();
 
     redis::store_refresh_token_async(&redis_client, &refresh_token, &user_id.to_string(), &role)
@@ -442,6 +444,7 @@ pub async fn webauthn_login_begin(
 pub async fn webauthn_login_complete(
     pool: web::Data<PgPool>,
     redis_client: web::Data<RedisClient>,
+    config: web::Data<crate::AppConfig>,
     body: web::Json<serde_json::Value>,
 ) -> Result<HttpResponse, AppError> {
     let credential_id = body["id"]
@@ -485,7 +488,7 @@ pub async fn webauthn_login_complete(
 
     let (user_id, role) = row.ok_or(AppError::BadRequest("Unknown credential".into()))?;
 
-    let access_token = jwt::generate_token(user_id, &role)?;
+    let access_token = jwt::generate_token(&config.jwt_secret, user_id, &role)?;
     let refresh_token = jwt::generate_refresh_token();
 
     redis::store_refresh_token_async(&redis_client, &refresh_token, &user_id.to_string(), &role)

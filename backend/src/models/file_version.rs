@@ -10,6 +10,7 @@ pub struct FileVersion {
     pub file_id: Uuid,
     pub version_number: i32,
     pub size_bytes: i64,
+    #[serde(skip_serializing)]
     pub storage_path: String,
     pub uploaded_by: Option<Uuid>,
     pub created_at: DateTime<Utc>,
