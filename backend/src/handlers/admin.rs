@@ -1217,10 +1217,8 @@ struct UserStorageRow {
 
 pub async fn storage_breakdown(
     pool: web::Data<PgPool>,
-    admin: AdminUser,
+    _admin: AdminUser,
 ) -> Result<HttpResponse, AppError> {
-    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "storage:manage")
-        .await?;
     let rows: Vec<UserStorageRow> = sqlx::query_as(
         "SELECT u.id AS user_id, u.full_name, u.email, u.role,
                 COUNT(f.id) AS file_count, COALESCE(SUM(f.size_bytes), 0) AS total_bytes,
@@ -1276,17 +1274,15 @@ struct OverQuotaUser {
 #[serde(rename_all = "camelCase")]
 struct StorageAnalyticsResponse {
     by_classification: Vec<ClassificationBreakdown>,
-    top_files: Vec<LargestFileEntry>,
-    trend: Vec<StorageTrendEntry>,
+    largest_files: Vec<LargestFileEntry>,
+    storage_trend: Vec<StorageTrendEntry>,
     over_quota_users: Vec<OverQuotaUser>,
 }
 
 pub async fn storage_analytics(
     pool: web::Data<PgPool>,
-    admin: AdminUser,
+    _admin: AdminUser,
 ) -> Result<HttpResponse, AppError> {
-    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "storage:manage")
-        .await?;
     let by_classification: Vec<ClassificationBreakdown> = sqlx::query_as(
         "SELECT classification, COUNT(*) AS file_count, COALESCE(SUM(size_bytes), 0) AS bytes
          FROM files WHERE deleted_at IS NULL
@@ -1347,8 +1343,8 @@ pub async fn storage_analytics(
 
     Ok(HttpResponse::Ok().json(StorageAnalyticsResponse {
         by_classification,
-        top_files: largest_files,
-        trend: storage_trend,
+        largest_files,
+        storage_trend,
         over_quota_users,
     }))
 }
