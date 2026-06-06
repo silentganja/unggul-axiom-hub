@@ -117,6 +117,24 @@ pub async fn create_request(
         "Governance request submitted"
     );
 
+    // Notify the requester's supervisor (if any) via SSE
+    let supervisor_id: Option<Uuid> =
+        sqlx::query_scalar("SELECT supervisor_id FROM users WHERE id = $1")
+            .bind(user.id)
+            .fetch_optional(pool.get_ref())
+            .await
+            .map_err(AppError::Database)?
+            .flatten();
+
+    crate::handlers::notifications::emit_notification(
+        crate::models::notification::NotificationEvent::GovernanceRequested {
+            request_id: request.id.to_string(),
+            title: title.clone(),
+            requested_by: user.id.to_string(),
+            supervisor_id: supervisor_id.map(|id| id.to_string()),
+        },
+    );
+
     Ok(HttpResponse::Created().json(request))
 }
 
@@ -320,11 +338,17 @@ async fn is_requester_supervisor(
 /// OR is the requester's supervisor with governance:approve.
 pub async fn approve_request(
     pool: web::Data<PgPool>,
+    redis_client: web::Data<crate::utils::redis::RedisClient>,
     user: AuthUser,
     req: HttpRequest,
     path: web::Path<Uuid>,
     body: web::Json<ReviewRequest>,
 ) -> Result<HttpResponse, AppError> {
+    let ip = req
+        .peer_addr()
+        .map(|a| a.ip().to_string())
+        .unwrap_or_default();
+    crate::app_middleware::rate_limit::check_action_rate_limit(&redis_client, &ip).await?;
     let request_id = path.into_inner();
 
     // Fetch the pending request info first so we can check supervisor status
@@ -602,11 +626,17 @@ pub async fn approve_request(
 /// Reject a governance request. officer+ can reject.
 pub async fn reject_request(
     pool: web::Data<PgPool>,
+    redis_client: web::Data<crate::utils::redis::RedisClient>,
     user: AuthUser,
     req: HttpRequest,
     path: web::Path<Uuid>,
     body: web::Json<ReviewRequest>,
 ) -> Result<HttpResponse, AppError> {
+    let ip = req
+        .peer_addr()
+        .map(|a| a.ip().to_string())
+        .unwrap_or_default();
+    crate::app_middleware::rate_limit::check_action_rate_limit(&redis_client, &ip).await?;
     if !user::can_govern(&user.role)
         && !user::user_has_permission(pool.get_ref(), user.id, &user.role, "governance:reject")
             .await
@@ -691,10 +721,16 @@ struct BatchReviewResponse {
 /// officer+ can approve standard requests, director+ for classification changes.
 pub async fn batch_approve(
     pool: web::Data<PgPool>,
+    redis_client: web::Data<crate::utils::redis::RedisClient>,
     user: AuthUser,
     req: HttpRequest,
     body: web::Json<BatchReviewRequest>,
 ) -> Result<HttpResponse, AppError> {
+    let ip = req
+        .peer_addr()
+        .map(|a| a.ip().to_string())
+        .unwrap_or_default();
+    crate::app_middleware::rate_limit::check_action_rate_limit(&redis_client, &ip).await?;
     if !user::can_govern(&user.role)
         && !user::user_has_permission(pool.get_ref(), user.id, &user.role, "governance:approve")
             .await
@@ -982,10 +1018,16 @@ pub async fn batch_approve(
 /// Batch-reject multiple governance requests. officer+ can reject.
 pub async fn batch_reject(
     pool: web::Data<PgPool>,
+    redis_client: web::Data<crate::utils::redis::RedisClient>,
     user: AuthUser,
     req: HttpRequest,
     body: web::Json<BatchReviewRequest>,
 ) -> Result<HttpResponse, AppError> {
+    let ip = req
+        .peer_addr()
+        .map(|a| a.ip().to_string())
+        .unwrap_or_default();
+    crate::app_middleware::rate_limit::check_action_rate_limit(&redis_client, &ip).await?;
     if !user::can_govern(&user.role)
         && !user::user_has_permission(pool.get_ref(), user.id, &user.role, "governance:reject")
             .await
@@ -1090,10 +1132,16 @@ pub async fn batch_reject(
 /// - APPROVED: create inverse request type and auto-approve it
 pub async fn undo_request(
     pool: web::Data<PgPool>,
+    redis_client: web::Data<crate::utils::redis::RedisClient>,
     user: AuthUser,
     req: HttpRequest,
     path: web::Path<Uuid>,
 ) -> Result<HttpResponse, AppError> {
+    let ip = req
+        .peer_addr()
+        .map(|a| a.ip().to_string())
+        .unwrap_or_default();
+    crate::app_middleware::rate_limit::check_action_rate_limit(&redis_client, &ip).await?;
     if !user::can_govern(&user.role)
         && !user::user_has_permission(pool.get_ref(), user.id, &user.role, "governance:approve")
             .await

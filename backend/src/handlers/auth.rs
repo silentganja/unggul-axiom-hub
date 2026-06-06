@@ -259,7 +259,28 @@ pub struct UpdateProfileRequest {
     pub current_password: Option<String>,
     pub new_password: Option<String>,
     pub department: Option<String>,
-    pub supervisor_id: Option<Uuid>,
+    /// `None` = don't change. `Some(None)` = clear. `Some(Some(id))` = set.
+    #[serde(default, deserialize_with = "deserialize_optional_option")]
+    pub supervisor_id: Option<Option<Uuid>>,
+}
+
+// Custom deserializer: treats missing field as None (don't change),
+// null as Some(None) (clear), and a UUID string as Some(Some(id)) (set).
+fn deserialize_optional_option<'de, D>(deserializer: D) -> Result<Option<Option<Uuid>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Helper {
+        Null,
+        Id(Uuid),
+    }
+    Ok(match Option::<Helper>::deserialize(deserializer)? {
+        None => None,                           // field missing → don't change
+        Some(Helper::Null) => Some(None),       // null → clear
+        Some(Helper::Id(id)) => Some(Some(id)), // UUID → set
+    })
 }
 
 pub async fn update_profile(
@@ -293,12 +314,19 @@ pub async fn update_profile(
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty());
 
-    // Supervisor: explicit value (including null to clear) updates, absent keeps existing
-    let new_supervisor = if body.supervisor_id.is_some() {
-        body.supervisor_id
-    } else {
-        existing.supervisor_id
+    // Supervisor: None = don't change, Some(None) = clear, Some(Some(id)) = set
+    let new_supervisor = match body.supervisor_id {
+        None => existing.supervisor_id,
+        Some(None) => None,
+        Some(Some(id)) => Some(id),
     };
+
+    // Prevent self-reference
+    if new_supervisor == Some(user.id) {
+        return Err(AppError::BadRequest(
+            "You cannot set yourself as your own supervisor".into(),
+        ));
+    }
 
     let mut password_changed = false;
 
@@ -497,6 +525,31 @@ pub async fn update_notification_prefs(
         .map_err(AppError::Database)?;
 
     Ok(HttpResponse::Ok().json(body.into_inner()))
+}
+
+// ── GET /api/auth/colleagues ──────────────────────────────────────────────────
+// Returns basic user info for supervisor/department selection in settings.
+
+#[derive(Debug, Serialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct ColleagueEntry {
+    pub id: Uuid,
+    pub full_name: String,
+    pub role: String,
+    pub department: Option<String>,
+}
+
+pub async fn list_colleagues(
+    pool: web::Data<PgPool>,
+    _user: AuthUser,
+) -> Result<HttpResponse, AppError> {
+    let colleagues: Vec<ColleagueEntry> =
+        sqlx::query_as("SELECT id, full_name, role, department FROM users ORDER BY full_name")
+            .fetch_all(pool.get_ref())
+            .await
+            .map_err(AppError::Database)?;
+
+    Ok(HttpResponse::Ok().json(colleagues))
 }
 
 // ── GET /api/auth/team ───────────────────────────────────────────────────────

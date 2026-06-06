@@ -39,6 +39,8 @@ pub struct UserProfile {
     pub storage_quota_bytes: Option<i64>,
     pub avatar_data: Option<String>,
     pub department: Option<String>,
+    #[sqlx(default)]
+    pub supervisor_id: Option<Uuid>,
     pub supervisor_name: Option<String>,
     pub notification_prefs: Option<serde_json::Value>,
     pub created_at: DateTime<Utc>,
@@ -177,53 +179,59 @@ pub async fn implicit_permissions(
 }
 
 /// Check whether a user has a specific permission — the single entry point.
-/// Checks in order: direct user_permissions → base role implicit → custom groups.
+/// Fast path: hardcoded implicit grants for chief/director/officer.
+/// Slow path: single DB query covering direct grants + DB-stored implicit + groups.
 pub async fn user_has_permission(
     pool: &sqlx::PgPool,
     user_id: uuid::Uuid,
     base_role: &str,
     permission_key: &str,
 ) -> Result<bool, crate::errors::AppError> {
-    // 1. Direct user-permission grant (fastest)
-    let direct: bool = sqlx::query_scalar(
+    // Fast path: hardcoded implicit grants for known base roles
+    match base_role {
+        "chief" | "director" => return Ok(true),
+        "officer"
+            if [
+                "files:read",
+                "files:write",
+                "users:read",
+                "governance:approve",
+                "governance:reject",
+                "audit:read",
+            ]
+            .contains(&permission_key) =>
+        {
+            return Ok(true);
+        }
+        _ => {}
+    }
+
+    // Single DB query: direct grants UNION DB implicit perms UNION group perms
+    let has_perm: bool = sqlx::query_scalar(
         "SELECT EXISTS(
             SELECT 1 FROM user_permissions up
             JOIN permissions p ON p.id = up.permission_id
-            WHERE up.user_id = $1 AND p.key = $2
-        )",
-    )
-    .bind(user_id)
-    .bind(permission_key)
-    .fetch_one(pool)
-    .await
-    .map_err(crate::errors::AppError::Database)?;
-
-    if direct {
-        return Ok(true);
-    }
-
-    // 2. Base role implicit grants (DB-driven)
-    let implicit = implicit_permissions(pool, base_role).await?;
-    if implicit.contains(&permission_key.to_string()) {
-        return Ok(true);
-    }
-
-    // 3. Custom role-group permissions
-    let group: bool = sqlx::query_scalar(
-        "SELECT EXISTS(
+            WHERE up.user_id = $1 AND p.key = $3
+            UNION ALL
+            SELECT 1 FROM role_implicit_permissions rip
+            JOIN permissions p ON p.id = rip.permission_id
+            WHERE rip.role_key = $2 AND p.key = $3
+            UNION ALL
             SELECT 1 FROM user_role_groups urg
             JOIN role_group_permissions rgp ON rgp.role_group_id = urg.role_group_id
             JOIN permissions p ON p.id = rgp.permission_id
-            WHERE urg.user_id = $1 AND p.key = $2
+            WHERE urg.user_id = $1 AND p.key = $3
+            LIMIT 1
         )",
     )
     .bind(user_id)
+    .bind(base_role)
     .bind(permission_key)
     .fetch_one(pool)
     .await
     .map_err(crate::errors::AppError::Database)?;
 
-    Ok(group)
+    Ok(has_perm)
 }
 
 impl From<User> for UserProfile {
@@ -237,6 +245,7 @@ impl From<User> for UserProfile {
             storage_quota_bytes: u.storage_quota_bytes,
             avatar_data: u.avatar_data,
             department: u.department,
+            supervisor_id: u.supervisor_id,
             supervisor_name: None,
             notification_prefs: u.notification_prefs,
             created_at: u.created_at,

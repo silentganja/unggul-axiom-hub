@@ -99,6 +99,8 @@ pub async fn create_role_group(
     req: HttpRequest,
     body: web::Json<CreateRoleGroupRequest>,
 ) -> Result<HttpResponse, AppError> {
+    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:manage")
+        .await?;
     let name = body.name.trim().to_string();
     let description = body.description.trim().to_string();
 
@@ -213,11 +215,13 @@ pub async fn get_role_group(
 
 pub async fn update_role_group(
     pool: web::Data<PgPool>,
-    _admin: AdminUser,
+    admin: AdminUser,
     req: HttpRequest,
     path: web::Path<Uuid>,
     body: web::Json<UpdateRoleGroupRequest>,
 ) -> Result<HttpResponse, AppError> {
+    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:manage")
+        .await?;
     let group_id = path.into_inner();
     let existing = fetch_group(pool.get_ref(), group_id).await?;
 
@@ -282,10 +286,12 @@ pub async fn update_role_group(
 
 pub async fn delete_role_group(
     pool: web::Data<PgPool>,
-    _admin: AdminUser,
+    admin: AdminUser,
     req: HttpRequest,
     path: web::Path<Uuid>,
 ) -> Result<HttpResponse, AppError> {
+    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:manage")
+        .await?;
     let group_id = path.into_inner();
 
     // Verify the group exists before deleting
@@ -336,6 +342,8 @@ pub async fn duplicate_role_group(
     path: web::Path<Uuid>,
     body: web::Json<DuplicateRoleGroupRequest>,
 ) -> Result<HttpResponse, AppError> {
+    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:manage")
+        .await?;
     let source_id = path.into_inner();
     let source = fetch_group(pool.get_ref(), source_id).await?;
     let source_perms = fetch_group_permissions(pool.get_ref(), source_id).await?;
@@ -372,14 +380,15 @@ pub async fn duplicate_role_group(
 
     // Copy permissions to the new group
     for perm in &source_perms {
-        let _ = sqlx::query(
+        sqlx::query(
             "INSERT INTO role_group_permissions (role_group_id, permission_id)
              VALUES ($1, $2) ON CONFLICT DO NOTHING",
         )
         .bind(group.id)
         .bind(perm.id)
         .execute(pool.get_ref())
-        .await;
+        .await
+        .map_err(AppError::Database)?;
     }
 
     // Audit log
@@ -411,11 +420,13 @@ pub async fn duplicate_role_group(
 
 pub async fn set_group_permissions(
     pool: web::Data<PgPool>,
-    _admin: AdminUser,
+    admin: AdminUser,
     req: HttpRequest,
     path: web::Path<Uuid>,
     body: web::Json<SetPermissionsRequest>,
 ) -> Result<HttpResponse, AppError> {
+    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:manage")
+        .await?;
     let group_id = path.into_inner();
 
     // Verify the group exists
@@ -519,11 +530,13 @@ pub async fn list_group_users(
 
 pub async fn set_group_users(
     pool: web::Data<PgPool>,
-    _admin: AdminUser,
+    admin: AdminUser,
     req: HttpRequest,
     path: web::Path<Uuid>,
     body: web::Json<SetUsersRequest>,
 ) -> Result<HttpResponse, AppError> {
+    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:manage")
+        .await?;
     let group_id = path.into_inner();
 
     // Verify the group exists
@@ -991,14 +1004,15 @@ pub async fn set_role_implicit_permissions(
         .map_err(AppError::Database)?;
 
     for perm_id in &body.permission_ids {
-        let _ = sqlx::query(
+        sqlx::query(
             "INSERT INTO role_implicit_permissions (role_key, permission_id)
              VALUES ($1, $2) ON CONFLICT DO NOTHING",
         )
         .bind(&role_key)
         .bind(perm_id)
         .execute(&mut *tx)
-        .await;
+        .await
+        .map_err(AppError::Database)?;
     }
 
     tx.commit().await.map_err(AppError::Database)?;
@@ -1069,14 +1083,15 @@ pub async fn set_user_permissions(
         .map_err(AppError::Database)?;
 
     for perm_id in &body.permission_ids {
-        let _ = sqlx::query(
+        sqlx::query(
             "INSERT INTO user_permissions (user_id, permission_id)
              VALUES ($1, $2) ON CONFLICT DO NOTHING",
         )
         .bind(user_id)
         .bind(perm_id)
         .execute(&mut *tx)
-        .await;
+        .await
+        .map_err(AppError::Database)?;
     }
 
     tx.commit().await.map_err(AppError::Database)?;

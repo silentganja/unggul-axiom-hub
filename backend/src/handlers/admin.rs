@@ -82,10 +82,9 @@ pub async fn list_users(
     admin: AdminUser,
 ) -> Result<HttpResponse, AppError> {
     crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:read").await?;
-    // This query selects 7 of 12 User columns. sqlx::FromRow fills the remaining
-    // fields with their sqlx::default values — safe because we only need the subset.
     let users: Vec<UserProfile> = sqlx::query_as::<_, User>(
-        "SELECT id, email, password_hash, full_name, role, active, created_at
+        "SELECT id, email, password_hash, full_name, role, active,
+                supervisor_id, department, storage_quota_bytes, created_at
          FROM users
          ORDER BY created_at DESC",
     )
@@ -183,7 +182,8 @@ pub async fn update_user(
 
     // Fetch the existing user first
     let existing: Option<User> = sqlx::query_as::<_, User>(
-        "SELECT id, email, password_hash, full_name, role, active, storage_quota_bytes, created_at
+        "SELECT id, email, password_hash, full_name, role, active,
+                storage_quota_bytes, supervisor_id, department, created_at
          FROM users WHERE id = $1",
     )
     .bind(user_id)
@@ -239,6 +239,13 @@ pub async fn update_user(
     } else {
         existing.supervisor_id
     };
+
+    // Prevent self-reference (user cannot be their own supervisor)
+    if new_supervisor == Some(user_id) {
+        return Err(AppError::BadRequest(
+            "A user cannot be their own supervisor".into(),
+        ));
+    }
 
     // Department: explicit value updates, absent keeps existing
     let new_department = if body.department.is_some() {
@@ -319,6 +326,22 @@ pub async fn delete_user(
     if file_count > 0 {
         return Err(AppError::Conflict(
             "User owns files. Delete or transfer files first.".into(),
+        ));
+    }
+
+    // Prevent deletion of users with governance history (FK constraint would fail)
+    let gov_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM governance_requests WHERE requested_by = $1 OR reviewed_by = $1",
+    )
+    .bind(user_id)
+    .fetch_one(pool.get_ref())
+    .await
+    .map_err(AppError::Database)?;
+
+    if gov_count > 0 {
+        return Err(AppError::Conflict(
+            "User has governance history and cannot be deleted. Deactivate the account instead."
+                .into(),
         ));
     }
 
@@ -730,7 +753,8 @@ pub async fn update_config(
     admin: AdminUser,
     body: web::Json<UpdateConfigRequest>,
 ) -> Result<HttpResponse, AppError> {
-    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "config:read").await?;
+    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:manage")
+        .await?;
     sqlx::query(
         "INSERT INTO system_config (key, value, updated_at) VALUES ($1, $2, NOW()) ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW()",
     )
@@ -885,11 +909,13 @@ pub(crate) struct ForceApproveRequest {
 
 pub async fn force_approve(
     pool: web::Data<PgPool>,
-    _admin: AdminUser,
+    admin: AdminUser,
     req: HttpRequest,
     path: web::Path<Uuid>,
     body: web::Json<ForceApproveRequest>,
 ) -> Result<HttpResponse, AppError> {
+    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "governance:approve")
+        .await?;
     let request_id = path.into_inner();
 
     // Check current status first - only proceed if PENDING
@@ -913,7 +939,7 @@ pub async fn force_approve(
     }
 
     // Mark as approved by the given reviewer
-    sqlx::query(
+    let updated = sqlx::query(
         "UPDATE governance_requests SET status = 'APPROVED', reviewed_by = $1, updated_at = NOW() WHERE id = $2 AND status = 'PENDING'",
     )
     .bind(body.reviewer_id)
@@ -921,6 +947,14 @@ pub async fn force_approve(
         .execute(pool.get_ref())
         .await
         .map_err(AppError::Database)?;
+
+    // TOCTOU guard: if status was already changed by a concurrent request, abort
+    if updated.rows_affected() == 0 {
+        return Err(AppError::Conflict(
+            "Request was already processed by a concurrent approval".into(),
+        ));
+    }
+
     // Execute the associated action (simplified: same logic as approve_request)
     let req_type: Option<String> =
         sqlx::query_scalar("SELECT type FROM governance_requests WHERE id = $1")

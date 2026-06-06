@@ -43,12 +43,22 @@ pub fn emit_notification(event: NotificationEvent) {
 /// for governance updates, share events, file locks/unlocks, and uploads.
 pub async fn stream(_user: AuthUser) -> Result<HttpResponse, AppError> {
     let rx = NOTIFICATION_TX.subscribe();
-    let stream = BroadcastStream::new(rx)
-        .filter_map(|result| async move { result.ok() })
-        .map(|event| {
-            let data = serde_json::to_string(&event).unwrap_or_default();
-            Ok::<_, actix_web::Error>(actix_web::web::Bytes::from(format!("data: {}\n\n", data)))
-        });
+    let stream = BroadcastStream::new(rx).map(|result| {
+        let payload = match result {
+            Ok(event) => serde_json::to_string(&event).unwrap_or_default(),
+            Err(tokio_stream::wrappers::errors::BroadcastStreamRecvError::Lagged(n)) => {
+                serde_json::json!({
+                    "type": "stream_reset",
+                    "message": format!("Missed {} events. Please refresh.", n)
+                })
+                .to_string()
+            }
+        };
+        Ok::<_, actix_web::Error>(actix_web::web::Bytes::from(format!(
+            "data: {}\n\n",
+            payload
+        )))
+    });
 
     Ok(HttpResponse::Ok()
         .content_type("text/event-stream")

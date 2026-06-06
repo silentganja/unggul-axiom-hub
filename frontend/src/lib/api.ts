@@ -239,6 +239,8 @@ export interface UpdateProfilePayload {
   fullName?: string;
   currentPassword?: string;
   newPassword?: string;
+  department?: string;
+  supervisorId?: string | null;
 }
 
 export interface SessionInfo {
@@ -345,6 +347,10 @@ export const authApi = {
 
   myTeam(): Promise<TeamMember[]> {
     return apiFetch("/api/auth/team");
+  },
+
+  listColleagues(): Promise<ColleagueEntry[]> {
+    return apiFetch("/api/auth/colleagues");
   },
 };
 
@@ -1129,6 +1135,13 @@ export interface TeamMember {
   email: string;
   role: string;
   active: boolean;
+  department?: string | null;
+}
+
+export interface ColleagueEntry {
+  id: string;
+  fullName: string;
+  role: string;
   department?: string | null;
 }
 

@@ -21,10 +21,52 @@ import {
   Building,
 } from "lucide-react";
 import { useAuthStore } from "@/store/useAuthStore";
-import { authApi, UpdateProfilePayload, webauthnApi, SessionInfo } from "@/lib/api";
+import { authApi, UpdateProfilePayload, webauthnApi, SessionInfo, ColleagueEntry } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 type SettingsTab = "profile" | "security" | "notifications" | "sessions";
+
+function SupervisorSelect({ user }: { user: { id?: string; supervisorId?: string | null; supervisorName?: string | null } }) {
+  const [colleagues, setColleagues] = useState<ColleagueEntry[]>([]);
+  const [supervisorId, setSupervisorId] = useState(user.supervisorId ?? "");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    authApi.listColleagues().then(setColleagues).catch(() => {});
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await authApi.updateProfile({ supervisorId: supervisorId || null });
+    } catch { /* ignore */ }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div className="flex items-center gap-2">
+      <select
+        value={supervisorId}
+        onChange={e => setSupervisorId(e.target.value)}
+        className="h-9 px-2 rounded-sm border border-border bg-background text-sm font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-accent flex-1"
+      >
+        <option value="">None</option>
+        {colleagues.filter(c => c.id !== user.id).map(c => (
+          <option key={c.id} value={c.id}>{c.fullName} ({c.role})</option>
+        ))}
+      </select>
+      {supervisorId !== (user.supervisorId ?? "") && (
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="h-9 px-3 rounded-sm border border-accent/30 bg-accent/10 text-accent text-[10px] font-bold uppercase font-mono hover:bg-accent/20 transition-colors disabled:opacity-50 shrink-0 cursor-pointer"
+        >
+          {saving ? "..." : "Save"}
+        </button>
+      )}
+    </div>
+  );
+}
 
 export default function ProfileSettingsPage() {
   const router = useRouter();
@@ -510,10 +552,7 @@ export default function ProfileSettingsPage() {
                       <span className="text-[9px] font-bold font-mono uppercase text-foreground-subtle block">
                         Direct Supervisor
                       </span>
-                      <div className="h-9 px-3 flex items-center rounded-sm border border-border/30 bg-background/50 text-sm text-foreground-muted font-mono">
-                        <UserCheck size={13} className="mr-1.5 text-foreground-subtle" />
-                        {user.supervisorName || "-"}
-                      </div>
+                      <SupervisorSelect user={user} />
                     </div>
 
                     <div className="sm:col-span-2 space-y-1.5">

@@ -27,4 +27,13 @@ pub enum NotificationEvent {
     FileUnlocked { file_id: String, file_name: String },
     #[serde(rename = "file_uploaded")]
     FileUploaded { file_name: String, size_bytes: i64 },
+    /// Emitted when a user submits a new governance request.
+    /// The `supervisor_id` field lets supervisor clients filter for their own alerts.
+    #[serde(rename = "governance_requested")]
+    GovernanceRequested {
+        request_id: String,
+        title: String,
+        requested_by: String,
+        supervisor_id: Option<String>,
+    },
 }

@@ -180,7 +180,8 @@ pub async fn run_migrations(pool: &PgPool) {
                     id              UUID         PRIMARY KEY DEFAULT uuid_generate_v4(),
                     type            VARCHAR(32)  NOT NULL CHECK (type IN (
                                         'FILE_LOCK', 'FILE_UNLOCK',
-                                        'CLASSIFICATION_UPGRADE', 'CLASSIFICATION_DOWNGRADE'
+                                        'CLASSIFICATION_UPGRADE', 'CLASSIFICATION_DOWNGRADE',
+                                        'FILE_MOVE', 'FILE_DELETE'
                                     )),
                     title           VARCHAR(255) NOT NULL,
                     description     TEXT,
@@ -373,6 +374,33 @@ pub async fn run_migrations(pool: &PgPool) {
                  )
                  ON CONFLICT DO NOTHING",
                 // Staff: no implicit permissions (rely on custom groups)
+            ],
+        ),
+        // 9024 - Fix governance_requests CHECK constraint (add FILE_MOVE, FILE_DELETE)
+        (
+            "9024",
+            "Auto: Fix governance type constraint - add FILE_MOVE and FILE_DELETE",
+            vec![
+                "DO $$
+                DECLARE
+                    constraint_name text;
+                BEGIN
+                    SELECT con.conname INTO constraint_name
+                    FROM pg_constraint con
+                    JOIN pg_class rel ON rel.oid = con.conrelid
+                    WHERE rel.relname = 'governance_requests'
+                      AND con.contype = 'c'
+                      AND pg_get_constraintdef(con.oid) LIKE '%FILE_LOCK%';
+                    IF constraint_name IS NOT NULL THEN
+                        EXECUTE format('ALTER TABLE governance_requests DROP CONSTRAINT %I', constraint_name);
+                    END IF;
+                    EXECUTE 'ALTER TABLE governance_requests ADD CONSTRAINT governance_requests_type_check
+                        CHECK (type IN (
+                            ''FILE_LOCK'', ''FILE_UNLOCK'',
+                            ''CLASSIFICATION_UPGRADE'', ''CLASSIFICATION_DOWNGRADE'',
+                            ''FILE_MOVE'', ''FILE_DELETE''
+                        ))';
+                END $$;",
             ],
         ),
         // 9012 - Audit logs table

@@ -1,4 +1,4 @@
-﻿// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 // Unggul Axiom Hub - application entry point.
 //
 // Responsibilities:
@@ -402,6 +402,10 @@ async fn main() -> std::io::Result<()> {
                     .route(
                         "/me/permissions",
                         web::get().to(handlers::auth::me_permissions),
+                    )
+                    .route(
+                        "/colleagues",
+                        web::get().to(handlers::auth::list_colleagues),
                     )
                     .route("/team", web::get().to(handlers::auth::my_team))
                     .route("/profile", web::put().to(handlers::auth::update_profile))
