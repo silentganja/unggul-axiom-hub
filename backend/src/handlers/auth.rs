@@ -169,6 +169,88 @@ pub async fn me(pool: web::Data<PgPool>, user: AuthUser) -> Result<HttpResponse,
     Ok(HttpResponse::Ok().json(profile))
 }
 
+// ── GET /api/auth/me/permissions ─────────────────────────────────────────────
+// Returns the effective permission set for the current user — union of
+// base-role implicit grants + all custom role-group permissions.
+
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct EffectivePermissionsResponse {
+    /// All permission keys this user currently holds.
+    permissions: Vec<String>,
+    /// Groups the user belongs to (for debugging/transparency).
+    groups: Vec<serde_json::Value>,
+}
+
+pub async fn me_permissions(
+    pool: web::Data<PgPool>,
+    user: AuthUser,
+) -> Result<HttpResponse, AppError> {
+    // Get the user's custom groups
+    let groups: Vec<serde_json::Value> = sqlx::query_as::<_, (uuid::Uuid, String, String)>(
+        "SELECT rg.id, rg.name, rg.description
+         FROM role_groups rg
+         JOIN user_role_groups urg ON urg.role_group_id = rg.id
+         WHERE urg.user_id = $1
+         ORDER BY rg.name",
+    )
+    .bind(user.id)
+    .fetch_all(pool.get_ref())
+    .await
+    .map_err(AppError::Database)?
+    .into_iter()
+    .map(|(id, name, desc)| {
+        serde_json::json!({
+            "id": id,
+            "name": name,
+            "description": desc,
+        })
+    })
+    .collect();
+
+    // Collect all permission keys from custom groups
+    let custom_keys: Vec<String> = sqlx::query_scalar(
+        "SELECT DISTINCT p.key
+         FROM permissions p
+         JOIN role_group_permissions rgp ON rgp.permission_id = p.id
+         JOIN user_role_groups urg ON urg.role_group_id = rgp.role_group_id
+         WHERE urg.user_id = $1
+         ORDER BY p.key",
+    )
+    .bind(user.id)
+    .fetch_all(pool.get_ref())
+    .await
+    .map_err(AppError::Database)?;
+
+    // Build the effective set: base role implicit + custom group permissions + direct
+    let implicit = crate::models::user::implicit_permissions(pool.get_ref(), &user.role)
+        .await
+        .unwrap_or_default();
+    let mut all_perms: std::collections::BTreeSet<String> =
+        implicit.into_iter().collect();
+    for k in custom_keys {
+        all_perms.insert(k);
+    }
+    // Also include direct user_permissions
+    let direct_keys: Vec<String> = sqlx::query_scalar(
+        "SELECT p.key FROM permissions p
+         JOIN user_permissions up ON up.permission_id = p.id
+         WHERE up.user_id = $1",
+    )
+    .bind(user.id)
+    .fetch_all(pool.get_ref())
+    .await
+    .map_err(AppError::Database)?;
+    for k in direct_keys {
+        all_perms.insert(k);
+    }
+
+    Ok(HttpResponse::Ok().json(EffectivePermissionsResponse {
+        permissions: all_perms.into_iter().collect(),
+        groups,
+    }))
+}
+
 // ── PUT /api/auth/profile ───────────────────────────────────────────────────
 
 #[derive(Debug, Deserialize)]
@@ -178,6 +260,7 @@ pub struct UpdateProfileRequest {
     pub current_password: Option<String>,
     pub new_password: Option<String>,
     pub department: Option<String>,
+    pub supervisor_id: Option<Uuid>,
 }
 
 pub async fn update_profile(
@@ -211,6 +294,13 @@ pub async fn update_profile(
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty());
 
+    // Supervisor: explicit value (including null to clear) updates, absent keeps existing
+    let new_supervisor = if body.supervisor_id.is_some() {
+        body.supervisor_id
+    } else {
+        existing.supervisor_id
+    };
+
     let mut password_changed = false;
 
     let new_password_hash = if let (Some(current), Some(new)) = (
@@ -241,13 +331,14 @@ pub async fn update_profile(
     // Try extended UPDATE (with department + extended RETURNING).
     // If columns don't exist yet, fall back to basic UPDATE.
     let result = sqlx::query_as::<_, User>(
-        "UPDATE users SET full_name = $1, password_hash = $2, department = $3 WHERE id = $4
+        "UPDATE users SET full_name = $1, password_hash = $2, department = $3, supervisor_id = $4 WHERE id = $5
          RETURNING id, email, password_hash, full_name, role, active, \
                   storage_quota_bytes, avatar_data, department, supervisor_id, notification_prefs, created_at",
     )
     .bind(&new_full_name)
     .bind(&new_password_hash)
     .bind(&new_department)
+    .bind(new_supervisor)
     .bind(user.id)
     .fetch_one(pool.get_ref())
     .await;
@@ -407,6 +498,38 @@ pub async fn update_notification_prefs(
         .map_err(AppError::Database)?;
 
     Ok(HttpResponse::Ok().json(body.into_inner()))
+}
+
+// ── GET /api/auth/team ───────────────────────────────────────────────────────
+// Returns the current user's direct reports (users whose supervisor_id = current user).
+
+#[derive(Debug, Serialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct TeamMember {
+    pub id: Uuid,
+    pub full_name: String,
+    pub email: String,
+    pub role: String,
+    pub active: bool,
+    pub department: Option<String>,
+}
+
+pub async fn my_team(
+    pool: web::Data<PgPool>,
+    user: AuthUser,
+) -> Result<HttpResponse, AppError> {
+    let members: Vec<TeamMember> = sqlx::query_as(
+        "SELECT id, full_name, email, role, active, department
+         FROM users
+         WHERE supervisor_id = $1
+         ORDER BY full_name",
+    )
+    .bind(user.id)
+    .fetch_all(pool.get_ref())
+    .await
+    .map_err(AppError::Database)?;
+
+    Ok(HttpResponse::Ok().json(members))
 }
 
 // ── GET /api/auth/sessions ──────────────────────────────────────────────────

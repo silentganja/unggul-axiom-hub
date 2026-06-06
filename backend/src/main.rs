@@ -193,6 +193,9 @@ async fn main() -> std::io::Result<()> {
     let config_data = web::Data::new(config);
     let redis_data = web::Data::new(redis_client);
 
+    // Hard request-body limit at the HTTP level (multipart overhead allowance)
+    let payload_limit = (max_upload_size_bytes as usize).saturating_add(2 * 1024 * 1024);
+
     let server = HttpServer::new(move || {
         // CORS - allow localhost in dev + hub subdomain in production
         let cors = Cors::default()
@@ -212,6 +215,8 @@ async fn main() -> std::io::Result<()> {
             .max_age(3600);
 
         App::new()
+            // Reject requests larger than the upload limit at the HTTP layer
+            .app_data(web::PayloadConfig::new(payload_limit))
             // ── Middleware ────────────────────────────────────────────────────
             .wrap(cors)
             .wrap(Logger::new(
@@ -296,13 +301,109 @@ async fn main() -> std::io::Result<()> {
                         web::get().to(handlers::admin::user_detail),
                     )
                     // Audit logs
-                    .route("/audit", web::get().to(handlers::admin::admin_audit_logs)),
+                    .route("/audit", web::get().to(handlers::admin::admin_audit_logs))
+                    // Role Builder
+                    .route(
+                        "/permissions",
+                        web::get().to(handlers::role_group::list_permissions),
+                    )
+                    .route(
+                        "/permissions",
+                        web::post().to(handlers::role_group::create_permission),
+                    )
+                    .route(
+                        "/permissions/{id}",
+                        web::put().to(handlers::role_group::update_permission),
+                    )
+                    .route(
+                        "/permissions/{id}",
+                        web::delete().to(handlers::role_group::delete_permission),
+                    )
+                    // Custom Roles
+                    .route(
+                        "/roles",
+                        web::get().to(handlers::role_group::list_custom_roles),
+                    )
+                    .route(
+                        "/roles",
+                        web::post().to(handlers::role_group::create_custom_role),
+                    )
+                    .route(
+                        "/roles/{role_key}",
+                        web::delete().to(handlers::role_group::delete_custom_role),
+                    )
+                    .route(
+                        "/roles/{role_key}/permissions",
+                        web::get().to(handlers::role_group::get_role_implicit_permissions),
+                    )
+                    .route(
+                        "/roles/{role_key}/permissions",
+                        web::put().to(handlers::role_group::set_role_implicit_permissions),
+                    )
+                    // Per-user permission grants
+                    .route(
+                        "/users/{id}/permissions",
+                        web::get().to(handlers::role_group::list_user_permissions),
+                    )
+                    .route(
+                        "/users/{id}/permissions",
+                        web::put().to(handlers::role_group::set_user_permissions),
+                    )
+                    .route(
+                        "/role-groups",
+                        web::get().to(handlers::role_group::list_role_groups),
+                    )
+                    .route(
+                        "/role-groups",
+                        web::post().to(handlers::role_group::create_role_group),
+                    )
+                    .route(
+                        "/role-groups/{id}",
+                        web::get().to(handlers::role_group::get_role_group),
+                    )
+                    .route(
+                        "/role-groups/{id}",
+                        web::put().to(handlers::role_group::update_role_group),
+                    )
+                    .route(
+                        "/role-groups/{id}",
+                        web::delete().to(handlers::role_group::delete_role_group),
+                    )
+                    .route(
+                        "/role-groups/{id}/duplicate",
+                        web::post().to(handlers::role_group::duplicate_role_group),
+                    )
+                    .route(
+                        "/role-groups/{id}/permissions",
+                        web::put().to(handlers::role_group::set_group_permissions),
+                    )
+                    .route(
+                        "/role-groups/{id}/users",
+                        web::get().to(handlers::role_group::list_group_users),
+                    )
+                    .route(
+                        "/role-groups/{id}/users",
+                        web::put().to(handlers::role_group::set_group_users),
+                    )
+                    .route(
+                        "/users/group-summaries",
+                        web::get().to(handlers::role_group::list_user_group_summaries),
+                    )
+                    .route(
+                        "/users/{id}/groups",
+                        web::get().to(handlers::role_group::list_user_groups),
+                    ),
             )
             // /api/auth
             .service(
                 web::scope("/api/auth")
                     .route("/login", web::post().to(handlers::auth::login))
                     .route("/me", web::get().to(handlers::auth::me))
+                    .route(
+                        "/me/permissions",
+                        web::get().to(handlers::auth::me_permissions),
+                    )
+                    .route("/team", web::get().to(handlers::auth::my_team))
                     .route("/profile", web::put().to(handlers::auth::update_profile))
                     .route("/avatar", web::post().to(handlers::auth::upload_avatar))
                     .route("/avatar", web::delete().to(handlers::auth::delete_avatar))

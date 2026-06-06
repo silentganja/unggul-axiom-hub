@@ -77,15 +77,43 @@ pub async fn share_file(
         ));
     }
 
-    // Verify the file exists and is owned by the authenticated user
-    let owner_id: Option<Uuid> =
-        sqlx::query_scalar("SELECT owner_id FROM files WHERE id = $1 AND owner_id = $2")
-            .bind(file_id)
-            .bind(user.id)
-            .fetch_optional(pool.get_ref())
-            .await
-            .map_err(AppError::Database)?
-            .ok_or(AppError::NotFound)?;
+    // Verify the file exists, is owned by the user, and check classification
+    let file_row: Option<(Uuid, String)> = sqlx::query_as(
+        "SELECT owner_id, classification FROM files WHERE id = $1 AND owner_id = $2",
+    )
+    .bind(file_id)
+    .bind(user.id)
+    .fetch_optional(pool.get_ref())
+    .await
+    .map_err(AppError::Database)?;
+
+    let (owner_id, file_classification) = file_row.ok_or(AppError::NotFound)?;
+
+    // ── Classification check: restricted files can only be shared with
+    //     users who have files:classify permission or director+ base role ─
+    if file_classification != "TERBUKA" {
+        let recipient: Option<(Uuid, String)> = sqlx::query_as(
+            "SELECT id, role FROM users WHERE email = $1",
+        )
+        .bind(&recipient_email)
+        .fetch_optional(pool.get_ref())
+        .await
+        .map_err(AppError::Database)?;
+
+        if let Some((recipient_id, recipient_role)) = recipient {
+            let can_receive = user::can_govern_classified(&recipient_role)
+                || user::user_has_permission(
+                    pool.get_ref(), recipient_id, &recipient_role, "files:classify",
+                ).await.unwrap_or(false);
+            if !can_receive {
+                return Err(AppError::BadRequest(
+                    "Recipient lacks clearance for classified files. Use governance to share.".into(),
+                ));
+            }
+        } else {
+            return Err(AppError::NotFound);
+        }
+    }
 
     // ── Enforce lock: hierarchical - must be the locker or have >= role level ──
     let lock_info: Option<(Option<Uuid>, Option<String>)> = sqlx::query_as(
@@ -99,7 +127,18 @@ pub async fn share_file(
     if let Some((locker, locker_role)) = lock_info {
         match locker_role {
             Some(role) => {
-                if locker != Some(user.id) && user::role_level(&user.role) < user::role_level(&role)
+                let user_lvl = user::get_role_level(pool.get_ref(), &user.role).await.unwrap_or(0);
+                let locker_lvl = user::get_role_level(pool.get_ref(), &role).await.unwrap_or(0);
+                if locker != Some(user.id)
+                    && user_lvl < locker_lvl
+                    && !user::user_has_permission(
+                        pool.get_ref(),
+                        user.id,
+                        &user.role,
+                        "shares:manage",
+                    )
+                    .await
+                    .unwrap_or(false)
                 {
                     return Err(AppError::Conflict(
                         "This file is locked by a higher authority and cannot be shared".into(),

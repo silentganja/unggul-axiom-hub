@@ -45,7 +45,7 @@ export default function InfoHardeningPage() {
       title: "Redis Sliding-Window Rate Limiter",
       category: "Network & Headers",
       status: "MONITORED",
-      description: "Applies Lua script rate limiting boundaries on authentication and sensitive endpoints (5 requests/60s for logins).",
+      description: "Lua script sliding-window rate limiter on all auth endpoints: 5 requests/60s for standard login, 3 requests/60s for sensitive operations (admin login, password reset, magic link).",
       threatMitigation: "Blocks brute-force scans and Denial of Service (DoS) API execution floods.",
       complianceControl: "SOC 2 CC6.8 / ISO 27001 A.13.1.1"
     },

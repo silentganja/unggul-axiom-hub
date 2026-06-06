@@ -126,7 +126,7 @@ More detail with interactive diagrams: [hub.unggulaxiom.com/v/info/architecture]
 
 **Audit trail.** Append-only log of every critical action. Actor, action, resource, timestamp, IP address. Filterable by user, action type, resource, and date range. Immutable by design.
 
-**Security hardening.** AES-256-GCM file encryption at rest. Redis-backed distributed rate limiting. Security headers via Nginx (CSP, HSTS, X-Frame-Options, Referrer-Policy). Non-root container users. No hardcoded secrets. OIDC for CI/CD so no long-lived AWS keys exist.
+**Security hardening.** AES-256-GCM file encryption at rest. Redis-backed distributed rate limiting. Security headers via Nginx (CSP, HSTS, X-Frame-Options, Referrer-Policy). Non-root container users. No hardcoded secrets. CI/CD authenticates to AWS via OIDC — no static IAM keys stored in GitHub.
 
 ---
 

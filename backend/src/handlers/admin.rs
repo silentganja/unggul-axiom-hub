@@ -33,6 +33,8 @@ pub struct CreateUserRequest {
     pub full_name: String,
     pub role: String,
     pub storage_quota_bytes: Option<i64>,
+    pub supervisor_id: Option<Uuid>,
+    pub department: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -42,6 +44,8 @@ pub struct UpdateUserRequest {
     pub role: Option<String>,
     pub password: Option<String>,
     pub storage_quota_bytes: Option<i64>,
+    pub supervisor_id: Option<Uuid>,
+    pub department: Option<String>,
 }
 
 // â”€â”€ POST /api/admin/login â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -75,8 +79,9 @@ pub async fn admin_login(
 
 pub async fn list_users(
     pool: web::Data<PgPool>,
-    _admin: AdminUser,
+    admin: AdminUser,
 ) -> Result<HttpResponse, AppError> {
+    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:read").await?;
     // This query selects 7 of 12 User columns. sqlx::FromRow fills the remaining
     // fields with their sqlx::default values — safe because we only need the subset.
     let users: Vec<UserProfile> = sqlx::query_as::<_, User>(
@@ -98,9 +103,10 @@ pub async fn list_users(
 
 pub async fn create_user(
     pool: web::Data<PgPool>,
-    _admin: AdminUser,
+    admin: AdminUser,
     body: web::Json<CreateUserRequest>,
 ) -> Result<HttpResponse, AppError> {
+    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:manage").await?;
     let email = body.email.trim().to_lowercase();
     let full_name = body.full_name.trim().to_string();
     let role = body.role.trim().to_string();
@@ -115,10 +121,11 @@ pub async fn create_user(
     password::validate_password_strength(&body.password)
         .map_err(|msg| AppError::BadRequest(msg.into()))?;
 
-    if !user::VALID_ROLES.contains(&role.as_str()) {
+    if !user::is_valid_role(pool.get_ref(), &role).await? {
+        let valid = user::fetch_valid_roles(pool.get_ref()).await?;
         return Err(AppError::BadRequest(format!(
             "role must be one of: {}",
-            user::VALID_ROLES.join(", ")
+            valid.join(", ")
         )));
     }
 
@@ -126,15 +133,17 @@ pub async fn create_user(
     let password_hash = password::hash_password(&body.password)?;
 
     let user: User = sqlx::query_as::<_, User>(
-        "INSERT INTO users (email, password_hash, full_name, role, storage_quota_bytes)
-         VALUES ($1, $2, $3, $4, $5)
-         RETURNING id, email, password_hash, full_name, role, active, storage_quota_bytes, created_at",
+        "INSERT INTO users (email, password_hash, full_name, role, storage_quota_bytes, supervisor_id, department)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         RETURNING id, email, password_hash, full_name, role, active, storage_quota_bytes, supervisor_id, department, created_at",
     )
     .bind(&email)
     .bind(&password_hash)
     .bind(&full_name)
     .bind(&role)
     .bind(body.storage_quota_bytes)
+    .bind(body.supervisor_id)
+    .bind(body.department.as_deref())
     .fetch_one(pool.get_ref())
     .await
     .map_err(|e| {
@@ -163,10 +172,11 @@ pub async fn create_user(
 
 pub async fn update_user(
     pool: web::Data<PgPool>,
-    _admin: AdminUser,
+    admin: AdminUser,
     path: web::Path<Uuid>,
     body: web::Json<UpdateUserRequest>,
 ) -> Result<HttpResponse, AppError> {
+    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:manage").await?;
     let user_id = path.into_inner();
 
     // Fetch the existing user first
@@ -193,10 +203,11 @@ pub async fn update_user(
         .map(|s| s.trim().to_string())
         .unwrap_or(existing.role);
 
-    if !user::VALID_ROLES.contains(&new_role.as_str()) {
+    if !user::is_valid_role(pool.get_ref(), &new_role).await? {
+        let valid = user::fetch_valid_roles(pool.get_ref()).await?;
         return Err(AppError::BadRequest(format!(
             "role must be one of: {}",
-            user::VALID_ROLES.join(", ")
+            valid.join(", ")
         )));
     }
 
@@ -215,21 +226,38 @@ pub async fn update_user(
 
     // Storage quota: explicit `null` clears it (use default), absent keeps existing
     let new_quota = if body.storage_quota_bytes.is_some() {
-        body.storage_quota_bytes // can be Some(null) â†’ explicitly set to None
+        body.storage_quota_bytes
     } else {
         existing.storage_quota_bytes
     };
 
+    // Supervisor: explicit value (including null) updates, absent keeps existing
+    let new_supervisor = if body.supervisor_id.is_some() {
+        body.supervisor_id
+    } else {
+        existing.supervisor_id
+    };
+
+    // Department: explicit value updates, absent keeps existing
+    let new_department = if body.department.is_some() {
+        body.department.as_deref().map(|s| s.trim().to_string())
+    } else {
+        existing.department.clone()
+    };
+
     let user: User = sqlx::query_as::<_, User>(
         "UPDATE users
-         SET full_name = $1, role = $2, password_hash = $3, storage_quota_bytes = $4
-         WHERE id = $5
-         RETURNING id, email, password_hash, full_name, role, active, storage_quota_bytes, created_at",
+         SET full_name = $1, role = $2, password_hash = $3, storage_quota_bytes = $4,
+             supervisor_id = $5, department = $6
+         WHERE id = $7
+         RETURNING id, email, password_hash, full_name, role, active, storage_quota_bytes, supervisor_id, department, created_at",
     )
     .bind(&new_full_name)
     .bind(&new_role)
     .bind(&password_hash)
     .bind(new_quota)
+    .bind(new_supervisor)
+    .bind(new_department)
     .bind(user_id)
     .fetch_one(pool.get_ref())
     .await
@@ -249,9 +277,10 @@ pub async fn update_user(
 
 pub async fn delete_user(
     pool: web::Data<PgPool>,
-    _admin: AdminUser,
+    admin: AdminUser,
     path: web::Path<Uuid>,
 ) -> Result<HttpResponse, AppError> {
+    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:delete").await?;
     let user_id = path.into_inner();
 
     // Prevent deleting the last chief/director
@@ -388,9 +417,10 @@ pub async fn dashboard(
 
 pub async fn user_files(
     pool: web::Data<PgPool>,
-    _admin: AdminUser,
+    admin: AdminUser,
     path: web::Path<Uuid>,
 ) -> Result<HttpResponse, AppError> {
+    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:read").await?;
     let user_id = path.into_inner();
 
     let files: Vec<crate::models::file::FileNode> = sqlx::query_as(
@@ -417,10 +447,11 @@ pub(crate) struct AdminResetPasswordRequest {
 
 pub async fn reset_user_password(
     pool: web::Data<PgPool>,
-    _admin: AdminUser,
+    admin: AdminUser,
     path: web::Path<Uuid>,
     body: web::Json<AdminResetPasswordRequest>,
 ) -> Result<HttpResponse, AppError> {
+    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:manage").await?;
     let user_id = path.into_inner();
     password::validate_password_strength(&body.new_password)
         .map_err(|msg| AppError::BadRequest(msg.into()))?;
@@ -442,9 +473,10 @@ pub async fn reset_user_password(
 pub async fn toggle_user_active(
     pool: web::Data<PgPool>,
     redis_client: web::Data<crate::utils::redis::RedisClient>,
-    _admin: AdminUser,
+    admin: AdminUser,
     path: web::Path<Uuid>,
 ) -> Result<HttpResponse, AppError> {
+    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:manage").await?;
     let user_id = path.into_inner();
     // Prevent deactivating the last active chief/director
     let target: Option<(String, bool)> =
@@ -486,8 +518,9 @@ pub async fn toggle_user_active(
 
 pub async fn list_all_shares(
     pool: web::Data<PgPool>,
-    _admin: AdminUser,
+    admin: AdminUser,
 ) -> Result<HttpResponse, AppError> {
+    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "shares:manage").await?;
     #[derive(serde::Serialize, sqlx::FromRow)]
     #[serde(rename_all = "camelCase")]
     struct AdminShareRow {
@@ -536,9 +569,10 @@ pub async fn list_all_shares(
 
 pub async fn revoke_share(
     pool: web::Data<PgPool>,
-    _admin: AdminUser,
+    admin: AdminUser,
     path: web::Path<Uuid>,
 ) -> Result<HttpResponse, AppError> {
+    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "shares:manage").await?;
     let share_id = path.into_inner();
 
     let deleted = sqlx::query("DELETE FROM file_shares WHERE id = $1")
@@ -564,10 +598,11 @@ pub(crate) struct TransferOwnershipRequest {
 
 pub async fn transfer_ownership(
     pool: web::Data<PgPool>,
-    _admin: AdminUser,
+    admin: AdminUser,
     path: web::Path<Uuid>,
     body: web::Json<TransferOwnershipRequest>,
 ) -> Result<HttpResponse, AppError> {
+    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "files:write").await?;
     let file_id = path.into_inner();
     let new_owner_id = body.new_owner_id;
 
@@ -616,10 +651,11 @@ pub async fn transfer_ownership(
 
 pub async fn force_delete_file(
     pool: web::Data<PgPool>,
-    _admin: AdminUser,
+    admin: AdminUser,
     config: web::Data<AppConfig>,
     path: web::Path<Uuid>,
 ) -> Result<HttpResponse, AppError> {
+    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "files:delete").await?;
     let file_id = path.into_inner();
     // Read the file record first to verify it exists
     let file_exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM files WHERE id = $1)")
@@ -663,8 +699,9 @@ struct ConfigRow {
 
 pub async fn get_config(
     pool: web::Data<PgPool>,
-    _admin: AdminUser,
+    admin: AdminUser,
 ) -> Result<HttpResponse, AppError> {
+    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "config:read").await?;
     let rows: Vec<ConfigRow> = sqlx::query_as("SELECT key, value FROM system_config")
         .fetch_all(pool.get_ref())
         .await
@@ -682,9 +719,10 @@ pub(crate) struct UpdateConfigRequest {
 
 pub async fn update_config(
     pool: web::Data<PgPool>,
-    _admin: AdminUser,
+    admin: AdminUser,
     body: web::Json<UpdateConfigRequest>,
 ) -> Result<HttpResponse, AppError> {
+    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "config:read").await?;
     sqlx::query(
         "INSERT INTO system_config (key, value, updated_at) VALUES ($1, $2, NOW()) ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW()",
     )
@@ -1017,8 +1055,9 @@ struct UserStorageRow {
 
 pub async fn storage_breakdown(
     pool: web::Data<PgPool>,
-    _admin: AdminUser,
+    admin: AdminUser,
 ) -> Result<HttpResponse, AppError> {
+    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "storage:manage").await?;
     let rows: Vec<UserStorageRow> = sqlx::query_as(
         "SELECT u.id AS user_id, u.full_name, u.email, u.role,
                 COUNT(f.id) AS file_count, COALESCE(SUM(f.size_bytes), 0) AS total_bytes,
@@ -1081,8 +1120,9 @@ struct StorageAnalyticsResponse {
 
 pub async fn storage_analytics(
     pool: web::Data<PgPool>,
-    _admin: AdminUser,
+    admin: AdminUser,
 ) -> Result<HttpResponse, AppError> {
+    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "storage:manage").await?;
     let by_classification: Vec<ClassificationBreakdown> = sqlx::query_as(
         "SELECT classification, COUNT(*) AS file_count, COALESCE(SUM(size_bytes), 0) AS bytes
          FROM files WHERE deleted_at IS NULL
@@ -1182,9 +1222,10 @@ struct UserDetailResponse {
 
 pub async fn user_detail(
     pool: web::Data<PgPool>,
-    _admin: AdminUser,
+    admin: AdminUser,
     path: web::Path<Uuid>,
 ) -> Result<HttpResponse, AppError> {
+    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:read").await?;
     let user_id = path.into_inner();
 
     let user: crate::models::user::User = sqlx::query_as::<_, crate::models::user::User>(
@@ -1306,17 +1347,19 @@ pub(crate) struct BulkUsersRequest {
 
 pub async fn bulk_create_users(
     pool: web::Data<PgPool>,
-    _admin: AdminUser,
+    admin: AdminUser,
     body: web::Json<BulkUsersRequest>,
 ) -> Result<HttpResponse, AppError> {
+    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:manage").await?;
     let mut created = 0u32;
     let mut errors: Vec<String> = Vec::new();
+    let valid_roles = user::fetch_valid_roles(pool.get_ref()).await?;
     for u in &body.users {
         if u.email.is_empty() || u.password.is_empty() || u.full_name.is_empty() {
             errors.push(format!("{}: missing fields", u.email));
             continue;
         }
-        if !user::VALID_ROLES.contains(&u.role.as_str()) {
+        if !valid_roles.contains(&u.role) {
             errors.push(format!("{}: invalid role", u.email));
             continue;
         }
@@ -1357,10 +1400,11 @@ pub(crate) struct BulkRoleUpdate {
 
 pub async fn bulk_role_update(
     pool: web::Data<PgPool>,
-    _admin: AdminUser,
+    admin: AdminUser,
     body: web::Json<BulkRoleUpdate>,
 ) -> Result<HttpResponse, AppError> {
-    if !user::VALID_ROLES.contains(&body.new_role.as_str()) {
+    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:manage").await?;
+    if !user::is_valid_role(pool.get_ref(), &body.new_role).await? {
         return Err(AppError::BadRequest("Invalid role".into()));
     }
     if body.user_ids.is_empty() {
@@ -1383,9 +1427,10 @@ pub async fn bulk_role_update(
 
 pub async fn admin_audit_logs(
     pool: web::Data<PgPool>,
-    _admin: AdminUser,
+    admin: AdminUser,
     query: web::Query<crate::handlers::audit::AuditLogQuery>,
 ) -> Result<HttpResponse, AppError> {
+    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "audit:read").await?;
     // Create an AuthUser with officer role to see all audit logs
     let admin_auth = crate::app_middleware::auth::AuthUser {
         id: Uuid::nil(),

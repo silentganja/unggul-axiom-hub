@@ -338,6 +338,14 @@ export const authApi = {
   revokeSession(id: string): Promise<void> {
     return apiFetch(`/api/auth/sessions/${id}`, { method: "DELETE" });
   },
+
+  mePermissions(): Promise<EffectivePermissions> {
+    return apiFetch("/api/auth/me/permissions");
+  },
+
+  myTeam(): Promise<TeamMember[]> {
+    return apiFetch("/api/auth/team");
+  },
 };
 
 // ── WebAuthn helpers ─────────────────────────────────────────────────────────
@@ -837,6 +845,8 @@ export interface AdminUserEntry {
   role: string;
   active: boolean;
   storageQuotaBytes: number | null;
+  supervisorId?: string | null;
+  department?: string | null;
   createdAt: string;
 }
 
@@ -846,6 +856,8 @@ export interface AdminCreateUserPayload {
   fullName: string;
   role: string;
   storageQuotaBytes?: number | null;
+  supervisorId?: string;
+  department?: string;
 }
 
 export interface AdminUpdateUserPayload {
@@ -853,6 +865,8 @@ export interface AdminUpdateUserPayload {
   role?: string;
   password?: string;
   storageQuotaBytes?: number | null;
+  supervisorId?: string | null;
+  department?: string;
 }
 
 export const adminApi = {
@@ -974,7 +988,197 @@ export const adminApi = {
     }
     return apiFetch("/api/admin/audit", {}, true);
   },
+
+  // ── Role Builder ──────────────────────────────────────────────────────────
+
+  listPermissions(): Promise<Permission[]> {
+    return apiFetch("/api/admin/permissions", {}, true);
+  },
+
+  listRoleGroups(): Promise<RoleGroupSummary[]> {
+    return apiFetch("/api/admin/role-groups", {}, true);
+  },
+
+  createRoleGroup(payload: { name: string; description?: string }): Promise<RoleGroupDetail> {
+    return apiFetch("/api/admin/role-groups", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }, true);
+  },
+
+  getRoleGroup(id: string): Promise<RoleGroupDetail> {
+    return apiFetch(`/api/admin/role-groups/${id}`, {}, true);
+  },
+
+  updateRoleGroup(id: string, payload: { name?: string; description?: string }): Promise<RoleGroupDetail> {
+    return apiFetch(`/api/admin/role-groups/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }, true);
+  },
+
+  deleteRoleGroup(id: string): Promise<void> {
+    return apiFetch(`/api/admin/role-groups/${id}`, { method: "DELETE" }, true);
+  },
+
+  setRoleGroupPermissions(id: string, permissionIds: string[]): Promise<RoleGroupDetail> {
+    return apiFetch(`/api/admin/role-groups/${id}/permissions`, {
+      method: "PUT",
+      body: JSON.stringify({ permissionIds }),
+    }, true);
+  },
+
+  listRoleGroupUsers(id: string): Promise<RoleGroupUser[]> {
+    return apiFetch(`/api/admin/role-groups/${id}/users`, {}, true);
+  },
+
+  setRoleGroupUsers(id: string, userIds: string[]): Promise<void> {
+    return apiFetch(`/api/admin/role-groups/${id}/users`, {
+      method: "PUT",
+      body: JSON.stringify({ userIds }),
+    }, true);
+  },
+
+  listUserGroups(userId: string): Promise<UserGroupEntry[]> {
+    return apiFetch(`/api/admin/users/${userId}/groups`, {}, true);
+  },
+
+  duplicateRoleGroup(id: string, name?: string): Promise<RoleGroupDetail> {
+    return apiFetch(`/api/admin/role-groups/${id}/duplicate`, {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    }, true);
+  },
+
+  listUserGroupSummaries(): Promise<Record<string, string[]>> {
+    return apiFetch("/api/admin/users/group-summaries", {}, true);
+  },
+
+  // ── Permissions CRUD ───────────────────────────────────────────────────
+
+  createPermission(payload: { key: string; description: string }): Promise<Permission> {
+    return apiFetch("/api/admin/permissions", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }, true);
+  },
+
+  updatePermission(id: string, description: string): Promise<Permission> {
+    return apiFetch(`/api/admin/permissions/${id}`, {
+      method: "PUT",
+      body: JSON.stringify({ description }),
+    }, true);
+  },
+
+  deletePermission(id: string): Promise<void> {
+    return apiFetch(`/api/admin/permissions/${id}`, { method: "DELETE" }, true);
+  },
+
+  // ── Custom Roles CRUD ──────────────────────────────────────────────────
+
+  listCustomRoles(): Promise<CustomRoleEntry[]> {
+    return apiFetch("/api/admin/roles", {}, true);
+  },
+
+  createCustomRole(payload: { roleKey: string; label: string; level: number }): Promise<CustomRoleEntry> {
+    return apiFetch("/api/admin/roles", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }, true);
+  },
+
+  deleteCustomRole(roleKey: string): Promise<void> {
+    return apiFetch(`/api/admin/roles/${roleKey}`, { method: "DELETE" }, true);
+  },
+
+  getRoleImplicitPermissions(roleKey: string): Promise<Permission[]> {
+    return apiFetch(`/api/admin/roles/${roleKey}/permissions`, {}, true);
+  },
+
+  setRoleImplicitPermissions(roleKey: string, permissionIds: string[]): Promise<void> {
+    return apiFetch(`/api/admin/roles/${roleKey}/permissions`, {
+      method: "PUT",
+      body: JSON.stringify({ permissionIds }),
+    }, true);
+  },
+
+  // ── Per-user permission grants ─────────────────────────────────────────
+
+  listUserPermissions(userId: string): Promise<Permission[]> {
+    return apiFetch(`/api/admin/users/${userId}/permissions`, {}, true);
+  },
+
+  setUserPermissions(userId: string, permissionIds: string[]): Promise<void> {
+    return apiFetch(`/api/admin/users/${userId}/permissions`, {
+      method: "PUT",
+      body: JSON.stringify({ permissionIds }),
+    }, true);
+  },
 };
+
+// ── Auth: effective permissions ───────────────────────────────────────────
+
+export interface EffectivePermissions {
+  permissions: string[];
+  groups: { id: string; name: string; description: string }[];
+}
+
+export interface TeamMember {
+  id: string;
+  fullName: string;
+  email: string;
+  role: string;
+  active: boolean;
+  department?: string | null;
+}
+
+// ── Role Builder types ────────────────────────────────────────────────────────
+
+export interface Permission {
+  id: string;
+  key: string;
+  description: string;
+}
+
+export interface RoleGroupSummary {
+  id: string;
+  name: string;
+  description: string;
+  permissionCount: number;
+  userCount: number;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RoleGroupDetail {
+  id: string;
+  name: string;
+  description: string;
+  permissions: Permission[];
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RoleGroupUser {
+  userId: string;
+  fullName: string;
+  email: string;
+  role: string;
+}
+
+export interface UserGroupEntry {
+  id: string;
+  name: string;
+  description: string;
+}
+
+export interface CustomRoleEntry {
+  roleKey: string;
+  label: string;
+  level: number;
+}
 
 export interface UserStorageRow {
   userId: string;

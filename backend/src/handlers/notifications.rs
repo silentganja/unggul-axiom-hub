@@ -26,6 +26,11 @@ pub fn notification_sender() -> broadcast::Sender<NotificationEvent> {
 }
 
 /// Emit an event to all connected SSE clients.
+///
+/// Uses a single Tokio broadcast channel — every connected client receives every
+/// event. This is sufficient for the current deployment scale. A per-user queue
+/// (e.g. Redis pub/sub keyed by user ID) would be more appropriate at higher
+/// concurrency.
 pub fn emit_notification(event: NotificationEvent) {
     let _ = NOTIFICATION_TX.send(event);
 }

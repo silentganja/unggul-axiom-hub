@@ -47,7 +47,8 @@ pub struct AuditLogListResponse {
 /// GET /api/audit
 ///
 /// Returns audit log entries with optional filtering and pagination.
-/// Admins see all entries; staff see only their own.
+/// Users with `audit:read` permission (via role builder) see all entries;
+/// everyone else sees only their own logs.
 /// Supports `?format=csv` for CSV export.
 ///
 /// # Errors
@@ -57,7 +58,11 @@ pub async fn list_audit_logs(
     user: AuthUser,
     query: web::Query<AuditLogQuery>,
 ) -> Result<HttpResponse, AppError> {
-    let can_see_all = user::can_govern(&user.role); // officer+ see all logs
+    // Only users with audit:read permission (from role builder) can see all logs.
+    // This gives admins per-role, per-user, and per-group control over audit visibility.
+    let can_see_all = user::user_has_permission(pool.get_ref(), user.id, &user.role, "audit:read")
+        .await
+        .unwrap_or(false);
 
     let page = query.page.unwrap_or(1).max(1);
     let per_page = query.per_page.unwrap_or(50).clamp(1, 500);

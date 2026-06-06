@@ -12,7 +12,7 @@ interface Props {
 }
 
 const LABELS: Record<string, string> = {
-  default_storage_quota_bytes: "Default Storage Quota (bytes)",
+  default_storage_quota_bytes: "Default Storage Quota (bytes, 5 GB = 5368709120)",
   jwt_expiry_hours: "JWT Expiry (hours)",
   allowed_classifications: "Allowed Classifications",
 };

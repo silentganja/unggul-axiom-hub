@@ -154,7 +154,7 @@ tx.commit().await?;`}
               <strong>Token Purging:</strong> Deactivating a user triggers an asynchronous Redis command to purge all active refresh tokens associated with that user ID, immediately terminating active sessions.
             </li>
             <li>
-              <strong>Dynamic Configuration:</strong> Key-value configurations are stored in the database `system_config` table, allowing administrators to modify system variables (such as password criteria or lockout thresholds) without restarting the services.
+              <strong>Dynamic Configuration:</strong> Key-value configurations are stored in the database `system_config` table, allowing administrators to modify system variables (such as default storage quotas or JWT expiry windows) without restarting the services.
             </li>
           </ul>
         </div>

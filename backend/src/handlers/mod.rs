@@ -8,4 +8,5 @@ pub mod file_versions;
 pub mod files;
 pub mod governance;
 pub mod notifications;
+pub mod role_group;
 pub mod shares;

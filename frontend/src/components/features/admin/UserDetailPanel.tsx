@@ -2,11 +2,12 @@
 import { useEffect, useState } from "react";
 import {
   Loader2, ArrowLeft, AlertCircle, Lock, Shield,
-  File, Folder, Activity,
+  File, Folder, Activity, Users, Key, Check, Save,
 } from "lucide-react";
 import { useToastStore } from "@/components/ui/Toast";
+import PasswordResetModal from "@/components/features/admin/PasswordResetModal";
 import {
-  adminApi, UserDetail, formatFileSize, formatTimestamp,
+  adminApi, UserDetail, formatFileSize, formatTimestamp, UserGroupEntry, Permission,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -18,18 +19,53 @@ interface Props {
 
 export default function UserDetailPanel({ userId, onBack, onRefresh }: Props) {
   const [detail, setDetail] = useState<UserDetail | null>(null);
+  const [groups, setGroups] = useState<UserGroupEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+
+  // ── Per-user permissions ──────────────────────────────────────────────────
+  const [userPerms, setUserPerms] = useState<Permission[]>([]);
+  const [allPerms, setAllPerms] = useState<Permission[]>([]);
+  const [editingPerms, setEditingPerms] = useState(false);
+  const [editPermIds, setEditPermIds] = useState<Set<string>>(new Set());
+  const [savingPerms, setSavingPerms] = useState(false);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     setError(null);
-    adminApi.getUserDetail(userId)
-      .then(setDetail)
+    setEditingPerms(false);
+    Promise.all([
+      adminApi.getUserDetail(userId),
+      adminApi.listUserGroups(userId).catch(() => [] as UserGroupEntry[]),
+      adminApi.listUserPermissions(userId).catch(() => [] as Permission[]),
+    ])
+      .then(([d, g, p]) => { setDetail(d); setGroups(g); setUserPerms(p); })
       .catch(e => setError(e instanceof Error ? e.message : "Failed to load"))
       .finally(() => setLoading(false));
   }, [userId]);
+
+  const startEditingPerms = async () => {
+    try {
+      const perms = await adminApi.listPermissions();
+      setAllPerms(perms);
+      setEditPermIds(new Set(userPerms.map(p => p.id)));
+      setEditingPerms(true);
+    } catch { useToastStore.getState().error("Failed to load permissions"); }
+  };
+
+  const savePerms = async () => {
+    setSavingPerms(true);
+    try {
+      await adminApi.setUserPermissions(userId, Array.from(editPermIds));
+      useToastStore.getState().success("Permissions saved");
+      setEditingPerms(false);
+      setUserPerms(await adminApi.listUserPermissions(userId));
+    } catch (e) {
+      useToastStore.getState().error(e instanceof Error ? e.message : "Failed to save");
+    } finally { setSavingPerms(false); }
+  };
 
   if (loading) {
     return <div className="py-12 text-center"><Loader2 size={20} className="animate-spin mx-auto text-accent" /></div>;
@@ -84,12 +120,7 @@ export default function UserDetailPanel({ userId, onBack, onRefresh }: Props) {
 
         {/* Quick Actions */}
         <div className="flex items-center gap-2">
-          <button onClick={() => {
-            const pw = prompt("Enter new password (min 6 chars):");
-            if (pw && pw.length >= 6) {
-              adminApi.resetUserPassword(detail.id, pw).then(() => { useToastStore.getState().success("Password reset"); onRefresh(); }).catch(e => useToastStore.getState().error(e.message));
-            }
-          }}
+          <button onClick={() => setIsPasswordModalOpen(true)}
             className="h-7 px-2.5 rounded-sm border border-accent/30 text-accent bg-accent/5 hover:bg-accent/15 text-[9px] font-bold uppercase font-mono transition-colors flex items-center gap-1.5 cursor-pointer">
             <Lock size={10} /> Reset Password
           </button>
@@ -152,6 +183,97 @@ export default function UserDetailPanel({ userId, onBack, onRefresh }: Props) {
         <div><span className="text-foreground-subtle">Quota:</span> <span className="text-foreground">{detail.storageQuotaBytes ? formatFileSize(detail.storageQuotaBytes) : "Default"}</span></div>
       </div>
 
+      {/* Role Groups */}
+      <div className="border border-border/40 rounded bg-background-panel/40 overflow-hidden">
+        <div className="px-4 py-2.5 border-b border-border/30 bg-background-panel/80 flex items-center gap-2">
+          <Users size={11} className="text-accent" />
+          <span className="font-mono text-[10px] font-bold tracking-wider text-foreground-subtle uppercase">
+            Role Groups ({groups.length})
+          </span>
+        </div>
+        {groups.length === 0 ? (
+          <div className="p-4 text-center text-[10px] font-mono text-foreground-subtle">
+            Not a member of any custom role groups.
+          </div>
+        ) : (
+          <div className="divide-y divide-border/10">
+            {groups.map(g => (
+              <div key={g.id} className="px-4 py-2 flex items-center gap-2 text-[10px] font-mono">
+                <Shield size={11} className="text-accent shrink-0" />
+                <span className="text-foreground font-bold">{g.name}</span>
+                {g.description && (
+                  <span className="text-foreground-subtle/60 truncate">— {g.description}</span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Direct Permissions */}
+      <div className="border border-border/40 rounded bg-background-panel/40 overflow-hidden">
+        <div className="px-4 py-2.5 border-b border-border/30 bg-background-panel/80 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Key size={11} className="text-accent" />
+            <span className="font-mono text-[10px] font-bold tracking-wider text-foreground-subtle uppercase">
+              Direct Permissions ({userPerms.length})
+            </span>
+          </div>
+          {!editingPerms ? (
+            <button onClick={startEditingPerms}
+              className="h-6 px-2 rounded-sm border border-border/30 bg-background/40 text-[8px] font-mono text-foreground-subtle hover:text-accent transition-colors cursor-pointer">
+              Edit
+            </button>
+          ) : (
+            <button onClick={savePerms} disabled={savingPerms}
+              className="flex items-center gap-1 h-6 px-2 rounded-sm border border-accent/30 text-accent bg-accent/5 hover:bg-accent/15 text-[8px] font-bold uppercase font-mono transition-colors cursor-pointer disabled:opacity-50">
+              {savingPerms ? <Loader2 size={9} className="animate-spin" /> : <Save size={9} />}
+              Save
+            </button>
+          )}
+        </div>
+        {editingPerms ? (
+          <div className="p-3 grid grid-cols-2 sm:grid-cols-3 gap-1 max-h-[250px] overflow-y-auto">
+            {allPerms.map(p => {
+              const sel = editPermIds.has(p.id);
+              return (
+                <button key={p.id} type="button"
+                  onClick={() => setEditPermIds(prev => {
+                    const next = new Set(prev);
+                    if (next.has(p.id)) next.delete(p.id); else next.add(p.id);
+                    return next;
+                  })}
+                  title={`${p.key}: ${p.description}`}
+                  className={cn("flex items-center gap-1.5 px-2 py-1.5 rounded-sm border text-left transition-colors cursor-pointer",
+                    sel ? "border-accent/30 bg-accent/10 text-accent" : "border-border/20 bg-background/30 text-foreground-subtle hover:border-border/50"
+                  )}>
+                  <div className={cn("h-3 w-3 rounded-sm border flex items-center justify-center shrink-0",
+                    sel ? "border-accent bg-accent" : "border-border bg-background"
+                  )}>
+                    {sel && <Check size={8} strokeWidth={3} />}
+                  </div>
+                  <span className="text-[9px] font-mono font-bold truncate">{p.key.replace(/^.+:/, "")}</span>
+                </button>
+              );
+            })}
+          </div>
+        ) : userPerms.length === 0 ? (
+          <div className="p-4 text-center text-[10px] font-mono text-foreground-subtle">
+            No direct permissions assigned (relies on base role + groups).
+          </div>
+        ) : (
+          <div className="divide-y divide-border/10">
+            {userPerms.map(p => (
+              <div key={p.id} className="px-4 py-2 flex items-center gap-2 text-[10px] font-mono">
+                <Key size={10} className="text-accent shrink-0" />
+                <span className="text-foreground font-bold">{p.key}</span>
+                <span className="text-foreground-subtle/60">{p.description}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Recent Activity */}
       <div className="border border-border/40 rounded bg-background-panel/40 overflow-hidden">
         <div className="px-4 py-2.5 border-b border-border/30 bg-background-panel/80">
@@ -176,6 +298,18 @@ export default function UserDetailPanel({ userId, onBack, onRefresh }: Props) {
             ))}
           </div>
         )}
+
+        <PasswordResetModal
+          open={isPasswordModalOpen}
+          onClose={() => setIsPasswordModalOpen(false)}
+          onSubmit={async (password) => {
+            await adminApi.resetUserPassword(userId, password);
+            useToastStore.getState().success("Password reset");
+            setIsPasswordModalOpen(false);
+            onRefresh();
+          }}
+          userName={detail?.fullName}
+        />
       </div>
     </div>
   );

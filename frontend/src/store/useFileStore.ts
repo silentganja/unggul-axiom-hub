@@ -260,7 +260,7 @@ export const useFileStore = create<FileState>((set, get) => ({
   uploadProgress: null,
   uploadFileName: null,
   quotaUsed: 0,
-  quotaTotal: 107374182400, // 100 GB default
+  quotaTotal: 5368709120, // 5 GB default
   quotaFileCount: 0,
   quotaFolderCount: 0,
 

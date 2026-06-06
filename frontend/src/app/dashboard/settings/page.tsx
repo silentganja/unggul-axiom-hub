@@ -247,8 +247,8 @@ export default function ProfileSettingsPage() {
       setError("Current password is required.");
       return;
     }
-    if (!newPassword || newPassword.length < 6) {
-      setError("New password must be at least 6 characters.");
+    if (!newPassword || newPassword.length < 8) {
+      setError("Password must be at least 8 characters with uppercase, lowercase, and a digit.");
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -590,7 +590,7 @@ export default function ProfileSettingsPage() {
                           value={newPassword}
                           onChange={(e) => setNewPassword(e.target.value)}
                           className="h-9 w-full px-3 pr-10 rounded-sm border border-input-border bg-input-bg text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent"
-                          placeholder="Min 6 characters"
+                          placeholder="8+ chars, upper, lower, digit"
                         />
                         <button
                           type="button"

@@ -13,7 +13,7 @@ export default function InfoSecurityPage() {
     { action: "Approve File Locks/Unlocks/Moves", staff: false, officer: true, director: true, chief: true },
     { action: "Approve Classification Changes", staff: false, officer: false, director: true, chief: true },
     { action: "Manage Staff Accounts & Tiers", staff: false, officer: false, director: true, chief: true },
-    { action: "Erase Files Globally", staff: false, officer: false, block: false, chief: true },
+    { action: "Erase Files Globally", staff: false, officer: false, director: false, chief: true },
   ];
 
   return (

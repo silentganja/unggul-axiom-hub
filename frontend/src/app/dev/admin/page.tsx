@@ -17,6 +17,8 @@ import AuditLogTab from "@/components/features/admin/AuditLogTab";
 import FileBrowserTab from "@/components/features/admin/FileBrowserTab";
 import ShareManagementTab from "@/components/features/admin/ShareManagementTab";
 import UserDetailPanel from "@/components/features/admin/UserDetailPanel";
+import PasswordResetModal from "@/components/features/admin/PasswordResetModal";
+import RoleBuilderTab from "@/components/features/admin/RoleBuilderTab";
 import {
   adminApi, AdminUserEntry, AdminDashboard, BackendFileNode,
   GovernanceRequest, UserStorageRow, formatFileSize, formatTimestamp,
@@ -120,7 +122,7 @@ function AdminDashboardView() {
   const { username, logout } = useAdminStore();
 
   // Tab state - expanded to include new tabs
-  const TABS = ["dashboard", "users", "governance", "files", "audit", "shares", "storage", "config"] as const;
+  const TABS = ["dashboard", "users", "governance", "files", "audit", "shares", "storage", "config", "roles"] as const;
   type AdminTab = typeof TABS[number];
   const [adminTab, setAdminTab] = useState<AdminTab>("dashboard");
 
@@ -137,11 +139,20 @@ function AdminDashboardView() {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [dashboard, setDashboard] = useState<AdminDashboard | null>(null);
+  const [passwordResetUserId, setPasswordResetUserId] = useState<string | null>(null);
+  const [passwordResetUserName, setPasswordResetUserName] = useState<string>("");
   const [dashboardLoaded, setDashboardLoaded] = useState(false);
   const [dashboardError, setDashboardError] = useState<string | null>(null);
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
   const [userFiles, setUserFiles] = useState<BackendFileNode[]>([]);
   const [userFilesLoading, setUserFilesLoading] = useState(false);
+  const [groupSummaries, setGroupSummaries] = useState<Record<string, string[]>>({});
+  const [availableRoles, setAvailableRoles] = useState<Array<{ roleKey: string; label: string }>>([
+    { roleKey: "chief", label: "Chief" },
+    { roleKey: "director", label: "Director" },
+    { roleKey: "officer", label: "Officer" },
+    { roleKey: "staff", label: "Staff" },
+  ]);
 
   // User detail panel
   const [detailUserId, setDetailUserId] = useState<string | null>(null);
@@ -155,8 +166,8 @@ function AdminDashboardView() {
   // Form states
   const createEmailId = useId(); const createPassId = useId(); const createNameId = useId();
   const editNameId = useId(); const editPassId = useId();
-  const [createForm, setCreateForm] = useState({ email: "", password: "", fullName: "", role: "staff", storageQuotaBytes: "" });
-  const [editForm, setEditForm] = useState({ fullName: "", role: "staff", password: "", storageQuotaBytes: "" });
+  const [createForm, setCreateForm] = useState({ email: "", password: "", fullName: "", role: "staff", storageQuotaMB: "", supervisorId: "" });
+  const [editForm, setEditForm] = useState({ fullName: "", role: "staff", password: "", storageQuotaMB: "", supervisorId: "" });
   const [formError, setFormError] = useState<string | null>(null);
   const [formLoading, setFormLoading] = useState(false);
 
@@ -179,7 +190,14 @@ function AdminDashboardView() {
 
   const fetchUsers = useCallback(async () => {
     setIsLoading(true); setError(null);
-    try { setUsers(await adminApi.listUsers()); } catch (e) { setError(`Users: ${e instanceof Error ? e.message : "Failed to fetch"}`); }
+    try {
+      const [u, gs] = await Promise.all([
+        adminApi.listUsers(),
+        adminApi.listUserGroupSummaries().catch(() => ({})),
+      ]);
+      setUsers(u);
+      setGroupSummaries(gs);
+    } catch (e) { setError(`Users: ${e instanceof Error ? e.message : "Failed to fetch"}`); }
     finally { setIsLoading(false); }
   }, []);
 
@@ -213,6 +231,15 @@ function AdminDashboardView() {
 
   useEffect(() => { fetchUsers(); fetchDashboard(); }, [fetchUsers, fetchDashboard]); // eslint-disable-line react-hooks/set-state-in-effect
 
+  // Fetch custom roles for dropdowns
+  useEffect(() => {
+    adminApi.listCustomRoles().then(roles => {
+      if (roles.length > 0) {
+        setAvailableRoles(roles.map(r => ({ roleKey: r.roleKey, label: r.label })));
+      }
+    }).catch(() => {});
+  }, []);
+
   const handleExpandUser = async (userId: string) => {
     if (expandedUserId === userId) { setExpandedUserId(null); return; }
     setExpandedUserId(userId); setUserFilesLoading(true);
@@ -220,11 +247,15 @@ function AdminDashboardView() {
     finally { setUserFilesLoading(false); }
   };
 
-  const handleResetPassword = async (userId: string) => {
-    const pw = prompt("Enter new password (min 6 characters):");
-    if (!pw || pw.length < 6) { useToastStore.getState().error("Password must be at least 6 characters"); return; }
-    try { await adminApi.resetUserPassword(userId, pw); useToastStore.getState().success("Password reset successfully"); }
-    catch (e) { useToastStore.getState().error(e instanceof Error ? e.message : "Failed to reset password"); }
+  const handleResetPassword = async (password: string) => {
+    if (!passwordResetUserId) return;
+    try {
+      await adminApi.resetUserPassword(passwordResetUserId, password);
+      useToastStore.getState().success("Password reset successfully");
+      setPasswordResetUserId(null);
+    } catch (e) {
+      useToastStore.getState().error(e instanceof Error ? e.message : "Failed to reset password");
+    }
   };
 
   const handleToggleActive = async (userId: string) => {
@@ -241,20 +272,22 @@ function AdminDashboardView() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault(); setFormError(null); setFormLoading(true);
-    try { const quota = createForm.storageQuotaBytes ? Number(createForm.storageQuotaBytes) : null; await adminApi.createUser({ email: createForm.email, password: createForm.password, fullName: createForm.fullName, role: createForm.role, storageQuotaBytes: quota }); setCreateForm({ email: "", password: "", fullName: "", role: "staff", storageQuotaBytes: "" }); setIsCreateOpen(false); await fetchUsers(); }
+    try { const quotaMB = createForm.storageQuotaMB ? Number(createForm.storageQuotaMB) : null; const quotaBytes = quotaMB ? quotaMB * 1024 * 1024 : null; const supId = createForm.supervisorId || undefined; await adminApi.createUser({ email: createForm.email, password: createForm.password, fullName: createForm.fullName, role: createForm.role, storageQuotaBytes: quotaBytes, supervisorId: supId }); setCreateForm({ email: "", password: "", fullName: "", role: "staff", storageQuotaMB: "", supervisorId: "" }); setIsCreateOpen(false); await fetchUsers(); }
     catch (e) { setFormError(e instanceof Error ? e.message : "Failed to create user"); }
     finally { setFormLoading(false); }
   };
 
   const openEdit = (user: AdminUserEntry) => {
-    setEditTarget(user); setEditForm({ fullName: user.fullName, role: user.role, password: "", storageQuotaBytes: user.storageQuotaBytes != null ? String(user.storageQuotaBytes) : "" }); setFormError(null); setIsEditOpen(true);
+    setEditTarget(user); setEditForm({ fullName: user.fullName, role: user.role, password: "", storageQuotaMB: user.storageQuotaBytes != null ? String(Math.round(user.storageQuotaBytes / (1024 * 1024))) : "", supervisorId: user.supervisorId ?? "" }); setFormError(null); setIsEditOpen(true);
   };
 
   const handleEdit = async (e: React.FormEvent) => {
     e.preventDefault(); if (!editTarget) return; setFormError(null); setFormLoading(true);
     try {
-      const quota = editForm.storageQuotaBytes ? Number(editForm.storageQuotaBytes) : null;
-      await adminApi.updateUser(editTarget.id, { fullName: editForm.fullName.trim(), role: editForm.role, password: editForm.password.trim() || undefined, storageQuotaBytes: quota }); setIsEditOpen(false); setEditTarget(null); await fetchUsers();
+      const quotaMB = editForm.storageQuotaMB ? Number(editForm.storageQuotaMB) : null;
+      const quotaBytes = quotaMB ? quotaMB * 1024 * 1024 : null;
+      const supId = editForm.supervisorId || (editForm.supervisorId === "" ? null : undefined);
+      await adminApi.updateUser(editTarget.id, { fullName: editForm.fullName.trim(), role: editForm.role, password: editForm.password.trim() || undefined, storageQuotaBytes: quotaBytes, supervisorId: supId }); setIsEditOpen(false); setEditTarget(null); await fetchUsers();
     } catch (e) { setFormError(e instanceof Error ? e.message : "Failed to update user"); }
     finally { setFormLoading(false); }
   };
@@ -354,7 +387,7 @@ function AdminDashboardView() {
             <button key={tab} onClick={() => { setAdminTab(tab); setDrillState(null); setDetailUserId(null); }}
               className={cn("px-3 py-1.5 rounded-sm border uppercase transition-colors cursor-pointer capitalize",
                 adminTab === tab ? "bg-accent/10 border-accent/20 text-accent font-extrabold" : "border-border/30 text-foreground-subtle hover:text-foreground hover:bg-background-subtle/50"
-              )}>{tab === "files" ? "Files" : tab === "audit" ? "Audit" : tab === "shares" ? "Shares" : tab}</button>
+              )}>{tab === "files" ? "Files" : tab === "audit" ? "Audit" : tab === "shares" ? "Shares" : tab === "roles" ? "Roles" : tab}</button>
           ))}
         </div>
 
@@ -435,7 +468,7 @@ function AdminDashboardView() {
                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
                     Export CSV
                   </button>
-                  <button onClick={() => { setCreateForm({ email: "", password: "", fullName: "", role: "staff", storageQuotaBytes: "" }); setFormError(null); setIsCreateOpen(true); }}
+                  <button onClick={() => { setCreateForm({ email: "", password: "", fullName: "", role: "staff", storageQuotaMB: "", supervisorId: "" }); setFormError(null); setIsCreateOpen(true); }}
                     className="btn-shimmer h-8 px-3 rounded text-[11px] font-bold tracking-wider uppercase font-mono flex items-center gap-1.5 shadow-sm transition-all cursor-pointer">
                     <UserPlus size={12} /> Create User
                   </button>
@@ -467,6 +500,11 @@ function AdminDashboardView() {
                                 {user.fullName}
                               </button>
                               {user.active === false && <span className="ml-1.5 text-[8px] text-destructive font-mono uppercase bg-destructive/10 px-1 py-0.5 rounded">Inactive</span>}
+                              {groupSummaries[user.id] && groupSummaries[user.id].length > 0 && (
+                                <span className="ml-1.5 text-[8px] text-accent font-mono bg-accent/10 border border-accent/20 px-1 py-0.5 rounded" title={groupSummaries[user.id].join(", ")}>
+                                  +{groupSummaries[user.id].length}
+                                </span>
+                              )}
                             </td>
                             <td className="px-4 py-2 text-foreground-muted select-all">{user.email}</td>
                             <td className="px-4 py-2 text-center">
@@ -479,7 +517,7 @@ function AdminDashboardView() {
                               <div className="flex items-center justify-center gap-1">
                                 <button onClick={() => { setDetailUserId(user.id); }} className="h-7 w-7 rounded flex items-center justify-center border border-transparent hover:border-accent/25 hover:bg-accent/10 text-foreground-subtle hover:text-accent transition-colors cursor-pointer" title="View details"><Users size={12} /></button>
                                 <button onClick={() => handleExpandUser(user.id)} className="h-7 w-7 rounded flex items-center justify-center border border-transparent hover:border-accent/25 hover:bg-accent/10 text-foreground-subtle hover:text-accent transition-colors cursor-pointer" title="View files"><Folder size={12} /></button>
-                                <button onClick={() => handleResetPassword(user.id)} className="h-7 w-7 rounded flex items-center justify-center border border-transparent hover:border-border hover:bg-background/40 text-foreground-subtle hover:text-foreground transition-colors cursor-pointer" title="Reset password"><Lock size={12} /></button>
+                                <button onClick={() => { setPasswordResetUserId(user.id); setPasswordResetUserName(user.email); }} className="h-7 w-7 rounded flex items-center justify-center border border-transparent hover:border-border hover:bg-background/40 text-foreground-subtle hover:text-foreground transition-colors cursor-pointer" title="Reset password"><Lock size={12} /></button>
                                 <button onClick={() => handleToggleActive(user.id)} className="h-7 w-7 rounded flex items-center justify-center border border-transparent hover:border-border hover:bg-background/40 text-foreground-subtle hover:text-warning transition-colors cursor-pointer" title={user.active !== false ? "Deactivate" : "Activate"}><Shield size={12} className={user.active !== false ? "text-success" : "text-destructive"} /></button>
                                 <button onClick={() => openEdit(user)} className="h-7 w-7 rounded flex items-center justify-center border border-transparent hover:border-border hover:bg-background/40 text-foreground-subtle hover:text-foreground transition-colors cursor-pointer" title="Edit user"><Edit2 size={12} /></button>
                                 <button onClick={() => { setDeleteTarget(user); setFormError(null); }} className="h-7 w-7 rounded flex items-center justify-center border border-transparent hover:border-destructive/25 hover:bg-destructive/10 text-foreground-subtle hover:text-destructive transition-colors cursor-pointer" title="Delete user"><Trash2 size={12} /></button>
@@ -569,6 +607,9 @@ function AdminDashboardView() {
         {/* Tab: Config */}
         {adminTab === "config" && <ConfigTab configMap={configMap} setConfigMap={setConfigMap} configEditKey={configEditKey} setConfigEditKey={setConfigEditKey} configEditVal={configEditVal} setConfigEditVal={setConfigEditVal} />}
 
+        {/* Tab: Roles */}
+        {adminTab === "roles" && <RoleBuilderTab />}
+
         {/* ── SSE Toast ── */}
         {sseToast && (
           <div className="fixed bottom-6 right-6 z-50 animate-in fade-in slide-in-from-bottom-4 duration-250">
@@ -589,8 +630,9 @@ function AdminDashboardView() {
               <div><label htmlFor={createNameId} className="block text-[9px] font-bold font-mono uppercase text-foreground-subtle mb-1">Full Name</label><input id={createNameId} type="text" required placeholder="e.g. John Doe" value={createForm.fullName} onChange={e => setCreateForm(f => ({ ...f, fullName: e.target.value }))} className="h-8 w-full px-2.5 rounded-sm border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent" /></div>
               <div><label htmlFor={createEmailId} className="block text-[9px] font-bold font-mono uppercase text-foreground-subtle mb-1">Email</label><input id={createEmailId} type="email" required placeholder="user@unggulaxiom.com" value={createForm.email} onChange={e => setCreateForm(f => ({ ...f, email: e.target.value }))} className="h-8 w-full px-2.5 rounded-sm border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent" /></div>
               <div><label htmlFor={createPassId} className="block text-[9px] font-bold font-mono uppercase text-foreground-subtle mb-1">Password</label><input id={createPassId} type="password" required placeholder="••••••••" value={createForm.password} onChange={e => setCreateForm(f => ({ ...f, password: e.target.value }))} className="h-8 w-full px-2.5 rounded-sm border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent" /></div>
-              <div><label className="block text-[9px] font-bold font-mono uppercase text-foreground-subtle mb-1">Role</label><select value={createForm.role} onChange={e => setCreateForm(f => ({ ...f, role: e.target.value }))} className="h-8 w-full px-2 rounded-sm border border-border bg-background text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent"><option value="staff">Staff</option><option value="officer">Officer</option><option value="director">Director</option><option value="chief">Chief</option></select></div>
-              <div><label className="block text-[9px] font-bold font-mono uppercase text-foreground-subtle mb-1">Storage Quota (bytes, empty = default)</label><input type="number" placeholder="e.g. 107374182400 for 100GB" value={createForm.storageQuotaBytes} onChange={e => setCreateForm(f => ({ ...f, storageQuotaBytes: e.target.value }))} className="h-8 w-full px-2.5 rounded-sm border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent" /></div>
+              <div><label className="block text-[9px] font-bold font-mono uppercase text-foreground-subtle mb-1">Role</label><select value={createForm.role} onChange={e => setCreateForm(f => ({ ...f, role: e.target.value }))} className="h-8 w-full px-2 rounded-sm border border-border bg-background text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent">{availableRoles.map(r => <option key={r.roleKey} value={r.roleKey}>{r.label}</option>)}</select></div>
+              <div><label className="block text-[9px] font-bold font-mono uppercase text-foreground-subtle mb-1">Supervisor (optional)</label><select value={createForm.supervisorId} onChange={e => setCreateForm(f => ({ ...f, supervisorId: e.target.value }))} className="h-8 w-full px-2 rounded-sm border border-border bg-background text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent"><option value="">None</option>{users.map(u => <option key={u.id} value={u.id}>{u.fullName} ({u.role})</option>)}</select></div>
+              <div><label className="block text-[9px] font-bold font-mono uppercase text-foreground-subtle mb-1">Storage Quota (MB, empty = default)</label><input type="number" placeholder="e.g. 5120 for 5GB" value={createForm.storageQuotaMB} onChange={e => setCreateForm(f => ({ ...f, storageQuotaMB: e.target.value }))} className="h-8 w-full px-2.5 rounded-sm border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent" /></div>
               <div className="flex items-center justify-end gap-2 text-[10px] font-bold font-mono pt-2"><button type="button" onClick={() => setIsCreateOpen(false)} className="h-8 px-3 rounded-sm border border-transparent bg-transparent text-foreground-subtle hover:text-foreground hover:bg-background-subtle/50 transition-colors">Cancel</button><button type="submit" disabled={formLoading} className="btn-shimmer h-8 px-4 rounded-sm font-mono text-[11px] font-bold uppercase tracking-wider text-accent-foreground disabled:opacity-50">{formLoading ? <Loader2 size={12} className="animate-spin" /> : "Create User"}</button></div>
             </form>
           </div>
@@ -605,9 +647,10 @@ function AdminDashboardView() {
             {formError && <div className="flex items-start gap-2 rounded border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive"><AlertCircle size={12} className="mt-0.5 shrink-0" /><span>{formError}</span></div>}
             <form onSubmit={handleEdit} className="space-y-3">
               <div><label htmlFor={editNameId} className="block text-[9px] font-bold font-mono uppercase text-foreground-subtle mb-1">Full Name</label><input id={editNameId} type="text" required value={editForm.fullName} onChange={e => setEditForm(f => ({ ...f, fullName: e.target.value }))} className="h-8 w-full px-2.5 rounded-sm border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent" /></div>
-              <div><label className="block text-[9px] font-bold font-mono uppercase text-foreground-subtle mb-1">Role</label><select value={editForm.role} onChange={e => setEditForm(f => ({ ...f, role: e.target.value }))} className="h-8 w-full px-2 rounded-sm border border-border bg-background text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent"><option value="staff">Staff</option><option value="officer">Officer</option><option value="director">Director</option><option value="chief">Chief</option></select></div>
+              <div><label className="block text-[9px] font-bold font-mono uppercase text-foreground-subtle mb-1">Role</label><select value={editForm.role} onChange={e => setEditForm(f => ({ ...f, role: e.target.value }))} className="h-8 w-full px-2 rounded-sm border border-border bg-background text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent">{availableRoles.map(r => <option key={r.roleKey} value={r.roleKey}>{r.label}</option>)}</select></div>
+              <div><label className="block text-[9px] font-bold font-mono uppercase text-foreground-subtle mb-1">Supervisor (optional)</label><select value={editForm.supervisorId} onChange={e => setEditForm(f => ({ ...f, supervisorId: e.target.value }))} className="h-8 w-full px-2 rounded-sm border border-border bg-background text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent"><option value="">None</option>{users.map(u => <option key={u.id} value={u.id}>{u.fullName} ({u.role})</option>)}</select></div>
               <div><label htmlFor={editPassId} className="block text-[9px] font-bold font-mono uppercase text-foreground-subtle mb-1">New Password (leave blank to keep)</label><input id={editPassId} type="password" placeholder="••••••••" value={editForm.password} onChange={e => setEditForm(f => ({ ...f, password: e.target.value }))} className="h-8 w-full px-2.5 rounded-sm border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent" /></div>
-              <div><label className="block text-[9px] font-bold font-mono uppercase text-foreground-subtle mb-1">Storage Quota (bytes, empty = default)</label><input type="number" placeholder="e.g. 107374182400 for 100GB" value={editForm.storageQuotaBytes} onChange={e => setEditForm(f => ({ ...f, storageQuotaBytes: e.target.value }))} className="h-8 w-full px-2.5 rounded-sm border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent" /></div>
+              <div><label className="block text-[9px] font-bold font-mono uppercase text-foreground-subtle mb-1">Storage Quota (MB, empty = default)</label><input type="number" placeholder="e.g. 5120 for 5GB" value={editForm.storageQuotaMB} onChange={e => setEditForm(f => ({ ...f, storageQuotaMB: e.target.value }))} className="h-8 w-full px-2.5 rounded-sm border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent" /></div>
               <div className="flex items-center justify-end gap-2 text-[10px] font-bold font-mono pt-2"><button type="button" onClick={() => { setIsEditOpen(false); setEditTarget(null); }} className="h-8 px-3 rounded-sm border border-transparent bg-transparent text-foreground-subtle hover:text-foreground hover:bg-background-subtle/50 transition-colors">Cancel</button><button type="submit" disabled={formLoading} className="btn-shimmer h-8 px-4 rounded-sm font-mono text-[11px] font-bold uppercase tracking-wider text-accent-foreground disabled:opacity-50">{formLoading ? <Loader2 size={12} className="animate-spin" /> : "Save Changes"}</button></div>
             </form>
           </div>
@@ -625,6 +668,13 @@ function AdminDashboardView() {
           </div>
         </div>
       )}
+
+      <PasswordResetModal
+        open={passwordResetUserId !== null}
+        onClose={() => setPasswordResetUserId(null)}
+        onSubmit={handleResetPassword}
+        userName={passwordResetUserName}
+      />
     </div>
   );
 }

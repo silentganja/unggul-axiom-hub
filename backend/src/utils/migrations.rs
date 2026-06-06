@@ -132,7 +132,7 @@ pub async fn run_migrations(pool: &PgPool) {
                     updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
                 )",
                 "INSERT INTO system_config (key, value) VALUES
-                    ('default_storage_quota_bytes', '107374182400'),
+                    ('default_storage_quota_bytes', '5368709120'),
                     ('jwt_expiry_hours', '8'),
                     ('allowed_classifications', 'RAHSIA,SULIT,TERHAD,TERBUKA')
                 ON CONFLICT (key) DO NOTHING",
@@ -278,6 +278,101 @@ pub async fn run_migrations(pool: &PgPool) {
                     last_seen_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
                 )",
                 "CREATE INDEX IF NOT EXISTS idx_user_sessions_user_id ON user_sessions (user_id)",
+            ],
+        ),
+        // 9022 - Role Builder tables (permissions, role_groups, junctions)
+        (
+            "9022",
+            "Auto: Role Builder - permissions, role_groups, user_role_groups",
+            vec![
+                "CREATE TABLE IF NOT EXISTS permissions (
+                    id          UUID         PRIMARY KEY DEFAULT uuid_generate_v4(),
+                    key         VARCHAR(64)  NOT NULL UNIQUE,
+                    description TEXT         NOT NULL
+                )",
+                "CREATE TABLE IF NOT EXISTS role_groups (
+                    id          UUID         PRIMARY KEY DEFAULT uuid_generate_v4(),
+                    name        VARCHAR(128) NOT NULL,
+                    description TEXT         NOT NULL DEFAULT '',
+                    created_by  VARCHAR(128) NOT NULL,
+                    created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+                    updated_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+                )",
+                "CREATE TABLE IF NOT EXISTS role_group_permissions (
+                    role_group_id UUID NOT NULL REFERENCES role_groups (id) ON DELETE CASCADE,
+                    permission_id UUID NOT NULL REFERENCES permissions (id) ON DELETE CASCADE,
+                    PRIMARY KEY (role_group_id, permission_id)
+                )",
+                "CREATE TABLE IF NOT EXISTS user_role_groups (
+                    user_id       UUID NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+                    role_group_id UUID NOT NULL REFERENCES role_groups (id) ON DELETE CASCADE,
+                    PRIMARY KEY (user_id, role_group_id)
+                )",
+                // Seed the 14 base permissions (idempotent via ON CONFLICT DO NOTHING)
+                "INSERT INTO permissions (key, description) VALUES
+                    ('files:read',         'View and download files'),
+                    ('files:write',        'Upload and edit files'),
+                    ('files:delete',       'Delete files'),
+                    ('files:classify',     'Change file classifications'),
+                    ('users:read',         'View user directory'),
+                    ('users:manage',       'Create and edit users'),
+                    ('users:delete',       'Delete users'),
+                    ('governance:approve', 'Approve governance requests'),
+                    ('governance:reject',  'Reject governance requests'),
+                    ('admin:access',       'Access admin panel features'),
+                    ('shares:manage',      'Manage file shares'),
+                    ('audit:read',         'View audit logs'),
+                    ('storage:manage',     'Manage storage quotas'),
+                    ('config:read',        'Read system configuration')
+                 ON CONFLICT (key) DO NOTHING",
+            ],
+        ),
+        // 9023 - Direct user permissions + custom roles + role implicit perms
+        (
+            "9023",
+            "Auto: User permissions, custom roles, role implicit permissions",
+            vec![
+                // Direct user-permission grants (bypasses groups)
+                "CREATE TABLE IF NOT EXISTS user_permissions (
+                    user_id       UUID NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+                    permission_id UUID NOT NULL REFERENCES permissions (id) ON DELETE CASCADE,
+                    PRIMARY KEY (user_id, permission_id)
+                )",
+                // Custom base roles (extends the 4-tier hierarchy)
+                "CREATE TABLE IF NOT EXISTS custom_roles (
+                    role_key    VARCHAR(32)  PRIMARY KEY,
+                    label       VARCHAR(64)  NOT NULL,
+                    level       SMALLINT     NOT NULL DEFAULT 1
+                )",
+                // Which permissions each base role implicitly grants
+                "CREATE TABLE IF NOT EXISTS role_implicit_permissions (
+                    role_key      VARCHAR(32) NOT NULL REFERENCES custom_roles (role_key) ON DELETE CASCADE,
+                    permission_id UUID        NOT NULL REFERENCES permissions (id) ON DELETE CASCADE,
+                    PRIMARY KEY (role_key, permission_id)
+                )",
+                // Seed the 4 base roles
+                "INSERT INTO custom_roles (role_key, label, level) VALUES
+                    ('chief',    'Chief',    4),
+                    ('director', 'Director', 3),
+                    ('officer',  'Officer',  2),
+                    ('staff',    'Staff',    1)
+                 ON CONFLICT (role_key) DO NOTHING",
+                // Seed implicit permissions for chief/director (all 14 permissions)
+                "INSERT INTO role_implicit_permissions (role_key, permission_id)
+                 SELECT 'chief', id FROM permissions
+                 ON CONFLICT DO NOTHING",
+                "INSERT INTO role_implicit_permissions (role_key, permission_id)
+                 SELECT 'director', id FROM permissions
+                 ON CONFLICT DO NOTHING",
+                // Officer: governance + audit + read-only
+                "INSERT INTO role_implicit_permissions (role_key, permission_id)
+                 SELECT 'officer', id FROM permissions
+                 WHERE key IN (
+                     'files:read', 'files:write', 'users:read',
+                     'governance:approve', 'governance:reject', 'audit:read'
+                 )
+                 ON CONFLICT DO NOTHING",
+                // Staff: no implicit permissions (rely on custom groups)
             ],
         ),
         // 9012 - Audit logs table

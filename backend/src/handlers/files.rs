@@ -370,6 +370,16 @@ pub async fn update_classification(
 ) -> Result<HttpResponse, AppError> {
     let file_id = path.into_inner();
 
+    // Only users with files:classify permission can change classification directly.
+    // Everyone else must submit a governance request (CLASSIFICATION_UPGRADE / CLASSIFICATION_DOWNGRADE).
+    if !user::can_govern_classified(&user.role)
+        && !user::user_has_permission(pool.get_ref(), user.id, &user.role, "files:classify")
+            .await
+            .unwrap_or(false)
+    {
+        return Err(AppError::Unauthorized);
+    }
+
     if !crate::models::file::VALID_CLASSIFICATIONS.contains(&body.classification.as_str()) {
         return Err(AppError::BadRequest("Invalid classification".into()));
     }
@@ -387,10 +397,22 @@ pub async fn update_classification(
     if let Some((locker, locker_role)) = lock_info {
         match locker_role {
             Some(role) => {
-                if locker != Some(user.id) && user::role_level(&user.role) < user::role_level(&role)
+                let user_lvl = user::get_role_level(pool.get_ref(), &user.role).await.unwrap_or(0);
+                let locker_lvl = user::get_role_level(pool.get_ref(), &role).await.unwrap_or(0);
+                if locker != Some(user.id)
+                    && user_lvl < locker_lvl
+                    && !user::user_has_permission(
+                        pool.get_ref(),
+                        user.id,
+                        &user.role,
+                        "files:classify",
+                    )
+                    .await
+                    .unwrap_or(false)
                 {
                     return Err(AppError::Conflict(
-                        "This file is locked by a higher authority and cannot change classification".into(),
+                        "This file is locked by a higher authority and cannot change classification"
+                            .into(),
                     ));
                 }
             }
@@ -470,7 +492,18 @@ pub async fn rename_file(
     if let Some((locker, locker_role)) = lock_info {
         match locker_role {
             Some(role) => {
-                if locker != Some(user.id) && user::role_level(&user.role) < user::role_level(&role)
+                let user_lvl = user::get_role_level(pool.get_ref(), &user.role).await.unwrap_or(0);
+                let locker_lvl = user::get_role_level(pool.get_ref(), &role).await.unwrap_or(0);
+                if locker != Some(user.id)
+                    && user_lvl < locker_lvl
+                    && !user::user_has_permission(
+                        pool.get_ref(),
+                        user.id,
+                        &user.role,
+                        "files:write",
+                    )
+                    .await
+                    .unwrap_or(false)
                 {
                     return Err(AppError::Conflict(
                         "This file is locked by a higher authority and cannot be renamed".into(),
@@ -481,6 +514,29 @@ pub async fn rename_file(
                 return Err(AppError::Conflict(
                     "File is locked by a deleted user. Contact an administrator.".into(),
                 ));
+            }
+        }
+    }
+
+    // ── Classification check: restricted files need files:classify or files:write ─
+    let file_class: Option<String> =
+        sqlx::query_scalar("SELECT classification FROM files WHERE id = $1")
+            .bind(file_id)
+            .fetch_optional(pool.get_ref())
+            .await
+            .map_err(AppError::Database)?
+            .flatten();
+
+    if let Some(ref cls) = file_class {
+        if cls != "TERBUKA" {
+            let can_modify = user::user_has_permission(
+                pool.get_ref(), user.id, &user.role, "files:classify",
+            ).await.unwrap_or(false)
+                || user::user_has_permission(
+                    pool.get_ref(), user.id, &user.role, "files:write",
+                ).await.unwrap_or(false);
+            if !can_modify {
+                return Err(AppError::Unauthorized);
             }
         }
     }
@@ -553,6 +609,20 @@ pub async fn delete_file(
 
     let file = file.ok_or(AppError::NotFound)?;
 
+    // ── Classification check: restricted files need files:classify or files:delete ─
+    if file.classification != "TERBUKA" {
+        let can_delete = user::can_govern_classified(&user.role)
+            || user::user_has_permission(pool.get_ref(), user.id, &user.role, "files:delete")
+                .await
+                .unwrap_or(false)
+            || user::user_has_permission(pool.get_ref(), user.id, &user.role, "files:classify")
+                .await
+                .unwrap_or(false);
+        if !can_delete {
+            return Err(AppError::Unauthorized);
+        }
+    }
+
     // ── Enforce lock: hierarchical - must be the locker or have >= role level ──
     if let Some(locker) = file.locked_by {
         if locker != user.id {
@@ -563,9 +633,23 @@ pub async fn delete_file(
                     .await
                     .map_err(AppError::Database)?;
 
-            let locker_level = locker_role.as_deref().map(user::role_level).unwrap_or(0);
+            let locker_level = if let Some(ref role) = locker_role {
+                user::get_role_level(pool.get_ref(), role).await.unwrap_or(0)
+            } else {
+                0
+            };
+            let user_lvl = user::get_role_level(pool.get_ref(), &user.role).await.unwrap_or(0);
 
-            if user::role_level(&user.role) < locker_level {
+            if user_lvl < locker_level
+                && !user::user_has_permission(
+                    pool.get_ref(),
+                    user.id,
+                    &user.role,
+                    "files:delete",
+                )
+                .await
+                .unwrap_or(false)
+            {
                 return Err(AppError::Conflict(
                     "This file is locked by a higher authority and cannot be deleted".into(),
                 ));
@@ -727,7 +811,7 @@ struct QuotaResponse {
     folder_count: i64,
 }
 
-const DEFAULT_QUOTA: i64 = 100 * 1024 * 1024 * 1024; // 100 GB
+const DEFAULT_QUOTA: i64 = 5 * 1024 * 1024 * 1024; // 100 GB
 
 pub async fn get_quota(pool: web::Data<PgPool>, user: AuthUser) -> Result<HttpResponse, AppError> {
     let used: i64 = sqlx::query_scalar(
@@ -823,8 +907,18 @@ pub async fn move_files(
         if let Some((locker, locker_role)) = lock_info {
             match locker_role {
                 Some(role) => {
+                    let user_lvl = user::get_role_level(pool.get_ref(), &user.role).await.unwrap_or(0);
+                    let locker_lvl = user::get_role_level(pool.get_ref(), &role).await.unwrap_or(0);
                     if locker != Some(user.id)
-                        && user::role_level(&user.role) < user::role_level(&role)
+                        && user_lvl < locker_lvl
+                        && !user::user_has_permission(
+                            pool.get_ref(),
+                            user.id,
+                            &user.role,
+                            "files:write",
+                        )
+                        .await
+                        .unwrap_or(false)
                     {
                         return Err(AppError::Conflict(
                             "This file is locked by a higher authority and cannot be moved".into(),
@@ -934,10 +1028,14 @@ pub async fn download_file(
 ) -> Result<HttpResponse, AppError> {
     let file_id = path.into_inner();
 
+    // Allow owner or shared users to download
     let file: Option<FileNode> = sqlx::query_as::<_, FileNode>(
         "SELECT id, parent_id, owner_id, name, is_folder,
                 size_bytes, mime_type, classification, created_at, updated_at, locked_by, locked_at, lock_reason
-         FROM files WHERE id = $1 AND owner_id = $2 AND deleted_at IS NULL AND is_folder = FALSE",
+         FROM files WHERE id = $1 AND deleted_at IS NULL AND is_folder = FALSE
+           AND (owner_id = $2 OR id IN (
+               SELECT file_id FROM file_shares WHERE file_id = $1 AND user_id = $2
+           ))",
     )
     .bind(file_id)
     .bind(user.id)
@@ -1005,10 +1103,14 @@ pub async fn get_file_content(
 ) -> Result<HttpResponse, AppError> {
     let file_id = path.into_inner();
 
+    // Try owner access first, then shared access
     let file: Option<FileNode> = sqlx::query_as::<_, FileNode>(
         "SELECT id, parent_id, owner_id, name, is_folder,
                 size_bytes, mime_type, classification, created_at, updated_at, locked_by, locked_at, lock_reason
-         FROM files WHERE id = $1 AND owner_id = $2 AND deleted_at IS NULL AND is_folder = FALSE",
+         FROM files WHERE id = $1 AND deleted_at IS NULL AND is_folder = FALSE
+           AND (owner_id = $2 OR id IN (
+               SELECT file_id FROM file_shares WHERE file_id = $1 AND user_id = $2
+           ))",
     )
     .bind(file_id)
     .bind(user.id)
@@ -1206,8 +1308,18 @@ pub async fn upload_file(
 
                     file_written = true;
 
-                    // Accumulate all bytes in memory, checking size limit as we go
-                    let mut all_bytes: Vec<u8> = Vec::new();
+                    // Stream chunks directly to a temp file to avoid buffering large
+                    // uploads in memory. Size is enforced per-chunk against the limit.
+                    let mut tmp = tokio::fs::File::create(&temp_filepath)
+                        .await
+                        .map_err(|e| {
+                            AppError::Internal(anyhow::anyhow!(
+                                "Failed to create temp file: {}",
+                                e
+                            ))
+                        })?;
+
+                    let mut first_bytes: Vec<u8> = Vec::new();
 
                     while let Some(chunk) = field.next().await {
                         let bytes = chunk.map_err(|e| {
@@ -1215,7 +1327,6 @@ pub async fn upload_file(
                         })?;
                         size_bytes += bytes.len() as i64;
 
-                        // Enforce maximum upload size
                         if size_bytes > config.max_upload_size_bytes {
                             return Err(AppError::BadRequest(format!(
                                 "File exceeds maximum upload size of {} bytes",
@@ -1223,30 +1334,56 @@ pub async fn upload_file(
                             )));
                         }
 
-                        all_bytes.extend_from_slice(&bytes);
+                        // Keep a small prefix for magic-byte validation
+                        if first_bytes.len() < 16 {
+                            let needed = 16 - first_bytes.len();
+                            first_bytes.extend_from_slice(&bytes[..needed.min(bytes.len())]);
+                        }
+
+                        tokio::io::AsyncWriteExt::write_all(&mut tmp, &bytes)
+                            .await
+                            .map_err(|e| {
+                                AppError::Internal(anyhow::anyhow!(
+                                    "Failed to write chunk to disk: {}",
+                                    e
+                                ))
+                            })?;
                     }
 
-                    // Validate file type by magic bytes - reject known-dangerous types
-                    if !all_bytes.is_empty() {
-                        validate_magic_bytes(&all_bytes, mime_type.as_deref())?;
+                    // Flush and sync the temp file
+                    tokio::io::AsyncWriteExt::flush(&mut tmp).await.map_err(|e| {
+                        AppError::Internal(anyhow::anyhow!("Failed to flush temp file: {}", e))
+                    })?;
+                    drop(tmp);
+
+                    // Validate file type by magic bytes on the captured prefix
+                    if size_bytes > 0 && !first_bytes.is_empty() {
+                        validate_magic_bytes(&first_bytes, mime_type.as_deref())?;
                     }
 
-                    // Encrypt bytes before writing to disk (if encryption key is configured)
-                    let bytes_to_write: Vec<u8> = if let Some(ref enc_key) = config.encryption_key {
-                        crate::utils::crypto::encrypt(enc_key, &all_bytes)?
-                    } else {
-                        all_bytes
-                    };
-
-                    // Write (possibly encrypted) bytes to disk
-                    tokio::fs::write(&temp_filepath, &bytes_to_write)
-                        .await
-                        .map_err(|e| {
-                            AppError::Internal(anyhow::anyhow!(
-                                "Failed to write file to disk: {}",
-                                e
-                            ))
-                        })?;
+                    // If encryption is configured, read the temp file back, encrypt,
+                    // and overwrite. AES-GCM requires the full plaintext, so this step
+                    // does buffer the file in memory — but only after the size limit
+                    // has already been enforced above.
+                    if let Some(ref enc_key) = config.encryption_key {
+                        let plaintext = tokio::fs::read(&temp_filepath)
+                            .await
+                            .map_err(|e| {
+                                AppError::Internal(anyhow::anyhow!(
+                                    "Failed to read temp file for encryption: {}",
+                                    e
+                                ))
+                            })?;
+                        let ciphertext = crate::utils::crypto::encrypt(enc_key, &plaintext)?;
+                        tokio::fs::write(&temp_filepath, &ciphertext)
+                            .await
+                            .map_err(|e| {
+                                AppError::Internal(anyhow::anyhow!(
+                                    "Failed to write encrypted file: {}",
+                                    e
+                                ))
+                            })?;
+                    }
                 }
                 _ => {
                     // Ignore unknown fields
@@ -1289,7 +1426,7 @@ pub async fn upload_file(
 
     let quota_bytes = user_quota
         .filter(|&q| q > 0)
-        .unwrap_or(100 * 1024 * 1024 * 1024); // 100 GB default
+        .unwrap_or(5 * 1024 * 1024 * 1024); // 100 GB default
 
     if used_bytes + size_bytes > quota_bytes {
         let _ = tokio::fs::remove_file(&temp_filepath).await;
@@ -1310,6 +1447,18 @@ pub async fn upload_file(
         if !parent_still_exists {
             let _ = tokio::fs::remove_file(&temp_filepath).await;
             return Err(AppError::NotFound);
+        }
+    }
+
+    // ── Classification check: restricted tiers require files:classify permission ─
+    if classification != "TERBUKA" {
+        let can_classify = user::can_govern_classified(&user.role)
+            || user::user_has_permission(pool.get_ref(), user.id, &user.role, "files:classify")
+                .await
+                .unwrap_or(false);
+        if !can_classify {
+            let _ = tokio::fs::remove_file(&temp_filepath).await;
+            return Err(AppError::Unauthorized);
         }
     }
 
@@ -1414,8 +1563,6 @@ const KNOWN_SIGNATURES: &[(&[u8], &str)] = &[
     (&[0x50, 0x4B, 0x03, 0x04], "application/zip"),
     (&[0x50, 0x4B, 0x05, 0x06], "application/zip"),
     (&[0x50, 0x4B, 0x07, 0x08], "application/zip"),
-    // Text
-    (&[0xEF, 0xBB, 0xBF], "text/"),
     // Office Open XML
     (&[0x50, 0x4B, 0x03, 0x04], "application/vnd.openxmlformats"),
 ];

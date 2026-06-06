@@ -186,10 +186,8 @@ jobs:
             # Pull images from ECR
             docker compose -f docker-compose.prod.yml pull
 
-            # Down containers to perform a clean recreation (preserves volumes/data)
-            docker compose -f docker-compose.prod.yml down || true
-
-            # Recreate containers safely with zero-downtime hot swap
+            # Restart services with new images. up -d re-creates only containers whose
+            # config or image has changed, leaving others running (rolling update).
             if ! docker compose -f docker-compose.prod.yml up -d --remove-orphans; then
               echo "❌ Deployment failed! Printing logs..."
               docker compose -f docker-compose.prod.yml logs

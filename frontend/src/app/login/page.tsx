@@ -118,8 +118,8 @@ function LoginForm() {
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setResetError(null);
-    if (resetNewPass.length < 6) {
-      setResetError("Password must be at least 6 characters.");
+    if (resetNewPass.length < 8) {
+      setResetError("Password must be at least 8 characters with uppercase, lowercase, and a digit.");
       return;
     }
     if (resetNewPass !== resetConfirm) {
@@ -182,7 +182,7 @@ function LoginForm() {
               <form onSubmit={handleResetPassword} className="space-y-4">
                 <div className="space-y-1.5">
                   <label className="text-[9px] font-semibold text-foreground-subtle font-mono uppercase tracking-wider block">New Password</label>
-                  <input type="password" required placeholder="Min 6 characters" value={resetNewPass} onChange={(e) => setResetNewPass(e.target.value)} className="h-10 w-full rounded border border-input-border bg-input-bg px-3.5 font-sans text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-accent" />
+                  <input type="password" required placeholder="8+ chars, upper, lower, digit" value={resetNewPass} onChange={(e) => setResetNewPass(e.target.value)} className="h-10 w-full rounded border border-input-border bg-input-bg px-3.5 font-sans text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-accent" />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-[9px] font-semibold text-foreground-subtle font-mono uppercase tracking-wider block">Confirm Password</label>

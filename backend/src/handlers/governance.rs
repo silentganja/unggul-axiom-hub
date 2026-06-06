@@ -171,7 +171,10 @@ pub async fn list_requests(
     }
 
     // Build WHERE clauses using parameterized bind parameters
-    let admin_mode = user::can_govern(&user.role);
+    let admin_mode = user::can_govern(&user.role)
+        || user::user_has_permission(pool.get_ref(), user.id, &user.role, "governance:approve")
+            .await
+            .unwrap_or(false);
     let mut param_idx = if admin_mode { 0u32 } else { 1u32 }; // $1 = user_id for non-admin
 
     let user_clause = if admin_mode {
@@ -290,8 +293,31 @@ pub(crate) struct ReviewRequest {
     reason: Option<String>,
 }
 
+/// Check if `reviewer_id` is the supervisor of the user who submitted `request_id`.
+async fn is_requester_supervisor(
+    pool: &PgPool,
+    reviewer_id: Uuid,
+    request_id: Uuid,
+) -> Result<bool, AppError> {
+    let is_supervisor: bool = sqlx::query_scalar(
+        "SELECT EXISTS(
+            SELECT 1 FROM governance_requests gr
+            JOIN users u ON u.id = gr.requested_by
+            WHERE gr.id = $1 AND u.supervisor_id = $2
+        )",
+    )
+    .bind(request_id)
+    .bind(reviewer_id)
+    .fetch_one(pool)
+    .await
+    .map_err(AppError::Database)?;
+
+    Ok(is_supervisor)
+}
+
 /// Approve a governance request and execute the associated action.
-/// officer+ for standard requests, director+ for classification changes, chief can do everything.
+/// Authorized if: base role can govern, OR has governance:approve permission,
+/// OR is the requester's supervisor with governance:approve.
 pub async fn approve_request(
     pool: web::Data<PgPool>,
     user: AuthUser,
@@ -299,31 +325,51 @@ pub async fn approve_request(
     path: web::Path<Uuid>,
     body: web::Json<ReviewRequest>,
 ) -> Result<HttpResponse, AppError> {
-    if !user::can_govern(&user.role) {
+    let request_id = path.into_inner();
+
+    // Fetch the pending request info first so we can check supervisor status
+    type RequestInfo = (String, Option<Uuid>, Option<serde_json::Value>, String, Uuid);
+    let request_info: Option<RequestInfo> = sqlx::query_as(
+        "SELECT type, target_file_id, metadata, title, requested_by
+         FROM governance_requests
+         WHERE id = $1 AND status = 'PENDING'",
+    )
+    .bind(request_id)
+    .fetch_optional(pool.get_ref())
+    .await
+    .map_err(AppError::Database)?;
+
+    let (req_type, target_file_id, metadata, req_title, _requester_id) =
+        request_info.ok_or(AppError::NotFound)?;
+
+    // Authorization: base role, custom permission, or supervisor with permission
+    let has_approve_perm = user::can_govern(&user.role)
+        || user::user_has_permission(pool.get_ref(), user.id, &user.role, "governance:approve")
+            .await
+            .unwrap_or(false);
+
+    let is_supervisor = is_requester_supervisor(pool.get_ref(), user.id, request_id)
+        .await
+        .unwrap_or(false);
+
+    // Supervisor needs governance:approve permission to act on their reports' requests
+    let can_act = has_approve_perm
+        || (is_supervisor
+            && user::user_has_permission(
+                pool.get_ref(), user.id, &user.role, "governance:approve",
+            ).await.unwrap_or(false));
+    if !can_act {
         return Err(AppError::Unauthorized);
     }
 
-    let request_id = path.into_inner();
-
-    // Fetch the pending request info (type, target_file_id, metadata, title) in one query
-    let request_info: Option<(String, Option<Uuid>, Option<serde_json::Value>, String)> =
-        sqlx::query_as(
-            "SELECT type, target_file_id, metadata, title
-             FROM governance_requests
-             WHERE id = $1 AND status = 'PENDING'",
-        )
-        .bind(request_id)
-        .fetch_optional(pool.get_ref())
-        .await
-        .map_err(AppError::Database)?;
-
-    let (req_type, target_file_id, metadata, req_title) = request_info.ok_or(AppError::NotFound)?;
-
-    // Classification changes require director+ authority
+    // Classification changes require director+ authority OR custom governance:approve permission
     if matches!(
         req_type.as_str(),
         "CLASSIFICATION_UPGRADE" | "CLASSIFICATION_DOWNGRADE"
     ) && !user::can_govern_classified(&user.role)
+        && !user::user_has_permission(pool.get_ref(), user.id, &user.role, "governance:approve")
+            .await
+            .unwrap_or(false)
     {
         return Err(AppError::Unauthorized);
     }
@@ -550,7 +596,11 @@ pub async fn reject_request(
     path: web::Path<Uuid>,
     body: web::Json<ReviewRequest>,
 ) -> Result<HttpResponse, AppError> {
-    if !user::can_govern(&user.role) {
+    if !user::can_govern(&user.role)
+        && !user::user_has_permission(pool.get_ref(), user.id, &user.role, "governance:reject")
+            .await
+            .unwrap_or(false)
+    {
         return Err(AppError::Unauthorized);
     }
 
@@ -634,7 +684,11 @@ pub async fn batch_approve(
     req: HttpRequest,
     body: web::Json<BatchReviewRequest>,
 ) -> Result<HttpResponse, AppError> {
-    if !user::can_govern(&user.role) {
+    if !user::can_govern(&user.role)
+        && !user::user_has_permission(pool.get_ref(), user.id, &user.role, "governance:approve")
+            .await
+            .unwrap_or(false)
+    {
         return Err(AppError::Unauthorized);
     }
 
@@ -643,6 +697,12 @@ pub async fn batch_approve(
     let mut succeeded = 0usize;
     let mut failed = 0usize;
     let mut errors: Vec<String> = Vec::new();
+
+    // Check classified permission once (needed in loop below)
+    let can_classified = user::can_govern_classified(&user.role)
+        || user::user_has_permission(pool.get_ref(), user.id, &user.role, "governance:approve")
+            .await
+            .unwrap_or(false);
 
     // Wrap the entire batch in a database transaction for atomicity
     let mut tx = pool.begin().await.map_err(AppError::Database)?;
@@ -679,11 +739,11 @@ pub async fn batch_approve(
             }
         };
 
-        // Classification changes require director+ authority
+        // Classification changes require director+ authority OR custom permission
         if matches!(
             rt.as_str(),
             "CLASSIFICATION_UPGRADE" | "CLASSIFICATION_DOWNGRADE"
-        ) && !user::can_govern_classified(&user.role)
+        ) && !can_classified
         {
             errors.push(format!(
                 "{}: classification changes require director+ authority",
@@ -915,7 +975,11 @@ pub async fn batch_reject(
     req: HttpRequest,
     body: web::Json<BatchReviewRequest>,
 ) -> Result<HttpResponse, AppError> {
-    if !user::can_govern(&user.role) {
+    if !user::can_govern(&user.role)
+        && !user::user_has_permission(pool.get_ref(), user.id, &user.role, "governance:reject")
+            .await
+            .unwrap_or(false)
+    {
         return Err(AppError::Unauthorized);
     }
 
@@ -1019,7 +1083,11 @@ pub async fn undo_request(
     req: HttpRequest,
     path: web::Path<Uuid>,
 ) -> Result<HttpResponse, AppError> {
-    if !user::can_govern(&user.role) {
+    if !user::can_govern(&user.role)
+        && !user::user_has_permission(pool.get_ref(), user.id, &user.role, "governance:approve")
+            .await
+            .unwrap_or(false)
+    {
         return Err(AppError::Unauthorized);
     }
 
