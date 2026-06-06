@@ -17,7 +17,6 @@ import {
   Camera,
   Bell,
   Laptop,
-  UserCheck,
   Building,
 } from "lucide-react";
 import { useAuthStore } from "@/store/useAuthStore";

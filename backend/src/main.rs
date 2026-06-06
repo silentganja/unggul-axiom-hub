@@ -72,12 +72,10 @@ async fn health_check(
         .is_ok();
 
     let redis_ok = match redis_client.get_conn().await {
-        Ok((_permit, mut conn)) => {
-            redis::cmd("PING")
-                .query_async::<_, String>(&mut conn)
-                .await
-                .is_ok()
-        }
+        Ok((_permit, mut conn)) => redis::cmd("PING")
+            .query_async::<_, String>(&mut conn)
+            .await
+            .is_ok(),
         Err(_) => false,
     };
 
@@ -246,8 +244,12 @@ async fn main() -> std::io::Result<()> {
             .wrap(Logger::new(
                 "%a \"%r\" %s %b \"%{Referer}i\" \"%{User-Agent}i\" %T",
             ))
-            .wrap(actix_web::middleware::from_fn(app_middleware::request_id::request_id_middleware))
-            .wrap(actix_web::middleware::from_fn(app_middleware::rate_limit::global_rate_limit_middleware))
+            .wrap(actix_web::middleware::from_fn(
+                app_middleware::request_id::request_id_middleware,
+            ))
+            .wrap(actix_web::middleware::from_fn(
+                app_middleware::rate_limit::global_rate_limit_middleware,
+            ))
             // ── Shared state ──────────────────────────────────────────────────
             .app_data(pool_data.clone())
             .app_data(config_data.clone())
@@ -437,7 +439,10 @@ async fn main() -> std::io::Result<()> {
                     .route("/profile", web::put().to(handlers::auth::update_profile))
                     .route("/avatar", web::post().to(handlers::auth::upload_avatar))
                     .route("/avatar", web::delete().to(handlers::auth::delete_avatar))
-                    .route("/avatar/{user_id}", web::get().to(handlers::auth::get_avatar))
+                    .route(
+                        "/avatar/{user_id}",
+                        web::get().to(handlers::auth::get_avatar),
+                    )
                     .route(
                         "/notification-prefs",
                         web::get().to(handlers::auth::get_notification_prefs),

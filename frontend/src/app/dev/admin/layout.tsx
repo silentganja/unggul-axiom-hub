@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, createContext, useContext, useRef } from "react";
+import React, { useState, useEffect, createContext, useContext } from "react";
 import { Shield, Loader2, AlertCircle, LogOut, Lock, ExternalLink, Eye, EyeOff } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { useAdminStore } from "@/store/useAdminStore";

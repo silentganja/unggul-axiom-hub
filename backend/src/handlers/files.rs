@@ -1368,9 +1368,11 @@ pub async fn upload_file(
                     };
 
                     // Write to temp_filepath exactly once
-                    tokio::fs::write(&temp_filepath, &final_bytes).await.map_err(|e| {
-                        AppError::Internal(anyhow::anyhow!("Failed to write file: {}", e))
-                    })?;
+                    tokio::fs::write(&temp_filepath, &final_bytes)
+                        .await
+                        .map_err(|e| {
+                            AppError::Internal(anyhow::anyhow!("Failed to write file: {}", e))
+                        })?;
                 }
                 _ => {
                     // Ignore unknown fields
@@ -1411,9 +1413,7 @@ pub async fn upload_file(
             .map_err(AppError::Database)?
             .flatten();
 
-    let quota_bytes = user_quota
-        .filter(|&q| q > 0)
-        .unwrap_or(DEFAULT_QUOTA);
+    let quota_bytes = user_quota.filter(|&q| q > 0).unwrap_or(DEFAULT_QUOTA);
 
     if used_bytes + size_bytes > quota_bytes {
         let _ = tokio::fs::remove_file(&temp_filepath).await;

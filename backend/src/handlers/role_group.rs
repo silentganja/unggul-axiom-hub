@@ -108,10 +108,14 @@ pub async fn create_role_group(
         return Err(AppError::BadRequest("Group name is required".into()));
     }
     if name.len() > 128 {
-        return Err(AppError::BadRequest("Group name must be 128 characters or less".into()));
+        return Err(AppError::BadRequest(
+            "Group name must be 128 characters or less".into(),
+        ));
     }
     if description.len() > 1024 {
-        return Err(AppError::BadRequest("Group description must be 1024 characters or less".into()));
+        return Err(AppError::BadRequest(
+            "Group description must be 1024 characters or less".into(),
+        ));
     }
 
     let group: RoleGroup = sqlx::query_as(
@@ -233,12 +237,16 @@ pub async fn update_role_group(
 
     if let Some(ref name) = body.name {
         if name.trim().len() > 128 {
-            return Err(AppError::BadRequest("Group name must be 128 characters or less".into()));
+            return Err(AppError::BadRequest(
+                "Group name must be 128 characters or less".into(),
+            ));
         }
     }
     if let Some(ref desc) = body.description {
         if desc.trim().len() > 1024 {
-            return Err(AppError::BadRequest("Group description must be 1024 characters or less".into()));
+            return Err(AppError::BadRequest(
+                "Group description must be 1024 characters or less".into(),
+            ));
         }
     }
 
@@ -719,10 +727,14 @@ pub async fn create_permission(
         ));
     }
     if key.len() > 255 {
-        return Err(AppError::BadRequest("Permission key must be 255 characters or less".into()));
+        return Err(AppError::BadRequest(
+            "Permission key must be 255 characters or less".into(),
+        ));
     }
     if description.len() > 1024 {
-        return Err(AppError::BadRequest("Permission description must be 1024 characters or less".into()));
+        return Err(AppError::BadRequest(
+            "Permission description must be 1024 characters or less".into(),
+        ));
     }
 
     let perm: Permission = sqlx::query_as(
@@ -775,7 +787,9 @@ pub async fn update_permission(
     let description = body.description.trim().to_string();
 
     if description.len() > 1024 {
-        return Err(AppError::BadRequest("Permission description must be 1024 characters or less".into()));
+        return Err(AppError::BadRequest(
+            "Permission description must be 1024 characters or less".into(),
+        ));
     }
 
     let perm: Permission = sqlx::query_as(

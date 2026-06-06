@@ -96,8 +96,10 @@ pub async fn stream(
         }
     });
 
-    let keepalive_stream = tokio_stream::wrappers::IntervalStream::new(tokio::time::interval(std::time::Duration::from_secs(15)))
-        .map(|_| Ok::<_, actix_web::Error>(actix_web::web::Bytes::from(": keepalive\n\n")));
+    let keepalive_stream = tokio_stream::wrappers::IntervalStream::new(tokio::time::interval(
+        std::time::Duration::from_secs(15),
+    ))
+    .map(|_| Ok::<_, actix_web::Error>(actix_web::web::Bytes::from(": keepalive\n\n")));
 
     let merged_stream = futures_util::stream::select(stream, keepalive_stream);
 

@@ -12,6 +12,7 @@ export default function AdminDashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Used from event handlers only (retry button, notification callbacks)
   const fetchDashboard = useCallback(async () => {
     setIsLoading(true);
     setError(null);
@@ -25,8 +26,22 @@ export default function AdminDashboardPage() {
   }, []);
 
   useEffect(() => {
-    fetchDashboard();
-  }, [fetchDashboard]);
+    let cancelled = false;
+    async function run() {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const data = await adminApi.getDashboard();
+        if (!cancelled) setDashboard(data);
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load metrics");
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    }
+    void run();
+    return () => { cancelled = true; };
+  }, []);
 
   // Real-time update subscriptions
   useEffect(() => {

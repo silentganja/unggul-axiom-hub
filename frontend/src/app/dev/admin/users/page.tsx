@@ -1,11 +1,10 @@
 "use client";
 
-import React, { useState, useEffect, useId, useCallback, useRef } from "react";
+import React, { useState, useEffect, useId, useCallback } from "react";
 import {
-  Users as UsersIcon, Loader2, AlertCircle, Eye, EyeOff, UserPlus, Trash2, Edit2, Search, Lock, Folder, Shield,
+  Users as UsersIcon, Loader2, AlertCircle, UserPlus, Trash2, Edit2, Search, Lock, Folder, Shield,
 } from "lucide-react";
 import { useToastStore } from "@/components/ui/Toast";
-import { useAdminStore } from "@/store/useAdminStore";
 import BulkOperations from "@/components/features/admin/BulkOperations";
 import UserDetailPanel from "@/components/features/admin/UserDetailPanel";
 import PasswordResetModal from "@/components/features/admin/PasswordResetModal";
@@ -80,6 +79,7 @@ export default function UsersAdminPage() {
   const [bulkRoleUserIds, setBulkRoleUserIds] = useState<string[]>([]);
   const [bulkRoleTarget, setBulkRoleTarget] = useState("staff");
 
+  // Used from event handlers only (post-create, post-edit, post-delete)
   const fetchUsers = useCallback(async () => {
     setIsLoading(true); setError(null);
     try {
@@ -98,8 +98,28 @@ export default function UsersAdminPage() {
   }, [page, perPage, searchQuery]);
 
   useEffect(() => {
-    fetchUsers();
-  }, [fetchUsers]);
+    let cancelled = false;
+    async function run() {
+      setIsLoading(true); setError(null);
+      try {
+        const [pRes, gs] = await Promise.all([
+          adminApi.listUsersPaginated({ page, perPage, q: searchQuery }),
+          adminApi.listUserGroupSummaries().catch(() => ({})),
+        ]);
+        if (!cancelled) {
+          setUsers(pRes.users);
+          setTotal(pRes.total);
+          setGroupSummaries(gs);
+        }
+      } catch (e) {
+        if (!cancelled) setError(`Users: ${e instanceof Error ? e.message : "Failed to fetch"}`);
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    }
+    void run();
+    return () => { cancelled = true; };
+  }, [page, perPage, searchQuery]);
 
   // Fetch custom roles for dropdowns
   useEffect(() => {

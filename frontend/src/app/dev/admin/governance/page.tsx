@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 import GovernanceTab from "@/components/features/admin/GovernanceTab";
 import { adminApi, GovernanceRequest, formatTimestamp } from "@/lib/api";
 
@@ -25,21 +25,23 @@ export default function GovernanceAdminPage() {
   const [govRequests, setGovRequests] = useState<GovernanceRequest[]>([]);
   const [govLoading, setGovLoading] = useState(true);
 
-  const fetchGovernance = useCallback(async () => {
-    setGovLoading(true);
-    try {
-      const res = await adminApi.getAdminGovernance();
-      setGovRequests(res.requests);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setGovLoading(false);
-    }
-  }, []);
 
   useEffect(() => {
-    fetchGovernance();
-  }, [fetchGovernance]);
+    let cancelled = false;
+    async function run() {
+      setGovLoading(true);
+      try {
+        const res = await adminApi.getAdminGovernance();
+        if (!cancelled) setGovRequests(res.requests);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        if (!cancelled) setGovLoading(false);
+      }
+    }
+    void run();
+    return () => { cancelled = true; };
+  }, []);
 
   const handleExportGovernance = () => {
     const headers = ["Type", "Title", "Requester", "Status", "Created"];

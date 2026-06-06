@@ -1,4 +1,4 @@
-﻿use crate::errors::AppError;
+use crate::errors::AppError;
 use chrono::Utc;
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use rand_core::{OsRng, RngCore};
@@ -132,7 +132,8 @@ mod tests {
         let user_id = sample_user_id();
         let role = "officer";
 
-        let token = generate_token(TEST_SECRET, user_id, role).expect("token generation should succeed");
+        let token =
+            generate_token(TEST_SECRET, user_id, role).expect("token generation should succeed");
         let claims = decode_token(TEST_SECRET, &token).expect("decoding own token should succeed");
 
         assert_eq!(claims.sub, user_id.to_string());
@@ -179,7 +180,8 @@ mod tests {
 
     #[test]
     fn admin_token_has_admin_panel_role() {
-        let token = generate_admin_token(TEST_SECRET, "superadmin").expect("admin token should succeed");
+        let token =
+            generate_admin_token(TEST_SECRET, "superadmin").expect("admin token should succeed");
         let claims = decode_token(TEST_SECRET, &token).expect("admin token must decode");
 
         assert_eq!(claims.sub, "superadmin");
@@ -238,6 +240,9 @@ mod tests {
         let claims = decode_token(TEST_SECRET, &token).unwrap();
         assert_eq!(claims.role, "sse_subscriber");
         let now = Utc::now().timestamp() as usize;
-        assert!(claims.exp <= now + 300 + 5, "SSE token must expire within ~5 min");
+        assert!(
+            claims.exp <= now + 300 + 5,
+            "SSE token must expire within ~5 min"
+        );
     }
 }

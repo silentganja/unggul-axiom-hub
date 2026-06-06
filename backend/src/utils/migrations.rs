@@ -1,4 +1,4 @@
-﻿// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 // Auto-migration runner - applies idempotent schema migrations on every startup.
 //
 // Uses version numbers in the 9000+ range to avoid conflicts with any existing
@@ -443,7 +443,9 @@ pub async fn run_migrations(pool: &PgPool) {
             match sqlx::query(stmt).execute(pool).await {
                 Ok(_) => {}
                 Err(e) => {
-                    let is_critical = !stmt.to_lowercase().contains("select 1 as migration_documentation");
+                    let is_critical = !stmt
+                        .to_lowercase()
+                        .contains("select 1 as migration_documentation");
                     if is_critical {
                         panic!(
                             "FATAL: Migration {version} ({description}) failed.\n\

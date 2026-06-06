@@ -39,7 +39,15 @@ impl RedisClient {
 
     /// Acquire a semaphore permit and return a multiplexed async connection.
     /// The permit is held for the duration of the caller's operation.
-    pub(crate) async fn get_conn(&self) -> Result<(tokio::sync::SemaphorePermit<'_>, redis::aio::MultiplexedConnection), crate::errors::AppError> {
+    pub(crate) async fn get_conn(
+        &self,
+    ) -> Result<
+        (
+            tokio::sync::SemaphorePermit<'_>,
+            redis::aio::MultiplexedConnection,
+        ),
+        crate::errors::AppError,
+    > {
         let permit = self.semaphore.acquire().await.map_err(|e| {
             crate::errors::AppError::Redis(format!("Semaphore acquire failed: {}", e))
         })?;

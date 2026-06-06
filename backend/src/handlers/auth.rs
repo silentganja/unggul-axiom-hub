@@ -298,22 +298,30 @@ pub async fn update_profile(
 ) -> Result<HttpResponse, AppError> {
     if let Some(ref name) = body.full_name {
         if name.trim().len() > 255 {
-            return Err(AppError::BadRequest("Full name must be 255 characters or less".into()));
+            return Err(AppError::BadRequest(
+                "Full name must be 255 characters or less".into(),
+            ));
         }
     }
     if let Some(ref dept) = body.department {
         if dept.trim().len() > 255 {
-            return Err(AppError::BadRequest("Department must be 255 characters or less".into()));
+            return Err(AppError::BadRequest(
+                "Department must be 255 characters or less".into(),
+            ));
         }
     }
     if let Some(ref pwd) = body.new_password {
         if pwd.len() > 128 {
-            return Err(AppError::BadRequest("New password must be 128 characters or less".into()));
+            return Err(AppError::BadRequest(
+                "New password must be 128 characters or less".into(),
+            ));
         }
     }
     if let Some(ref pwd) = body.current_password {
         if pwd.len() > 128 {
-            return Err(AppError::BadRequest("Current password must be 128 characters or less".into()));
+            return Err(AppError::BadRequest(
+                "Current password must be 128 characters or less".into(),
+            ));
         }
     }
 
@@ -550,7 +558,10 @@ fn detect_mime_type(bytes: &[u8]) -> &'static str {
         "image/jpeg"
     } else if bytes.starts_with(&[0x47, 0x49, 0x46, 0x38]) {
         "image/gif"
-    } else if bytes.starts_with(&[0x52, 0x49, 0x46, 0x46]) && bytes.len() > 11 && &bytes[8..12] == b"WEBP" {
+    } else if bytes.starts_with(&[0x52, 0x49, 0x46, 0x46])
+        && bytes.len() > 11
+        && &bytes[8..12] == b"WEBP"
+    {
         "image/webp"
     } else {
         "image/jpeg" // fallback
@@ -576,9 +587,7 @@ pub async fn get_avatar(
 
     let mime = detect_mime_type(&bytes);
 
-    Ok(HttpResponse::Ok()
-        .content_type(mime)
-        .body(bytes))
+    Ok(HttpResponse::Ok().content_type(mime).body(bytes))
 }
 
 // ── GET /api/auth/notification-prefs ────────────────────────────────────────

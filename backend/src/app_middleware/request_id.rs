@@ -33,11 +33,10 @@ pub async fn request_id_middleware(
 
     let mut res = next.call(req).await?;
 
-    res.headers_mut()
-        .insert(
-            actix_web::http::header::HeaderName::from_static("x-request-id"),
-            req_id.parse().unwrap(),
-        );
+    res.headers_mut().insert(
+        actix_web::http::header::HeaderName::from_static("x-request-id"),
+        req_id.parse().unwrap(),
+    );
 
     Ok(res)
 }

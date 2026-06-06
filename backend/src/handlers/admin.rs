@@ -120,7 +120,7 @@ pub async fn list_users(
         let (users_raw, total): (Vec<User>, i64) = if !search.is_empty() {
             let search_pattern = format!("%{}%", search);
             let count: i64 = sqlx::query_scalar(
-                "SELECT COUNT(*) FROM users WHERE email ILIKE $1 OR full_name ILIKE $1"
+                "SELECT COUNT(*) FROM users WHERE email ILIKE $1 OR full_name ILIKE $1",
             )
             .bind(&search_pattern)
             .fetch_one(pool.get_ref())
@@ -133,7 +133,7 @@ pub async fn list_users(
                  FROM users
                  WHERE email ILIKE $1 OR full_name ILIKE $1
                  ORDER BY created_at DESC
-                 LIMIT $2 OFFSET $3"
+                 LIMIT $2 OFFSET $3",
             )
             .bind(&search_pattern)
             .bind(per_page)
@@ -154,7 +154,7 @@ pub async fn list_users(
                         supervisor_id, department, storage_quota_bytes, created_at
                  FROM users
                  ORDER BY created_at DESC
-                 LIMIT $1 OFFSET $2"
+                 LIMIT $1 OFFSET $2",
             )
             .bind(per_page)
             .bind(offset)
@@ -214,7 +214,9 @@ pub async fn create_user(
     }
 
     if email.len() > 320 || body.password.len() > 128 || full_name.len() > 255 {
-        return Err(AppError::BadRequest("input lengths exceed maximum limits".into()));
+        return Err(AppError::BadRequest(
+            "input lengths exceed maximum limits".into(),
+        ));
     }
 
     if let Some(ref dept) = body.department {

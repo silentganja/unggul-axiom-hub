@@ -99,7 +99,9 @@ pub async fn global_rate_limit_middleware(
 
     if !allowed {
         tracing::warn!(ip = %ip, "Global rate limit exceeded");
-        return Err(actix_web::error::ErrorTooManyRequests("Global rate limit exceeded"));
+        return Err(actix_web::error::ErrorTooManyRequests(
+            "Global rate limit exceeded",
+        ));
     }
 
     next.call(req).await
