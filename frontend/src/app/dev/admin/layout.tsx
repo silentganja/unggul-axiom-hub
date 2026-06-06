@@ -112,6 +112,21 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [stepUpLoading, setStepUpLoading] = useState(false);
   const [stepUpCallback, setStepUpCallback] = useState<(() => void) | null>(null);
 
+  const [configMap, setConfigMap] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    const fetchConfig = () => {
+      if (isAuthenticated) {
+        adminApi.getConfig().then(setConfigMap).catch(() => {});
+      }
+    };
+    fetchConfig();
+    window.addEventListener("ui-config-update", fetchConfig);
+    return () => {
+      window.removeEventListener("ui-config-update", fetchConfig);
+    };
+  }, [isAuthenticated]);
+
   // Hydrate store on mount — validates the stored token against the backend
   useEffect(() => {
     void hydrate();
@@ -201,10 +216,61 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { key: "storage", label: "storage", href: "/dev/admin/storage" },
     { key: "config", label: "config", href: "/dev/admin/config" },
     { key: "roles", label: "Roles", href: "/dev/admin/roles" },
+    { key: "uiux", label: "UI/UX Templates", href: "/dev/admin/uiux" },
   ];
+
+  const uiTheme = configMap["ui_theme"] || "midnight";
+  const uiGlassBlur = configMap["ui_glass_blur"] || "20";
+  const uiGlowIntensity = configMap["ui_glow_intensity"] || "0.15";
+  const uiScanlinesOpacity = configMap["ui_scanlines_opacity"] || "0.015";
+  const uiTypography = configMap["ui_typography"] || "sans";
+  const uiOrgName = configMap["ui_org_name"] || "Unggul Axiom";
+  const uiLogoUrl = configMap["ui_logo_url"] || "";
+  const uiGreetingHeader = configMap["ui_greeting_header"] || "Strategic Portal";
+
+  let accentHex = "#CD7F32";
+  let accentHoverHex = "#B87333";
+  let accentRgb = "205, 127, 50";
+  if (uiTheme === "cyberpunk") {
+    accentHex = "#D97706";
+    accentHoverHex = "#B45309";
+    accentRgb = "217, 119, 6";
+  } else if (uiTheme === "emerald") {
+    accentHex = "#059669";
+    accentHoverHex = "#047857";
+    accentRgb = "5, 150, 105";
+  } else if (uiTheme === "ocean") {
+    accentHex = "#0284c7";
+    accentHoverHex = "#0369a1";
+    accentRgb = "2, 132, 199";
+  }
+
+  const borderOpacity = Number(uiGlowIntensity);
+  const borderStrongOpacity = Math.min(borderOpacity * 1.75, 0.7);
+
+  const styleOverrideHtml = `
+    :root, .dark {
+      --accent: ${accentHex} !important;
+      --accent-hover: ${accentHoverHex} !important;
+      --accent-subtle: rgba(${accentRgb}, 0.12) !important;
+      --accent-ring: rgba(${accentRgb}, 0.45) !important;
+      --border: rgba(${accentRgb}, ${borderOpacity}) !important;
+      --border-strong: rgba(${accentRgb}, ${borderStrongOpacity}) !important;
+      --font-sans: ${uiTypography === "serif" ? "var(--font-playfair-display)" : "var(--font-inter)"} !important;
+    }
+    .glass-premium {
+      backdrop-filter: blur(${uiGlassBlur}px) saturate(180%) !important;
+      -webkit-backdrop-filter: blur(${uiGlassBlur}px) saturate(180%) !important;
+      box-shadow: 0 0 15px rgba(${accentRgb}, ${Number(uiGlowIntensity) * 0.45}) !important;
+    }
+    .scan-grid {
+      opacity: ${uiScanlinesOpacity} !important;
+    }
+  `;
 
   return (
     <AdminLayoutContext.Provider value={{ requestStepUp }}>
+      <style dangerouslySetInnerHTML={{ __html: styleOverrideHtml }} />
       <div className="min-h-dvh bg-background text-foreground font-sans selection:bg-accent selection:text-accent-foreground">
         <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
           <div className="absolute top-[10%] left-[20%] w-[35%] h-[35%] rounded-full bg-accent/5 blur-[120px]" />
@@ -214,12 +280,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           {/* Header */}
           <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/20 pb-4">
             <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-accent/25 bg-accent-subtle shadow-[0_0_20px_rgba(205,127,50,0.15)]">
-                <Shield size={18} className="text-accent" strokeWidth={1.5} />
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-accent/25 bg-accent-subtle shadow-[0_0_20px_rgba(205,127,50,0.15)] overflow-hidden shrink-0">
+                {uiLogoUrl ? (
+                  <img src={uiLogoUrl} alt="Logo" className="h-full w-full object-cover" />
+                ) : (
+                  <Shield size={18} className="text-accent" strokeWidth={1.5} />
+                )}
               </div>
               <div>
-                <h1 className="text-lg font-bold tracking-tight text-foreground font-serif">Strategic Portal · Admin Console</h1>
-                <p className="font-mono text-[9px] text-foreground-subtle">Authenticated as <span className="text-accent font-bold">{username}</span></p>
+                <h1 className="text-lg font-bold tracking-tight text-foreground font-serif">{uiGreetingHeader} · Admin Console</h1>
+                <p className="font-mono text-[9px] text-foreground-subtle">Authenticated as <span className="text-accent font-bold">{username}</span> at <span className="text-accent/80 font-bold">{uiOrgName}</span></p>
               </div>
             </div>
             <div className="flex items-center gap-3">

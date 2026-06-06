@@ -420,6 +420,23 @@ pub async fn run_migrations(pool: &PgPool) {
                 "CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs (created_at DESC)",
             ],
         ),
+        // 9025 - UI/UX Template Settings seeds
+        (
+            "9025",
+            "Auto: Seed UI/UX configurations",
+            vec![
+                "INSERT INTO system_config (key, value, updated_at) VALUES
+                    ('ui_theme', 'midnight', NOW()),
+                    ('ui_glass_blur', '20', NOW()),
+                    ('ui_glow_intensity', '0.15', NOW()),
+                    ('ui_scanlines_opacity', '0.015', NOW()),
+                    ('ui_typography', 'sans', NOW()),
+                    ('ui_org_name', 'Unggul Axiom', NOW()),
+                    ('ui_logo_url', '', NOW()),
+                    ('ui_greeting_header', 'Strategic Portal', NOW())
+                 ON CONFLICT (key) DO NOTHING",
+            ],
+        ),
     ];
 
     for (version, description, statements) in &migrations {
