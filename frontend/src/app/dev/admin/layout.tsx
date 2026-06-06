@@ -101,7 +101,7 @@ function AdminLoginView() {
 
 // ─── Main Admin Layout Wrapper ────────────────────────────────────────────────
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  const { username, isAuthenticated, logout, hydrate } = useAdminStore();
+  const { username, isAuthenticated, isLoading, logout, hydrate } = useAdminStore();
   const pathname = usePathname() || "";
   const router = useRouter();
 
@@ -112,9 +112,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [stepUpLoading, setStepUpLoading] = useState(false);
   const [stepUpCallback, setStepUpCallback] = useState<(() => void) | null>(null);
 
-  // Hydrate store on mount
+  // Hydrate store on mount — validates the stored token against the backend
   useEffect(() => {
-    hydrate();
+    void hydrate();
   }, [hydrate]);
 
   // 15-Minute Idle Timeout Check
@@ -175,6 +175,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       setStepUpLoading(false);
     }
   };
+
+  // Show a minimal spinner while the async backend token check runs,
+  // so we never flash the login form for a user with a valid session.
+  if (isLoading) {
+    return (
+      <div className="min-h-dvh flex items-center justify-center bg-background font-mono text-xs text-foreground-subtle gap-2">
+        <Loader2 size={16} className="animate-spin text-accent" />
+        Verifying session...
+      </div>
+    );
+  }
 
   if (!isAuthenticated) {
     return <AdminLoginView />;

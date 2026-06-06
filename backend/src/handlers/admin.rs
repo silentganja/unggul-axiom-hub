@@ -56,10 +56,7 @@ pub async fn admin_login(
     req: HttpRequest,
     body: web::Json<AdminLoginRequest>,
 ) -> Result<HttpResponse, AppError> {
-    let ip = req
-        .peer_addr()
-        .map(|a| a.ip().to_string())
-        .unwrap_or_else(|| "unknown".to_string());
+    let ip = crate::app_middleware::rate_limit::extract_client_ip(&req);
     rate_limit::check_sensitive_rate_limit(&redis_client, &ip).await?;
 
     // Constant-time username check first, then Argon2id password verification

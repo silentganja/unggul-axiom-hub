@@ -250,6 +250,14 @@ async fn main() -> std::io::Result<()> {
             .wrap(actix_web::middleware::from_fn(
                 app_middleware::rate_limit::global_rate_limit_middleware,
             ))
+            // Security headers on every API response (belt-and-suspenders: Nginx
+            // covers browser traffic, but these protect direct API callers too)
+            .wrap(
+                actix_web::middleware::DefaultHeaders::new()
+                    .add(("X-Content-Type-Options", "nosniff"))
+                    .add(("X-Frame-Options", "DENY"))
+                    .add(("Cache-Control", "no-store")),
+            )
             // ── Shared state ──────────────────────────────────────────────────
             .app_data(pool_data.clone())
             .app_data(config_data.clone())

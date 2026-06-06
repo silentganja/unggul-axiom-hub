@@ -346,10 +346,7 @@ pub async fn approve_request(
     path: web::Path<Uuid>,
     body: web::Json<ReviewRequest>,
 ) -> Result<HttpResponse, AppError> {
-    let ip = req
-        .peer_addr()
-        .map(|a| a.ip().to_string())
-        .unwrap_or_default();
+    let ip = crate::app_middleware::rate_limit::extract_client_ip(&req);
     crate::app_middleware::rate_limit::check_action_rate_limit(&redis_client, &ip).await?;
     let request_id = path.into_inner();
 
@@ -411,6 +408,10 @@ pub async fn approve_request(
         return Err(AppError::Unauthorized);
     }
 
+    // Open a transaction so the file side-effect and the status update are atomic.
+    // If the process crashes between them no partial state can occur.
+    let mut tx = pool.begin().await.map_err(AppError::Database)?;
+
     // Execute the action on the target file
     if let Some(file_id) = target_file_id {
         match req_type.as_str() {
@@ -421,10 +422,10 @@ pub async fn approve_request(
                     .bind(request_id)
                     .bind(&req_title)
                     .bind(file_id)
-                    .execute(pool.get_ref())
+                    .execute(&mut *tx)
                     .await
                     .map_err(AppError::Database)?;
-                // Emit FileLocked notification
+                // Emit FileLocked notification (after commit; harmless if it fires early)
                 let file_name: String = sqlx::query_scalar("SELECT name FROM files WHERE id = $1")
                     .bind(file_id)
                     .fetch_optional(pool.get_ref())
@@ -452,7 +453,7 @@ pub async fn approve_request(
                     "UPDATE files SET locked_by = NULL, locked_at = NULL, lock_reason = NULL WHERE id = $1",
                 )
                 .bind(file_id)
-                    .execute(pool.get_ref())
+                    .execute(&mut *tx)
                     .await
                     .map_err(AppError::Database)?;
                 // Emit FileUnlocked notification
@@ -513,7 +514,7 @@ pub async fn approve_request(
                         sqlx::query("UPDATE files SET classification = $1 WHERE id = $2")
                             .bind(new_class)
                             .bind(file_id)
-                            .execute(pool.get_ref())
+                            .execute(&mut *tx)
                             .await
                             .map_err(AppError::Database)?;
                     }
@@ -538,7 +539,7 @@ pub async fn approve_request(
                             let original_parent_id: Option<Uuid> =
                                 sqlx::query_scalar("SELECT parent_id FROM files WHERE id = $1")
                                     .bind(file_id)
-                                    .fetch_optional(pool.get_ref())
+                                    .fetch_optional(&mut *tx)
                                     .await
                                     .map_err(AppError::Database)?
                                     .flatten();
@@ -552,7 +553,7 @@ pub async fn approve_request(
                             sqlx::query("UPDATE files SET parent_id = $1 WHERE id = $2")
                                 .bind(folder_uuid)
                                 .bind(file_id)
-                                .execute(pool.get_ref())
+                                .execute(&mut *tx)
                                 .await
                                 .map_err(AppError::Database)?;
 
@@ -563,7 +564,7 @@ pub async fn approve_request(
                                 )
                                 .bind(&updated_meta)
                                 .bind(request_id)
-                                .execute(pool.get_ref())
+                                .execute(&mut *tx)
                                 .await;
                             }
                         }
@@ -573,7 +574,7 @@ pub async fn approve_request(
             "FILE_DELETE" => {
                 sqlx::query("UPDATE files SET deleted_at = NOW() WHERE id = $1")
                     .bind(file_id)
-                    .execute(pool.get_ref())
+                    .execute(&mut *tx)
                     .await
                     .map_err(AppError::Database)?;
             }
@@ -588,7 +589,7 @@ pub async fn approve_request(
     .bind(user.id)
     .bind(&body.reason)
     .bind(request_id)
-    .execute(pool.get_ref())
+    .execute(&mut *tx)
     .await
     .map_err(AppError::Database)?;
 
@@ -596,18 +597,22 @@ pub async fn approve_request(
         return Err(AppError::NotFound);
     }
 
-    // ── Audit log ──────────────────────────────────────────────────────────────
-    let ip = req.peer_addr().map(|a| a.to_string()).unwrap_or_default();
-    let _ = crate::handlers::files::write_audit_log_internal(
-        pool.get_ref(),
-        user.id,
-        "GOVERNANCE_APPROVE",
-        &request_id.to_string(),
-        &ip,
+    // ── Audit log (inside the same transaction) ────────────────────────────────
+    let _ = sqlx::query(
+        "INSERT INTO audit_logs (actor_id, action, target_resource, ip_address)
+         VALUES ($1, $2, $3, $4)",
     )
+    .bind(user.id)
+    .bind("GOVERNANCE_APPROVE")
+    .bind(request_id.to_string())
+    .bind(&ip)
+    .execute(&mut *tx)
     .await;
 
-    // ── Emit notification to the original requester ─────────────────────────
+    // Commit everything atomically
+    tx.commit().await.map_err(AppError::Database)?;
+
+    // ── Emit notification to the original requester (after commit) ─────────────
     crate::handlers::notifications::emit_notification_to(
         Some(_requester_id),
         crate::models::notification::NotificationEvent::GovernanceUpdate {
@@ -635,10 +640,7 @@ pub async fn reject_request(
     path: web::Path<Uuid>,
     body: web::Json<ReviewRequest>,
 ) -> Result<HttpResponse, AppError> {
-    let ip = req
-        .peer_addr()
-        .map(|a| a.ip().to_string())
-        .unwrap_or_default();
+    let ip = crate::app_middleware::rate_limit::extract_client_ip(&req);
     crate::app_middleware::rate_limit::check_action_rate_limit(&redis_client, &ip).await?;
     if !user::can_govern(&user.role)
         && !user::user_has_permission(pool.get_ref(), user.id, &user.role, "governance:reject")
@@ -650,6 +652,10 @@ pub async fn reject_request(
 
     let request_id = path.into_inner();
 
+    // Wrap status update and audit log in a single transaction so they commit
+    // together. A crash between the two can no longer leave an unlogged rejection.
+    let mut tx = pool.begin().await.map_err(AppError::Database)?;
+
     let updated = sqlx::query(
         "UPDATE governance_requests SET status = 'REJECTED', reviewed_by = $1, review_note = $2, updated_at = NOW()
          WHERE id = $3 AND status = 'PENDING'",
@@ -657,7 +663,7 @@ pub async fn reject_request(
     .bind(user.id)
     .bind(&body.reason)
     .bind(request_id)
-    .execute(pool.get_ref())
+    .execute(&mut *tx)
     .await
     .map_err(AppError::Database)?;
 
@@ -665,18 +671,21 @@ pub async fn reject_request(
         return Err(AppError::NotFound);
     }
 
-    // ── Audit log ──────────────────────────────────────────────────────────────
-    let ip = req.peer_addr().map(|a| a.to_string()).unwrap_or_default();
-    let _ = crate::handlers::files::write_audit_log_internal(
-        pool.get_ref(),
-        user.id,
-        "GOVERNANCE_REJECT",
-        &request_id.to_string(),
-        &ip,
+    // ── Audit log (inside the same transaction) ────────────────────────────────
+    let _ = sqlx::query(
+        "INSERT INTO audit_logs (actor_id, action, target_resource, ip_address)
+         VALUES ($1, $2, $3, $4)",
     )
+    .bind(user.id)
+    .bind("GOVERNANCE_REJECT")
+    .bind(request_id.to_string())
+    .bind(&ip)
+    .execute(&mut *tx)
     .await;
 
-    // ── Emit notification ──────────────────────────────────────────────────
+    tx.commit().await.map_err(AppError::Database)?;
+
+    // ── Emit notification (after commit) ─────────────────────────────────────
     let req_title: Option<String> =
         sqlx::query_scalar("SELECT title FROM governance_requests WHERE id = $1")
             .bind(request_id)
@@ -729,10 +738,7 @@ pub async fn batch_approve(
     req: HttpRequest,
     body: web::Json<BatchReviewRequest>,
 ) -> Result<HttpResponse, AppError> {
-    let ip = req
-        .peer_addr()
-        .map(|a| a.ip().to_string())
-        .unwrap_or_default();
+    let ip = crate::app_middleware::rate_limit::extract_client_ip(&req);
     crate::app_middleware::rate_limit::check_action_rate_limit(&redis_client, &ip).await?;
     if !user::can_govern(&user.role)
         && !user::user_has_permission(pool.get_ref(), user.id, &user.role, "governance:approve")
@@ -741,8 +747,6 @@ pub async fn batch_approve(
     {
         return Err(AppError::Unauthorized);
     }
-
-    let ip = req.peer_addr().map(|a| a.to_string()).unwrap_or_default();
     let mut processed = 0usize;
     let mut succeeded = 0usize;
     let mut failed = 0usize;

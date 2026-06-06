@@ -138,10 +138,6 @@ export default function ForensicAuditPage() {
         </div>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
           <span>RECORDS: {logs.length}</span>
-          <span className="hidden md:inline text-foreground-subtle/20">|</span>
-          <span>INTEGRITY VERIFIED: SHA-256 MATCH</span>
-          <span className="hidden md:inline text-foreground-subtle/20">|</span>
-          <span>active listeners: 4</span>
         </div>
       </div>
 

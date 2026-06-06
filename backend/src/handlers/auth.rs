@@ -34,10 +34,7 @@ pub async fn login(
     req: HttpRequest,
     body: web::Json<LoginRequest>,
 ) -> Result<HttpResponse, AppError> {
-    let ip = req
-        .peer_addr()
-        .map(|a| a.ip().to_string())
-        .unwrap_or_else(|| "unknown".to_string());
+    let ip = crate::app_middleware::rate_limit::extract_client_ip(&req);
     rate_limit::check_login_rate_limit(&redis_client, &ip).await?;
 
     let email = body.email.trim().to_lowercase();
