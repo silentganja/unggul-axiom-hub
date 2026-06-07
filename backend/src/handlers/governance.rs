@@ -488,7 +488,12 @@ pub async fn approve_request(
                 if let Some(ref meta) = metadata {
                     if let Some(new_class) = meta.get("newClassification").and_then(|v| v.as_str())
                     {
-                        if !crate::models::classification::is_valid_classification(pool.get_ref(), new_class).await {
+                        if !crate::models::classification::is_valid_classification(
+                            pool.get_ref(),
+                            new_class,
+                        )
+                        .await
+                        {
                             return Err(AppError::BadRequest("Invalid classification".into()));
                         }
 
@@ -502,8 +507,16 @@ pub async fn approve_request(
                                 .flatten();
 
                         if let Some(ref cur) = current_class {
-                            let cur_level = crate::models::classification::classification_level(pool.get_ref(), cur.as_str()).await;
-                            let new_level = crate::models::classification::classification_level(pool.get_ref(), new_class).await;
+                            let cur_level = crate::models::classification::classification_level(
+                                pool.get_ref(),
+                                cur.as_str(),
+                            )
+                            .await;
+                            let new_level = crate::models::classification::classification_level(
+                                pool.get_ref(),
+                                new_class,
+                            )
+                            .await;
                             if let (Some(cl), Some(nl)) = (cur_level, new_level) {
                                 let is_upgrade = req_type.as_str() == "CLASSIFICATION_UPGRADE";
                                 if is_upgrade && cl >= nl {
@@ -625,9 +638,7 @@ pub async fn approve_request(
     // ── Emit deferred FILE_LOCK / FILE_UNLOCK notifications (after commit) ──
     match pending_notification {
         Some("FILE_LOCK") => {
-            if let (Some(ref file_name), Some(ref locked_by)) =
-                (&lock_file_name, &lock_locked_by)
-            {
+            if let (Some(ref file_name), Some(ref locked_by)) = (&lock_file_name, &lock_locked_by) {
                 crate::handlers::notifications::emit_notification(
                     crate::models::notification::NotificationEvent::FileLocked {
                         file_id: target_file_id.map_or(String::new(), |id| id.to_string()),
@@ -1335,7 +1346,12 @@ pub async fn undo_request(
                             if let Some(new_class) =
                                 meta.get("newClassification").and_then(|v| v.as_str())
                             {
-                                if crate::models::classification::is_valid_classification(pool.get_ref(), new_class).await {
+                                if crate::models::classification::is_valid_classification(
+                                    pool.get_ref(),
+                                    new_class,
+                                )
+                                .await
+                                {
                                     sqlx::query(
                                         "UPDATE files SET classification = $1 WHERE id = $2",
                                     )

@@ -842,9 +842,9 @@ pub async fn force_delete_file(
     // is preserved so the admin can retry rather than orphaning bytes on disk.
     let filepath = std::path::Path::new(&config.storage_path).join(file_id.to_string());
     if filepath.exists() {
-        tokio::fs::remove_file(&filepath)
-            .await
-            .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to remove file from disk: {}", e)))?;
+        tokio::fs::remove_file(&filepath).await.map_err(|e| {
+            AppError::Internal(anyhow::anyhow!("Failed to remove file from disk: {}", e))
+        })?;
     }
 
     let deleted = sqlx::query("DELETE FROM files WHERE id = $1")
@@ -1156,7 +1156,12 @@ pub async fn force_approve(
                 if let Some(meta) = meta {
                     if let Some(new_class) = meta.get("newClassification").and_then(|v| v.as_str())
                     {
-                        if crate::models::classification::is_valid_classification(pool.get_ref(), new_class).await {
+                        if crate::models::classification::is_valid_classification(
+                            pool.get_ref(),
+                            new_class,
+                        )
+                        .await
+                        {
                             let _ =
                                 sqlx::query("UPDATE files SET classification = $1 WHERE id = $2")
                                     .bind(new_class)

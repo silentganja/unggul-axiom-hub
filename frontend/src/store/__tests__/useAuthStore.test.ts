@@ -17,6 +17,7 @@ vi.mock("@/lib/api", () => {
     setToken: vi.fn(),
     setRefreshToken: vi.fn(),
     clearToken: vi.fn(),
+    registerForceLogoutHandler: vi.fn(),
   };
 });
 
@@ -37,6 +38,7 @@ beforeEach(() => {
     isLoading: false,
     isAuthenticated: false,
     error: null,
+    roleLandingDone: false,
   });
 });
 

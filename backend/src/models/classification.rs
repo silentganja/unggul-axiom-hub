@@ -72,20 +72,22 @@ pub struct ClassificationAccessDetail {
 /// Falls back to `fetch_classification_keys` (which itself falls back to the
 /// hardcoded list) when the DB has no classifications yet.
 pub async fn is_valid_classification(pool: &PgPool, key: &str) -> bool {
-    let exists: bool = sqlx::query_scalar(
-        "SELECT EXISTS(SELECT 1 FROM classifications WHERE key = $1)",
-    )
-    .bind(key)
-    .fetch_one(pool)
-    .await
-    .unwrap_or(false);
+    let exists: bool =
+        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM classifications WHERE key = $1)")
+            .bind(key)
+            .fetch_one(pool)
+            .await
+            .unwrap_or(false);
 
     if exists {
         return true;
     }
 
     // Fallback: use the canonical key list (DB → hardcoded bootstrap list)
-    fetch_classification_keys(pool).await.iter().any(|k| k == key)
+    fetch_classification_keys(pool)
+        .await
+        .iter()
+        .any(|k| k == key)
 }
 
 /// Returns the hierarchy level for a classification key (higher = more restricted).
@@ -111,12 +113,11 @@ pub async fn classification_level(pool: &PgPool, key: &str) -> Option<i16> {
 
 /// Fetch all valid classification keys (sorted by level ascending).
 pub async fn fetch_classification_keys(pool: &PgPool) -> Vec<String> {
-    let keys: Vec<String> = sqlx::query_scalar(
-        "SELECT key FROM classifications ORDER BY level ASC",
-    )
-    .fetch_all(pool)
-    .await
-    .unwrap_or_default();
+    let keys: Vec<String> =
+        sqlx::query_scalar("SELECT key FROM classifications ORDER BY level ASC")
+            .fetch_all(pool)
+            .await
+            .unwrap_or_default();
 
     if keys.is_empty() {
         super::file::VALID_CLASSIFICATIONS
@@ -204,12 +205,11 @@ pub async fn user_can_read_classification(
 
     // BUG-21: If no classification_permissions rules exist at all, fall back
     // to allowing access (backward compatible with pre-builder behaviour).
-    let any_rules: bool = sqlx::query_scalar(
-        "SELECT EXISTS(SELECT 1 FROM classification_permissions LIMIT 1)",
-    )
-    .fetch_one(pool)
-    .await
-    .unwrap_or(false);
+    let any_rules: bool =
+        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM classification_permissions LIMIT 1)")
+            .fetch_one(pool)
+            .await
+            .unwrap_or(false);
     if !any_rules {
         return Ok(true);
     }
@@ -269,12 +269,11 @@ pub async fn user_can_write_classification(
     }
 
     // BUG-21: If no classification_permissions rules exist, fall back to allow.
-    let any_rules: bool = sqlx::query_scalar(
-        "SELECT EXISTS(SELECT 1 FROM classification_permissions LIMIT 1)",
-    )
-    .fetch_one(pool)
-    .await
-    .unwrap_or(false);
+    let any_rules: bool =
+        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM classification_permissions LIMIT 1)")
+            .fetch_one(pool)
+            .await
+            .unwrap_or(false);
     if !any_rules {
         return Ok(true);
     }

@@ -102,22 +102,19 @@ pub async fn create_classification(
 
     let key = body.key.trim().to_uppercase();
     if key.is_empty() || key.len() > 32 {
-        return Err(AppError::BadRequest(
-            "Key must be 1-32 characters".into(),
-        ));
+        return Err(AppError::BadRequest("Key must be 1-32 characters".into()));
     }
     let label = body.label.trim().to_string();
     if label.is_empty() || label.len() > 64 {
-        return Err(AppError::BadRequest(
-            "Label must be 1-64 characters".into(),
-        ));
+        return Err(AppError::BadRequest("Label must be 1-64 characters".into()));
     }
 
     // If this is the first classification or marked default, clear previous default
     if body.is_default {
-        let _ = sqlx::query("UPDATE classifications SET is_default = FALSE WHERE is_default = TRUE")
-            .execute(pool.get_ref())
-            .await;
+        let _ =
+            sqlx::query("UPDATE classifications SET is_default = FALSE WHERE is_default = TRUE")
+                .execute(pool.get_ref())
+                .await;
     }
 
     let classification: Classification = sqlx::query_as(
@@ -135,9 +132,7 @@ pub async fn create_classification(
     .map_err(|e| {
         if let sqlx::Error::Database(ref db_err) = e {
             if db_err.constraint() == Some("classifications_key_key") {
-                return AppError::Conflict(
-                    "A classification with this key already exists".into(),
-                );
+                return AppError::Conflict("A classification with this key already exists".into());
             }
         }
         AppError::Database(e)
@@ -212,20 +207,19 @@ pub async fn update_classification(
 
     // If setting this as default, clear previous default
     if new_is_default && !existing.is_default {
-        let _ = sqlx::query("UPDATE classifications SET is_default = FALSE WHERE is_default = TRUE")
-            .execute(pool.get_ref())
-            .await;
+        let _ =
+            sqlx::query("UPDATE classifications SET is_default = FALSE WHERE is_default = TRUE")
+                .execute(pool.get_ref())
+                .await;
     }
 
     // If key changed, update file references
     if new_key != existing.key {
-        let _ = sqlx::query(
-            "UPDATE files SET classification = $1 WHERE classification = $2",
-        )
-        .bind(&new_key)
-        .bind(&existing.key)
-        .execute(pool.get_ref())
-        .await;
+        let _ = sqlx::query("UPDATE files SET classification = $1 WHERE classification = $2")
+            .bind(&new_key)
+            .bind(&existing.key)
+            .execute(pool.get_ref())
+            .await;
     }
 
     let classification: Classification = sqlx::query_as(
@@ -245,9 +239,7 @@ pub async fn update_classification(
     .map_err(|e| {
         if let sqlx::Error::Database(ref db_err) = e {
             if db_err.constraint() == Some("classifications_key_key") {
-                return AppError::Conflict(
-                    "A classification with this key already exists".into(),
-                );
+                return AppError::Conflict("A classification with this key already exists".into());
             }
         }
         AppError::Database(e)
@@ -342,12 +334,11 @@ pub async fn get_classification_permissions(
     let id = path.into_inner();
 
     // Get the classification key
-    let key: Option<String> =
-        sqlx::query_scalar("SELECT key FROM classifications WHERE id = $1")
-            .bind(id)
-            .fetch_optional(pool.get_ref())
-            .await
-            .map_err(AppError::Database)?;
+    let key: Option<String> = sqlx::query_scalar("SELECT key FROM classifications WHERE id = $1")
+        .bind(id)
+        .fetch_optional(pool.get_ref())
+        .await
+        .map_err(AppError::Database)?;
 
     let key = key.ok_or(AppError::NotFound)?;
 
@@ -548,11 +539,13 @@ pub async fn set_default_classification(
         .await;
 
     // Set new default
-    let updated = sqlx::query("UPDATE classifications SET is_default = TRUE, updated_at = NOW() WHERE id = $1")
-        .bind(body.classification_id)
-        .execute(pool.get_ref())
-        .await
-        .map_err(AppError::Database)?;
+    let updated = sqlx::query(
+        "UPDATE classifications SET is_default = TRUE, updated_at = NOW() WHERE id = $1",
+    )
+    .bind(body.classification_id)
+    .execute(pool.get_ref())
+    .await
+    .map_err(AppError::Database)?;
 
     if updated.rows_affected() == 0 {
         return Err(AppError::NotFound);

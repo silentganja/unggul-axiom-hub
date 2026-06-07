@@ -120,7 +120,9 @@ mod tests {
                 parent_id: None,
                 classification: None,
             };
-            let cls = req.validate_and_default_classification().expect("should be valid");
+            let cls = req
+                .validate_and_default_classification()
+                .expect("should be valid");
             assert_eq!(cls, "TERBUKA", "default classification is TERBUKA");
         }
 
@@ -165,7 +167,10 @@ mod tests {
             let cls = req
                 .validate_and_default_classification()
                 .expect("model should not reject unknown classifications");
-            assert_eq!(cls, "CUSTOM_TIER", "custom classification should pass through");
+            assert_eq!(
+                cls, "CUSTOM_TIER",
+                "custom classification should pass through"
+            );
         }
 
         #[test]

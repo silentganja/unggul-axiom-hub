@@ -111,12 +111,10 @@ pub async fn share_file(
     // ── Classification check: files above the lowest classification level
     //     can only be shared with users who have files:classify permission
     //     or director+ base role ─
-    let class_level = crate::models::classification::classification_level(
-        pool.get_ref(),
-        &file_classification,
-    )
-    .await
-    .unwrap_or(0);
+    let class_level =
+        crate::models::classification::classification_level(pool.get_ref(), &file_classification)
+            .await
+            .unwrap_or(0);
     if class_level > 0 {
         let recipient: Option<(Uuid, String)> =
             sqlx::query_as("SELECT id, role FROM users WHERE email = $1")

@@ -84,8 +84,7 @@ pub async fn get_file(
                     })?
                 {
                     return Err(AppError::Forbidden(
-                        "You do not have permission to access files of this classification"
-                            .into(),
+                        "You do not have permission to access files of this classification".into(),
                     ));
                 }
 
@@ -322,7 +321,8 @@ pub async fn create_folder(
         .map_err(|e| AppError::BadRequest(e.to_string()))?;
 
     // Validate classification against the dynamic DB-backed list
-    if !crate::models::classification::is_valid_classification(pool.get_ref(), classification).await {
+    if !crate::models::classification::is_valid_classification(pool.get_ref(), classification).await
+    {
         return Err(AppError::BadRequest(format!(
             "Invalid classification: {}",
             classification
@@ -432,7 +432,9 @@ pub async fn update_classification(
         ));
     }
 
-    if !crate::models::classification::is_valid_classification(pool.get_ref(), &body.classification).await {
+    if !crate::models::classification::is_valid_classification(pool.get_ref(), &body.classification)
+        .await
+    {
         return Err(AppError::BadRequest("Invalid classification".into()));
     }
 
@@ -448,8 +450,7 @@ pub async fn update_classification(
         tracing::error!(error = %e, user_id = %user.id, classification = %body.classification,
             "Classification write-access DB check failed in update_classification");
         AppError::Internal(anyhow::anyhow!("Access check failed"))
-    })?
-    {
+    })? {
         return Err(AppError::Forbidden(
             format!(
                 "You do not have permission to assign classification '{}'",
@@ -1369,13 +1370,12 @@ pub async fn upload_file(
     mut payload: Multipart,
 ) -> Result<HttpResponse, AppError> {
     // Fetch dynamic default classification from DB (falls back to TERBUKA)
-    let default_classification: Option<String> = sqlx::query_scalar(
-        "SELECT key FROM classifications WHERE is_default = TRUE LIMIT 1",
-    )
-    .fetch_optional(pool.get_ref())
-    .await
-    .ok()
-    .flatten();
+    let default_classification: Option<String> =
+        sqlx::query_scalar("SELECT key FROM classifications WHERE is_default = TRUE LIMIT 1")
+            .fetch_optional(pool.get_ref())
+            .await
+            .ok()
+            .flatten();
 
     let mut parent_id: Option<Uuid> = None;
     let mut classification = default_classification.unwrap_or_else(|| "TERBUKA".to_string());
@@ -1441,7 +1441,12 @@ pub async fn upload_file(
                         .map_err(|e| AppError::BadRequest(e.to_string()))?;
                     let val_str = val_str.trim().to_uppercase();
                     if !val_str.is_empty() {
-                        if !crate::models::classification::is_valid_classification(pool.get_ref(), &val_str).await {
+                        if !crate::models::classification::is_valid_classification(
+                            pool.get_ref(),
+                            &val_str,
+                        )
+                        .await
+                        {
                             return Err(AppError::BadRequest(
                                 "Invalid classification tier".to_string(),
                             ));
