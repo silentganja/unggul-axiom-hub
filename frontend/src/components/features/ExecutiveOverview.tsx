@@ -18,7 +18,7 @@ import {
 import { useFileStore, FileNode } from "@/store/useFileStore";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useOperationsStore } from "@/store/useOperationsStore";
-import { activityApi, ActivityEntry, formatTimestamp } from "@/lib/api";
+import { activityApi, authApi, ActivityEntry, formatTimestamp } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 export default function ExecutiveOverview() {
@@ -35,6 +35,23 @@ export default function ExecutiveOverview() {
   const setAccessSheetOpen = useFileStore((state) => state.setAccessSheetOpen);
 
   const user = useAuthStore((state) => state.user);
+
+  // ── Effective permissions for governance approval gating ─────────────────
+  const [effectivePerms, setEffectivePerms] = useState<string[]>([]);
+
+  useEffect(() => {
+    authApi
+      .mePermissions()
+      .then((ep) => setEffectivePerms(ep.permissions))
+      .catch(() => setEffectivePerms([]));
+  }, []);
+
+  const canApproveGovernance = (task: { requestedByEmail: string }): boolean => {
+    if (!user) return false;
+    if (user.email === task.requestedByEmail) return false;
+    if (["chief", "director", "officer"].includes(user.role)) return true;
+    return effectivePerms.includes("governance:approve");
+  };
 
   const [activityEntries, setActivityEntries] = useState<ActivityEntry[]>([]);
   // eslint-disable-next-line react-hooks/purity
@@ -441,26 +458,39 @@ export default function ExecutiveOverview() {
                         </div>
                       </div>
                       <div className="flex items-center gap-2 shrink-0 self-end sm:self-center font-sans">
-                        <button
-                          onClick={() => {
-                            setConfirmModal({ show: true, taskId: task.id, action: "REJECT" });
-                            setConfirmReason("");
-                            setConfirmError(null);
-                          }}
-                          className="h-9 px-4 rounded-md border border-destructive/30 text-destructive bg-destructive/5 hover:bg-destructive/10 transition-colors text-xs font-semibold uppercase cursor-pointer"
-                        >
-                          Decline
-                        </button>
-                        <button
-                          onClick={() => {
-                            setConfirmModal({ show: true, taskId: task.id, action: "APPROVE" });
-                            setConfirmReason("");
-                            setConfirmError(null);
-                          }}
-                          className="h-9 px-4 rounded-md border border-success/30 text-success bg-success/5 hover:bg-success/10 transition-colors text-xs font-semibold uppercase flex items-center gap-1.5 cursor-pointer"
-                        >
-                          Approve
-                        </button>
+                        {canApproveGovernance(task) ? (
+                          <>
+                            <button
+                              onClick={() => {
+                                setConfirmModal({ show: true, taskId: task.id, action: "REJECT" });
+                                setConfirmReason("");
+                                setConfirmError(null);
+                              }}
+                              className="h-9 px-4 rounded-md border border-destructive/30 text-destructive bg-destructive/5 hover:bg-destructive/10 transition-colors text-xs font-semibold uppercase cursor-pointer"
+                            >
+                              Decline
+                            </button>
+                            <button
+                              onClick={() => {
+                                setConfirmModal({ show: true, taskId: task.id, action: "APPROVE" });
+                                setConfirmReason("");
+                                setConfirmError(null);
+                              }}
+                              className="h-9 px-4 rounded-md border border-success/30 text-success bg-success/5 hover:bg-success/10 transition-colors text-xs font-semibold uppercase flex items-center gap-1.5 cursor-pointer"
+                            >
+                              Approve
+                            </button>
+                          </>
+                        ) : (
+                          <span className={cn(
+                            "px-3 py-1 rounded text-xs font-semibold uppercase border",
+                            task.status === "PENDING" && "bg-warning/10 text-warning border-warning/20",
+                            task.status === "APPROVED" && "bg-success/10 text-success border-success/20",
+                            task.status === "REJECTED" && "bg-destructive/10 text-destructive border-destructive/20",
+                          )}>
+                            {task.status === "PENDING" ? "Pending" : task.status === "APPROVED" ? "Approved" : "Rejected"}
+                          </span>
+                        )}
                       </div>
                     </div>
                   );

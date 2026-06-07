@@ -31,7 +31,7 @@ import {
 import { useFileStore, FileNode } from "@/store/useFileStore";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useOperationsStore, ApprovalTask } from "@/store/useOperationsStore";
-import { authApi } from "@/lib/api";
+import { authApi, adminApi } from "@/lib/api";
 import { useNotificationStore } from "@/store/useNotificationStore";
 import FileAccessSheet from "@/components/features/FileAccessSheet";
 import FloatingActionBar from "@/components/features/FloatingActionBar";
@@ -218,17 +218,30 @@ export default function FileExplorerPage() {
   // ── Effective permissions for governance approval gating ─────────────────
   const [effectivePerms, setEffectivePerms] = useState<string[]>([]);
 
+  // ── Governance filters (match admin Governance Console) ──────────────────
+  const [govStatusFilter, setGovStatusFilter] = useState<string>("ALL");
+  const [govTypeFilter, setGovTypeFilter] = useState<string>("ALL");
+  const [govReviewerId, setGovReviewerId] = useState<string>("");
+
   // ── Fetch governance tasks when switching to governance view ──────────────
+  const refreshGovernance = useCallback(() => {
+    fetchTasks({
+      page: 1,
+      perPage: 50,
+      status: govStatusFilter !== "ALL" ? govStatusFilter : undefined,
+      type: govTypeFilter !== "ALL" ? govTypeFilter : undefined,
+    });
+    authApi
+      .mePermissions()
+      .then((ep) => setEffectivePerms(ep.permissions))
+      .catch(() => setEffectivePerms([]));
+  }, [fetchTasks, govStatusFilter, govTypeFilter]);
+
   useEffect(() => {
     if (activeView === "governance") {
-      fetchTasks({ page: 1, perPage: 20, status: "PENDING" });
-      // Also refresh effective permissions so button visibility is accurate
-      authApi
-        .mePermissions()
-        .then((ep) => setEffectivePerms(ep.permissions))
-        .catch(() => setEffectivePerms([]));
+      refreshGovernance();
     }
-  }, [activeView, fetchTasks]);
+  }, [activeView, refreshGovernance]);
 
   // ── Register governance update callback for SSE auto-refresh ──────────────
   const setOnGovernanceUpdate = useNotificationStore((state) => state.setOnGovernanceUpdate);
@@ -550,7 +563,11 @@ export default function FileExplorerPage() {
         if (confirmModal.batch) {
           const ids = confirmModal.taskId as string[];
           if (confirmModal.action === "APPROVE") {
-            await batchApproveTasks(ids, confirmReason.trim());
+            if (govReviewerId) {
+              for (const rid of ids) await adminApi.forceApprove(rid, govReviewerId);
+            } else {
+              await batchApproveTasks(ids, confirmReason.trim());
+            }
           } else {
             await batchRejectTasks(ids, confirmReason.trim());
           }
@@ -558,7 +575,11 @@ export default function FileExplorerPage() {
         } else {
           const id = confirmModal.taskId as string;
           if (confirmModal.action === "APPROVE") {
-            await approveTask(id, confirmReason.trim());
+            if (govReviewerId) {
+              await adminApi.forceApprove(id, govReviewerId);
+            } else {
+              await approveTask(id, confirmReason.trim());
+            }
           } else {
             await rejectTask(id, confirmReason.trim());
           }
@@ -618,6 +639,54 @@ export default function FileExplorerPage() {
             <span>PROCESSED: {historyTasks.length}</span>
           </div>
           <span className="flex items-center gap-1"><Shield size={10} className="text-accent" /> ACTIVE</span>
+        </div>
+
+        {/* ── Filters + Reviewer (match admin Governance Console) ── */}
+        <div className="flex flex-wrap items-center gap-2 text-[10px] font-mono">
+          <span className="text-foreground-subtle uppercase text-[9px]">Status:</span>
+          <select
+            value={govStatusFilter}
+            onChange={(e) => { setGovStatusFilter(e.target.value); }}
+            className="h-7 px-2 rounded-sm border border-border bg-background text-[10px] text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+          >
+            <option value="ALL">All</option>
+            <option value="PENDING">Pending</option>
+            <option value="APPROVED">Approved</option>
+            <option value="REJECTED">Rejected</option>
+          </select>
+          <span className="text-foreground-subtle uppercase text-[9px] ml-2">Type:</span>
+          <select
+            value={govTypeFilter}
+            onChange={(e) => { setGovTypeFilter(e.target.value); }}
+            className="h-7 px-2 rounded-sm border border-border bg-background text-[10px] text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+          >
+            <option value="ALL">All types</option>
+            <option value="FILE_LOCK">File Lock</option>
+            <option value="FILE_UNLOCK">File Unlock</option>
+            <option value="CLASSIFICATION_UPGRADE">Class. Upgrade</option>
+            <option value="CLASSIFICATION_DOWNGRADE">Class. Downgrade</option>
+            <option value="FILE_MOVE">File Move</option>
+            <option value="FILE_DELETE">File Delete</option>
+          </select>
+          {/* Reviewer selection for force-approve (admin/chief/director only) */}
+          {(["chief", "director"].includes(currentUser?.role ?? "") || effectivePerms.includes("governance:approve")) && (
+            <>
+              <span className="text-foreground-subtle uppercase text-[9px] ml-2">Reviewer:</span>
+              <select
+                value={govReviewerId}
+                onChange={(e) => setGovReviewerId(e.target.value)}
+                className="h-7 px-2 rounded-sm border border-border bg-background text-[10px] text-foreground focus:outline-none focus:ring-1 focus:ring-accent max-w-[140px]"
+              >
+                <option value="">Self</option>
+              </select>
+            </>
+          )}
+          <button
+            onClick={refreshGovernance}
+            className="h-7 px-3 rounded-sm border border-accent/30 text-accent bg-accent/5 hover:bg-accent/10 text-[10px] font-bold uppercase cursor-pointer"
+          >
+            Apply
+          </button>
         </div>
 
         {errorTasks && (
