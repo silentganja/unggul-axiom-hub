@@ -111,23 +111,23 @@ unggul-axiom-hub/
 
 ### Dynamic Role-Based Access Control
 
-The system has a fully dynamic RBAC engine — not hardcoded role checks. 19 atomic permission keys (files:read, governance:approve, classifications:manage, etc.) flow through a single resolution function (`user_has_permission`) that evaluates three sources in a UNION query: direct user overrides, base role implicit grants, and role group memberships. Permissions are additive — users get the union of all their groups.
+The system has a fully dynamic RBAC engine - not hardcoded role checks. 19 atomic permission keys (files:read, governance:approve, classifications:manage, etc.) flow through a single resolution function (`user_has_permission`) that evaluates three sources in a UNION query: direct user overrides, base role implicit grants, and role group memberships. Permissions are additive - users get the union of all their groups.
 
 **Role Builder admin panel** with four sub-tabs:
-- **Groups** — Named bundles of permissions with user assignment. Quick presets (Read-Only Auditor, Content Manager, User Manager, Governance Officer, Full Access). Duplicate functionality for templating.
-- **Permissions** — Full CRUD for permission definitions. Before-delete warnings show exactly where each permission is used (groups, roles, classification rules, user overrides).
-- **Roles** — Custom base roles with configurable hierarchy levels (1-10) and implicit permission grants. The 4 core roles (chief, director, officer, staff) are protected from deletion.
-- **Audit** — Per-user effective permissions matrix with source attribution (base role, group inheritance, or direct override). Direct overrides for exceptions.
+- **Groups** - Named bundles of permissions with user assignment. Quick presets (Read-Only Auditor, Content Manager, User Manager, Governance Officer, Full Access). Duplicate functionality for templating.
+- **Permissions** - Full CRUD for permission definitions. Before-delete warnings show exactly where each permission is used (groups, roles, classification rules, user overrides).
+- **Roles** - Custom base roles with configurable hierarchy levels (1-10) and implicit permission grants. The 4 core roles (chief, director, officer, staff) are protected from deletion.
+- **Audit** - Per-user effective permissions matrix with source attribution (base role, group inheritance, or direct override). Direct overrides for exceptions.
 
-**Granular admin delegation** splits the legacy `users:manage` umbrella into `permissions:manage`, `role_groups:manage`, and `role_groups:assign` — with backward-compatible fallback.
+**Granular admin delegation** splits the legacy `users:manage` umbrella into `permissions:manage`, `role_groups:manage`, and `role_groups:assign` - with backward-compatible fallback.
 
 ### Classification Access Control
 
 Dynamic classification tiers (TERBUKA, TERHAD, SULIT, RAHSIA + custom tiers) with per-tier read/write access rules. Each tier defines which permissions grant read access (who can view) and write access (who can assign/change). Chief and Director bypass all checks. All other roles are evaluated against the configured rules.
 
 **Classification Builder admin panel** with two sub-tabs:
-- **Tiers** — Create, edit, delete. Key changes cascade to all files in a single transaction. Deletion blocked if files use the tier.
-- **Access Control** — Per-tier permission checkboxes for read and write access. Site-wide default rules auto-apply to newly created tiers.
+- **Tiers** - Create, edit, delete. Key changes cascade to all files in a single transaction. Deletion blocked if files use the tier.
+- **Access Control** - Per-tier permission checkboxes for read and write access. Site-wide default rules auto-apply to newly created tiers.
 
 Classification enforcement at every boundary: file listing, download, preview, upload, classification change, sharing, and governance approval.
 
@@ -136,12 +136,12 @@ Classification enforcement at every boundary: file listing, download, preview, u
 Dual-signature approval for sensitive operations: FILE_LOCK, FILE_UNLOCK, CLASSIFICATION_UPGRADE, CLASSIFICATION_DOWNGRADE, FILE_MOVE, FILE_DELETE. Users submit requests; authorized approvers review and approve/reject with written justification.
 
 **Governance engine** features:
-- Supervisor notification — requests notify the user's designated supervisor via SSE
-- Classification direction validation — upgrades must go to higher levels, downgrades to lower
-- Force Approve/Reject — admins can act on behalf of a selected reviewer
-- Undo — revert approved/rejected requests to PENDING
-- Batch operations — approve or reject multiple requests at once
-- Self-approval prevention — you cannot approve your own requests
+- Supervisor notification - requests notify the user's designated supervisor via SSE
+- Classification direction validation - upgrades must go to higher levels, downgrades to lower
+- Force Approve/Reject - admins can act on behalf of a selected reviewer
+- Undo - revert approved/rejected requests to PENDING
+- Batch operations - approve or reject multiple requests at once
+- Self-approval prevention - you cannot approve your own requests
 
 ### File Management
 
@@ -149,7 +149,7 @@ Upload (with classification selection), download, preview, rename, move, delete.
 
 ### Sharing & Collaboration
 
-Share files with role-based permissions (viewer, editor). Classification-gated sharing — restricted files require recipient clearance. Locked files protected from unauthorized sharing. Shared files filtered by classification read access.
+Share files with role-based permissions (viewer, editor). Classification-gated sharing - restricted files require recipient clearance. Locked files protected from unauthorized sharing. Shared files filtered by classification read access.
 
 ### Versioning & Recovery
 
@@ -162,18 +162,18 @@ Argon2id password hashing (memory-hard, GPU-resistant). WebAuthn/FIDO2 passkeys.
 ### Admin Panel
 
 12-tab admin console with granular permission gating:
-- **Dashboard** — System metrics (users, files, storage, governance)
-- **Users** — Full lifecycle management, bulk import, role assignment
-- **Governance** — Force approve/reject, undo, batch operations with reviewer selection
-- **Files** — Browse all files, force delete, transfer ownership
-- **Audit** — Chronological log viewer with 30+ action types, JSON diff rendering for permission/classification changes
-- **Shares** — All sharing relationships with revoke capability
-- **Storage** — Per-user analytics, classification breakdown
-- **Roles** — Full RBAC management (4 sub-tabs)
-- **Classifications** — Tier and access rule management (2 sub-tabs)
-- **Config** — System-wide settings (theme, org name, logo, default classification rules)
-- **System** — Database Reset tool with multi-factor consent
-- **Documentation** — 10-page comprehensive guide covering all features
+- **Dashboard** - System metrics (users, files, storage, governance)
+- **Users** - Full lifecycle management, bulk import, role assignment
+- **Governance** - Force approve/reject, undo, batch operations with reviewer selection
+- **Files** - Browse all files, force delete, transfer ownership
+- **Audit** - Chronological log viewer with 30+ action types, JSON diff rendering for permission/classification changes
+- **Shares** - All sharing relationships with revoke capability
+- **Storage** - Per-user analytics, classification breakdown
+- **Roles** - Full RBAC management (4 sub-tabs)
+- **Classifications** - Tier and access rule management (2 sub-tabs)
+- **Config** - System-wide settings (theme, org name, logo, default classification rules)
+- **System** - Database Reset tool with multi-factor consent
+- **Documentation** - 10-page comprehensive guide covering all features
 
 ### Database Reset & Initialize
 
@@ -185,11 +185,11 @@ SSE stream for live notifications on shares, approvals, governance updates, and 
 
 ### Audit Trail
 
-Append-only log of every critical action — 30+ action types covering file operations, governance, user management, role builder mutations, classification changes, and system events. Rich diffs for permission and classification rule changes: JSON before/after snapshots stored in the audit record, enabling full reconstruction of who changed what and when.
+Append-only log of every critical action - 30+ action types covering file operations, governance, user management, role builder mutations, classification changes, and system events. Rich diffs for permission and classification rule changes: JSON before/after snapshots stored in the audit record, enabling full reconstruction of who changed what and when.
 
 ### Security Hardening
 
-AES-256-GCM file encryption at rest. Redis-backed distributed rate limiting (login, governance actions). Security headers via Nginx (CSP, HSTS, X-Frame-Options, Referrer-Policy). Non-root container users. Argon2id password hashing. No hardcoded secrets. CI/CD authenticates to AWS via OIDC — no static IAM keys stored in GitHub. 15-minute idle timeout on admin panel. Step-up authentication for critical actions.
+AES-256-GCM file encryption at rest. Redis-backed distributed rate limiting (login, governance actions). Security headers via Nginx (CSP, HSTS, X-Frame-Options, Referrer-Policy). Non-root container users. Argon2id password hashing. No hardcoded secrets. CI/CD authenticates to AWS via OIDC - no static IAM keys stored in GitHub. 15-minute idle timeout on admin panel. Step-up authentication for critical actions.
 
 ---
 
@@ -199,13 +199,13 @@ AES-256-GCM file encryption at rest. Redis-backed distributed rate limiting (log
 |----------|--------|-----------|
 | Backend runtime | Rust (Actix-Web 4) | Memory safety without garbage collection. Predictable p95 latency under 10ms. The learning curve and slower iteration speed are real costs, but justified for a storage platform where correctness and throughput matter. |
 | Database access | SQLx with raw SQL | No ORM abstraction. Every query lives in source code where it can be reviewed, explained, and optimized. 19 versioned, idempotent auto-migrations checked into the repo. |
-| RBAC architecture | Dynamic DB-driven | Permissions, roles, groups, and assignments all live in PostgreSQL — not hardcoded. Adding a new permission or role requires zero code changes. The `user_has_permission` function is the single resolution entry point. |
+| RBAC architecture | Dynamic DB-driven | Permissions, roles, groups, and assignments all live in PostgreSQL - not hardcoded. Adding a new permission or role requires zero code changes. The `user_has_permission` function is the single resolution entry point. |
 | Classification model | Tier-based with access rules | Each classification tier has configurable read/write rules mapping permissions to access types. New tiers auto-inherit site-wide defaults. Chief/Director fast-path bypasses checks. |
 | Governance model | Dual-signature with force path | Sensitive operations require approval. Force Approve/Reject enables admin override with reviewer selection. Supervisor notification creates accountability without blocking workflow. |
 | Password hashing | Argon2id | Winner of the Password Hashing Competition. Memory-hard makes GPU/ASIC attacks impractical. The standard choice for systems that take credential storage seriously. |
 | File encryption | AES-256-GCM | Authenticated encryption. Confidentiality and integrity in a single pass. The GCM mode provides built-in authentication, so tampered ciphertext is detected before decryption. |
 | Auth architecture | JWT + refresh tokens + WebAuthn | Stateless API auth keeps latency low. Refresh tokens allow revocation without hitting the database on every request. Passkeys eliminate phishing as an attack vector. |
-| Frontend state | Zustand | Client state management with minimal boilerplate. Stores for files, auth, operations, notifications, and admin — each independently testable. |
+| Frontend state | Zustand | Client state management with minimal boilerplate. Stores for files, auth, operations, notifications, and admin - each independently testable. |
 | CI/CD authentication | AWS OIDC | GitHub Actions gets temporary AWS credentials per workflow run. No IAM user access keys exist to leak or rotate. This is the gold standard for cloud CI/CD auth. |
 | Container strategy | Multi-stage Docker | Build stage has the full Rust toolchain and dev dependencies. Runtime image is bare Debian Slim running as non-root. Attack surface minimized. Image size kept small. |
 
@@ -284,3 +284,4 @@ I'm looking for backend, full-stack, or platform engineering roles where I can w
 ---
 
 *Full documentation, interactive architecture diagrams, API reference, and live telemetry: [hub.unggulaxiom.com/dev/admin/doc](https://hub.unggulaxiom.com/dev/admin/doc)*
+
