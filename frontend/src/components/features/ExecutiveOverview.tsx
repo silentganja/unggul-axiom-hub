@@ -234,7 +234,7 @@ export default function ExecutiveOverview() {
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       {/* ── Session Status Bar ── */}
-      <div className="w-full bg-background-panel/40 border border-border/30 px-6 py-3 rounded-lg flex flex-col md:flex-row md:items-center justify-between gap-3 font-mono text-xs uppercase tracking-wider text-foreground-subtle select-none">
+      <div className="w-full bg-background-panel/40 border border-border/30 px-6 py-3 rounded-sm flex flex-col md:flex-row md:items-center justify-between gap-3 font-mono text-xs uppercase tracking-wider text-foreground-subtle select-none">
         <div className="flex items-center gap-2">
           <span className="h-2 w-2 rounded-full bg-success animate-pulse" />
           <span>SESSION ACTIVE</span>
@@ -253,7 +253,7 @@ export default function ExecutiveOverview() {
       {/* ── Metrics Grid ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Total Files */}
-        <div className="glass-premium rounded-xl p-5 flex flex-col justify-between h-[128px] select-none hover:border-accent/40 transition-all duration-300 group hover:-translate-y-0.5 relative overflow-hidden">
+        <div className="glass-premium rounded p-5 flex flex-col justify-between h-[128px] select-none hover:border-accent/40 transition-all duration-300 group hover:-translate-y-0.5 relative overflow-hidden">
           <div className="absolute top-0 right-0 w-24 h-24 bg-accent/5 rounded-full blur-2xl group-hover:bg-accent/10 transition-colors pointer-events-none" />
           <span className="font-sans text-[10px] font-bold uppercase tracking-wider text-foreground-subtle flex items-center gap-1.5">
             <Folder size={12} className="text-accent" />
@@ -269,7 +269,7 @@ export default function ExecutiveOverview() {
         </div>
 
         {/* Pending Signatures */}
-        <div className="glass-premium rounded-xl p-5 flex flex-col justify-between h-[128px] select-none hover:border-accent/40 transition-all duration-300 group hover:-translate-y-0.5 relative overflow-hidden">
+        <div className="glass-premium rounded p-5 flex flex-col justify-between h-[128px] select-none hover:border-accent/40 transition-all duration-300 group hover:-translate-y-0.5 relative overflow-hidden">
           <div className="absolute top-0 right-0 w-24 h-24 bg-warning/5 rounded-full blur-2xl group-hover:bg-warning/10 transition-colors pointer-events-none" />
           <span className="font-sans text-[10px] font-bold uppercase tracking-wider text-foreground-subtle flex items-center gap-1.5">
             <Shield size={12} className="text-warning" />
@@ -301,7 +301,7 @@ export default function ExecutiveOverview() {
         </div>
 
         {/* Storage Used */}
-        <div className="glass-premium rounded-xl p-5 flex flex-col justify-between h-[128px] select-none hover:border-accent/40 transition-all duration-300 group hover:-translate-y-0.5 relative overflow-hidden">
+        <div className="glass-premium rounded p-5 flex flex-col justify-between h-[128px] select-none hover:border-accent/40 transition-all duration-300 group hover:-translate-y-0.5 relative overflow-hidden">
           <div className="absolute top-0 right-0 w-24 h-24 bg-accent/5 rounded-full blur-2xl group-hover:bg-accent/10 transition-colors pointer-events-none" />
           <span className="font-sans text-[10px] font-bold uppercase tracking-wider text-foreground-subtle flex items-center gap-1.5">
             <HardDrive size={12} className="text-accent" />
@@ -319,7 +319,7 @@ export default function ExecutiveOverview() {
         </div>
 
         {/* Shared with Me */}
-        <div className="glass-premium rounded-xl p-5 flex flex-col justify-between h-[128px] select-none hover:border-accent/40 transition-all duration-300 group hover:-translate-y-0.5 relative overflow-hidden">
+        <div className="glass-premium rounded p-5 flex flex-col justify-between h-[128px] select-none hover:border-accent/40 transition-all duration-300 group hover:-translate-y-0.5 relative overflow-hidden">
           <div className="absolute top-0 right-0 w-24 h-24 bg-info/5 rounded-full blur-2xl group-hover:bg-info/10 transition-colors pointer-events-none" />
           <span className="font-sans text-[10px] font-bold uppercase tracking-wider text-foreground-subtle flex items-center gap-1.5">
             <User size={12} className="text-info" />
@@ -337,7 +337,7 @@ export default function ExecutiveOverview() {
       {/* ── Analytics & Trends ── */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         {/* Weekly Activity mini chart */}
-        <div className="lg:col-span-4 glass-premium rounded-xl p-5 select-none shadow-sm flex flex-col justify-between">
+        <div className="lg:col-span-4 glass-premium rounded p-5 select-none shadow-sm flex flex-col justify-between">
           <div className="flex items-center justify-between mb-2">
             <div>
               <span className="font-sans text-[10px] font-bold uppercase tracking-wider text-foreground-subtle">
@@ -363,7 +363,7 @@ export default function ExecutiveOverview() {
         </div>
 
         {/* Circular SVG Storage Gauge */}
-        <div className="lg:col-span-4 glass-premium rounded-xl p-5 select-none shadow-sm flex flex-col justify-between relative overflow-hidden group">
+        <div className="lg:col-span-4 glass-premium rounded p-5 select-none shadow-sm flex flex-col justify-between relative overflow-hidden group">
           <span className="font-sans text-[10px] font-bold uppercase tracking-wider text-foreground-subtle">
             Capacity Utilization
           </span>
@@ -403,7 +403,7 @@ export default function ExecutiveOverview() {
         </div>
 
         {/* Classification Distribution Stacked Bar */}
-        <div className="lg:col-span-4 glass-premium rounded-xl p-5 select-none shadow-sm flex flex-col justify-between">
+        <div className="lg:col-span-4 glass-premium rounded p-5 select-none shadow-sm flex flex-col justify-between">
           <span className="font-sans text-[10px] font-bold uppercase tracking-wider text-foreground-subtle">
             Classification Distribution
           </span>
@@ -459,7 +459,7 @@ export default function ExecutiveOverview() {
       {/* ── Split Layout: Governance Queue vs Recent Files ── */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Governance / Approval Queue */}
-        <div className="lg:col-span-7 border border-border/20 rounded-xl bg-background-panel/20 backdrop-blur-sm p-6 flex flex-col justify-between min-h-[380px] shadow-sm">
+        <div className="lg:col-span-7 border border-border/20 rounded bg-background-panel/20 backdrop-blur-sm p-6 flex flex-col justify-between min-h-[380px] shadow-sm">
           <div className="space-y-4">
             <div className="border-b border-border/20 pb-4 flex items-center justify-between">
               <div>
@@ -493,12 +493,12 @@ export default function ExecutiveOverview() {
                   return (
                     <div
                       key={task.id}
-                      className="p-4 rounded-lg border border-border/20 bg-background-panel/50 backdrop-blur-sm transition-all duration-300 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
+                      className="p-4 rounded-sm border border-border/20 bg-background-panel/50 backdrop-blur-sm transition-all duration-300 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
                     >
                       <div className="space-y-2 flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <span className={cn(
-                            "px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wider font-sans uppercase border",
+                            "px-2 py-0.5 rounded-sm text-[10px] font-bold tracking-wider font-sans uppercase border",
                             task.type === "FILE_LOCK" && "bg-destructive/15 text-destructive border-destructive/25",
                             task.type === "FILE_UNLOCK" && "bg-success/15 text-success border-success/25",
                             task.type === "CLASSIFICATION" && "bg-warning/15 text-warning border-warning/25",
@@ -528,7 +528,7 @@ export default function ExecutiveOverview() {
                                 setConfirmReason("");
                                 setConfirmError(null);
                               }}
-                              className="h-9 px-4 rounded-md border border-destructive/30 text-destructive bg-destructive/5 hover:bg-destructive/10 transition-colors text-xs font-semibold uppercase cursor-pointer"
+                              className="h-9 px-4 rounded-sm border border-destructive/30 text-destructive bg-destructive/5 hover:bg-destructive/10 transition-colors text-xs font-semibold uppercase cursor-pointer"
                             >
                               Decline
                             </button>
@@ -538,7 +538,7 @@ export default function ExecutiveOverview() {
                                 setConfirmReason("");
                                 setConfirmError(null);
                               }}
-                              className="h-9 px-4 rounded-md border border-success/30 text-success bg-success/5 hover:bg-success/10 transition-colors text-xs font-semibold uppercase flex items-center gap-1.5 cursor-pointer"
+                              className="h-9 px-4 rounded-sm border border-success/30 text-success bg-success/5 hover:bg-success/10 transition-colors text-xs font-semibold uppercase flex items-center gap-1.5 cursor-pointer"
                             >
                               Approve
                             </button>
@@ -570,7 +570,7 @@ export default function ExecutiveOverview() {
         </div>
 
         {/* Recent Secure Files */}
-        <div className="lg:col-span-5 border border-border/20 rounded-xl bg-background-panel/20 backdrop-blur-sm p-6 flex flex-col justify-between min-h-[380px] shadow-sm">
+        <div className="lg:col-span-5 border border-border/20 rounded bg-background-panel/20 backdrop-blur-sm p-6 flex flex-col justify-between min-h-[380px] shadow-sm">
           <div className="space-y-4">
             <div className="border-b border-border/20 pb-4">
               <h2 className="text-base font-bold tracking-tight text-foreground font-sans">
@@ -591,10 +591,10 @@ export default function ExecutiveOverview() {
                 recentFiles.map((file) => (
                   <div
                     key={file.id}
-                    className="py-3 flex items-center justify-between gap-3 group/row transition-all hover:bg-background-subtle/10 px-2 rounded-lg"
+                    className="py-3 flex items-center justify-between gap-3 group/row transition-all hover:bg-background-subtle/10 px-2 rounded-sm"
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="h-8 w-8 rounded-lg border border-border/20 bg-background/50 flex items-center justify-center shrink-0">
+                      <div className="h-8 w-8 rounded-sm border border-border/20 bg-background/50 flex items-center justify-center shrink-0">
                         {getFileIcon(file)}
                       </div>
                       <div className="min-w-0">
@@ -616,7 +616,7 @@ export default function ExecutiveOverview() {
                       )}
                       <button
                         onClick={() => handleOpenFile(file)}
-                        className="h-8 w-16 rounded-md border border-border bg-background hover:bg-background-subtle/50 text-foreground transition-all text-xs font-semibold font-sans uppercase flex items-center justify-center gap-1 cursor-pointer"
+                        className="h-8 w-16 rounded-sm border border-border bg-background hover:bg-background-subtle/50 text-foreground transition-all text-xs font-semibold font-sans uppercase flex items-center justify-center gap-1 cursor-pointer"
                       >
                         <span>View</span>
                         <ArrowRight size={12} />
@@ -638,7 +638,7 @@ export default function ExecutiveOverview() {
       </div>
 
       {/* ── Activity Feed ── */}
-      <div className="border border-border/20 rounded-xl bg-background-panel/20 backdrop-blur-sm p-6 shadow-sm">
+      <div className="border border-border/20 rounded bg-background-panel/20 backdrop-blur-sm p-6 shadow-sm">
         <div className="border-b border-border/20 pb-4 mb-4">
           <h2 className="text-base font-bold tracking-tight text-foreground font-sans">Recent Activity</h2>
           <p className="text-xs text-foreground-subtle font-sans mt-0.5">Latest actions, shares, and governance events.</p>
@@ -651,7 +651,7 @@ export default function ExecutiveOverview() {
               <div key={entry.id} className="py-2.5 flex items-center justify-between gap-3 text-xs font-sans">
                 <div className="flex items-center gap-2 min-w-0">
                   <span className={cn(
-                    "px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wider uppercase border shrink-0 font-sans",
+                    "px-2 py-0.5 rounded-sm text-[10px] font-bold tracking-wider uppercase border shrink-0 font-sans",
                     entry.action.includes("SHARED") && "bg-info/10 text-info border-info/20",
                     entry.action.includes("UPLOAD") && "bg-success/10 text-success border-success/20",
                     entry.action.includes("GOV_APPROVED") && "bg-success/10 text-success border-success/20",
@@ -674,7 +674,7 @@ export default function ExecutiveOverview() {
       {/* ── Confirm / Reason Modal ── */}
       {confirmModal?.show && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-background/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="w-full max-w-md rounded-xl border border-border/40 bg-background-panel shadow-2xl shadow-black/20 p-6 space-y-6">
+          <div className="w-full max-w-md rounded border border-border/40 bg-background-panel shadow-2xl shadow-black/20 p-6 space-y-6">
             <div className="flex items-start gap-3.5">
               <div className={cn(
                 "h-10 w-10 rounded-full flex items-center justify-center shrink-0",
@@ -696,13 +696,13 @@ export default function ExecutiveOverview() {
               </div>
             </div>
 
-            <div className="rounded-lg border border-warning/20 bg-warning/5 px-4 py-3 text-xs text-foreground-subtle flex items-start gap-2.5 font-sans">
+            <div className="rounded-sm border border-warning/20 bg-warning/5 px-4 py-3 text-xs text-foreground-subtle flex items-start gap-2.5 font-sans">
               <AlertTriangle size={14} className="text-warning shrink-0 mt-0.5" />
               <span>This action cannot be undone - though you may use the Undo option on completed requests.</span>
             </div>
 
             {confirmError && (
-              <div className="flex items-start gap-2.5 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-xs text-destructive font-sans">
+              <div className="flex items-start gap-2.5 rounded-sm border border-destructive/30 bg-destructive/5 px-4 py-3 text-xs text-destructive font-sans">
                 <AlertCircle size={14} className="mt-0.5 shrink-0" /><span>{confirmError}</span>
               </div>
             )}
@@ -716,7 +716,7 @@ export default function ExecutiveOverview() {
                 placeholder="Provide a detailed reason (minimum 10 characters)..."
                 value={confirmReason}
                 onChange={(e) => setConfirmReason(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-lg border border-border bg-background text-sm text-foreground placeholder:text-foreground-subtle/40 focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent resize-none transition-all duration-200"
+                className="w-full px-3.5 py-2.5 rounded-sm border border-border bg-background text-sm text-foreground placeholder:text-foreground-subtle/40 focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent resize-none transition-all duration-200"
                 autoFocus
               />
               <p className="text-[10px] font-mono text-foreground-subtle/60 mt-1.5">
@@ -728,7 +728,7 @@ export default function ExecutiveOverview() {
               <button
                 type="button"
                 onClick={() => { setConfirmModal(null); setConfirmReason(""); setConfirmError(null); }}
-                className="h-10 px-4 rounded-lg text-sm font-semibold font-sans text-foreground-subtle hover:text-foreground hover:bg-background-subtle/50 transition-colors cursor-pointer"
+                className="h-10 px-4 rounded-sm text-sm font-semibold font-sans text-foreground-subtle hover:text-foreground hover:bg-background-subtle/50 transition-colors cursor-pointer"
               >
                 Cancel
               </button>
@@ -736,7 +736,7 @@ export default function ExecutiveOverview() {
                 onClick={handleConfirmAction}
                 disabled={confirmLoading || confirmReason.trim().length < 10}
                 className={cn(
-                  "h-10 px-5 rounded-lg font-sans text-sm font-semibold tracking-wide transition-colors cursor-pointer disabled:opacity-50",
+                  "h-10 px-5 rounded-sm font-sans text-sm font-semibold tracking-wide transition-colors cursor-pointer disabled:opacity-50",
                   confirmModal.action === "APPROVE"
                     ? "btn-shimmer text-accent-foreground"
                     : "border border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive transition-colors"
