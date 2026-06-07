@@ -547,11 +547,28 @@ export default function ClassificationBuilderTab() {
           {/* Right: Permission checkboxes for read/write */}
           <div className="lg:col-span-2 border border-border/20 rounded-lg bg-background-panel/40 overflow-hidden">
             {!selectedAccessId || !selectedAccess ? (
-              <div className="flex flex-col items-center justify-center py-20 gap-3 text-foreground-subtle">
+              <div className="flex flex-col items-center justify-center py-12 gap-6 text-foreground-subtle px-6">
                 <Eye size={36} className="opacity-30" />
-                <p className="text-xs font-mono uppercase tracking-wider">
-                  Select a classification to manage access
-                </p>
+                <div className="text-center space-y-2">
+                  <p className="text-xs font-mono uppercase tracking-wider">
+                    Select a classification above to manage its access rules
+                  </p>
+                  <p className="text-[10px] text-foreground-subtle/70 font-sans leading-relaxed max-w-md">
+                    To set <strong>default access rules</strong> that auto-apply
+                    to every new classification tier, configure these keys in the{" "}
+                    <strong>Config</strong> tab:
+                  </p>
+                  <div className="inline-block text-left font-mono text-[10px] bg-background/50 border border-border/20 rounded p-3 mt-2 space-y-1">
+                    <div>
+                      <span className="text-accent">classification_default_read_perms</span>
+                      <span className="text-foreground-subtle"> = files:read</span>
+                    </div>
+                    <div>
+                      <span className="text-accent">classification_default_write_perms</span>
+                      <span className="text-foreground-subtle"> = files:classify</span>
+                    </div>
+                  </div>
+                </div>
               </div>
             ) : accessLoading ? (
               <div className="flex items-center justify-center py-20">

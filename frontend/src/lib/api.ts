@@ -1193,6 +1193,10 @@ export const adminApi = {
     return apiFetch(`/api/admin/permissions/${id}`, { method: "DELETE" }, true);
   },
 
+  getPermissionUsage(id: string): Promise<PermissionUsage> {
+    return apiFetch(`/api/admin/permissions/${id}/usage`, {}, true);
+  },
+
   // ── Custom Roles CRUD ──────────────────────────────────────────────────
 
   listCustomRoles(): Promise<CustomRoleEntry[]> {
@@ -1320,6 +1324,7 @@ export interface PublicClassificationEntry {
   key: string;
   label: string;
   level: number;
+  isDefault: boolean;
 }
 
 export const publicApi = {
@@ -1419,6 +1424,13 @@ export interface ClassificationAccessDetail {
   classificationKey: string;
   readPermissions: Permission[];
   writePermissions: Permission[];
+}
+
+export interface PermissionUsage {
+  roleGroups: string[];
+  customRoles: string[];
+  classificationRules: number;
+  userOverrides: number;
 }
 
 // ── Database Reset types ─────────────────────────────────────────────────

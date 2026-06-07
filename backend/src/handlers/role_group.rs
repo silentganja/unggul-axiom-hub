@@ -916,6 +916,75 @@ pub async fn delete_permission(
     Ok(HttpResponse::NoContent().finish())
 }
 
+// ── GET /api/admin/permissions/{id}/usage ────────────────────────────────────
+// Returns where this permission is referenced, so admins can assess impact
+// before deleting.
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PermissionUsage {
+    role_groups: Vec<String>,
+    custom_roles: Vec<String>,
+    classification_rules: i64,
+    user_overrides: i64,
+}
+
+pub async fn get_permission_usage(
+    pool: web::Data<PgPool>,
+    _admin: AdminUser,
+    path: web::Path<Uuid>,
+) -> Result<HttpResponse, AppError> {
+    let perm_id = path.into_inner();
+
+    // Role groups that include this permission
+    let role_groups: Vec<String> = sqlx::query_scalar(
+        "SELECT rg.name FROM role_groups rg
+         JOIN role_group_permissions rgp ON rgp.role_group_id = rg.id
+         WHERE rgp.permission_id = $1
+         ORDER BY rg.name",
+    )
+    .bind(perm_id)
+    .fetch_all(pool.get_ref())
+    .await
+    .map_err(AppError::Database)?;
+
+    // Custom roles with this implicit permission
+    let custom_roles: Vec<String> = sqlx::query_scalar(
+        "SELECT cr.role_key FROM custom_roles cr
+         JOIN role_implicit_permissions rip ON rip.role_key = cr.role_key
+         WHERE rip.permission_id = $1
+         ORDER BY cr.role_key",
+    )
+    .bind(perm_id)
+    .fetch_all(pool.get_ref())
+    .await
+    .map_err(AppError::Database)?;
+
+    // Classification rules referencing this permission
+    let classification_rules: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM classification_permissions WHERE permission_id = $1",
+    )
+    .bind(perm_id)
+    .fetch_one(pool.get_ref())
+    .await
+    .map_err(AppError::Database)?;
+
+    // Direct user overrides
+    let user_overrides: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM user_permissions WHERE permission_id = $1")
+            .bind(perm_id)
+            .fetch_one(pool.get_ref())
+            .await
+            .map_err(AppError::Database)?;
+
+    Ok(HttpResponse::Ok().json(PermissionUsage {
+        role_groups,
+        custom_roles,
+        classification_rules,
+        user_overrides,
+    }))
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // Custom Roles CRUD
 // ═══════════════════════════════════════════════════════════════════════════════

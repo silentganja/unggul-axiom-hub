@@ -391,14 +391,40 @@ export default function RoleBuilderTab() {
     }
   };
 
-  const handleDeletePermission = async (id: string) => {
-    if (!confirm("Delete this permission? It will be removed from all groups and users.")) return;
+  const handleDeletePermission = async (id: string, key: string) => {
+    // Fetch usage before confirming
+    let usageWarning = "";
+    try {
+      const usage = await adminApi.getPermissionUsage(id);
+      const parts: string[] = [];
+      if (usage.roleGroups.length > 0)
+        parts.push(`${usage.roleGroups.length} role group(s): ${usage.roleGroups.join(", ")}`);
+      if (usage.customRoles.length > 0)
+        parts.push(`${usage.customRoles.length} custom role(s): ${usage.customRoles.join(", ")}`);
+      if (usage.classificationRules > 0)
+        parts.push(`${usage.classificationRules} classification access rule(s)`);
+      if (usage.userOverrides > 0)
+        parts.push(`${usage.userOverrides} direct user override(s)`);
+      if (parts.length > 0)
+        usageWarning = `\n\n⚠ This permission is currently used by:\n${parts.join("\n")}`;
+    } catch {
+      // If usage check fails, still allow deletion with generic warning
+    }
+
+    if (
+      !confirm(
+        `Delete permission "${key}"?${usageWarning}\n\nThis action cannot be undone.`,
+      )
+    )
+      return;
     try {
       await adminApi.deletePermission(id);
       useToastStore.getState().success("Permission deleted");
       await fetchGroups();
     } catch (e) {
-      useToastStore.getState().error(e instanceof Error ? e.message : "Failed to delete permission");
+      useToastStore
+        .getState()
+        .error(e instanceof Error ? e.message : "Failed to delete permission");
     }
   };
 
@@ -953,7 +979,7 @@ export default function RoleBuilderTab() {
                     Edit
                   </button>
                   <button
-                    onClick={() => handleDeletePermission(p.id)}
+                    onClick={() => handleDeletePermission(p.id, p.key)}
                     className="h-8 w-8 rounded-md flex items-center justify-center border border-border bg-background text-foreground-subtle/60 hover:text-destructive hover:border-destructive/30 hover:bg-destructive/10 transition-all cursor-pointer"
                     title="Delete permission"
                   >

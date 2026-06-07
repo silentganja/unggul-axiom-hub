@@ -12,24 +12,22 @@ import { cn } from "@/lib/utils";
 
 const ACTION_TYPES = [
   "ALL",
-  "FILE_UPLOAD",
-  "FILE_DOWNLOAD",
-  "FILE_DELETE",
-  "FILE_RENAME",
-  "FILE_MOVE",
-  "FILE_LOCK",
-  "FILE_UNLOCK",
-  "SHARE_ADD",
-  "SHARE_REMOVE",
+  "FILE_UPLOAD", "FILE_DOWNLOAD", "FILE_DELETE", "FILE_RENAME", "FILE_MOVE",
+  "FILE_LOCK", "FILE_UNLOCK",
+  "SHARE_ADD", "SHARE_REMOVE",
   "CLASSIFICATION_CHANGE",
-  "GOV_APPROVED",
-  "GOV_REJECTED",
-  "GOV_REQUEST",
-  "USER_LOGIN",
-  "USER_LOGOUT",
-  "USER_CREATE",
-  "USER_UPDATE",
-  "USER_DELETE",
+  "GOV_APPROVED", "GOV_REJECTED", "GOV_REQUEST",
+  "USER_LOGIN", "USER_LOGOUT", "USER_CREATE", "USER_UPDATE", "USER_DELETE",
+  // Role Builder
+  "ROLE_GROUP_CREATE", "ROLE_GROUP_UPDATE", "ROLE_GROUP_DELETE",
+  "ROLE_GROUP_PERMISSIONS", "ROLE_GROUP_USERS", "ROLE_GROUP_DUPLICATE",
+  "PERMISSION_CREATE", "PERMISSION_UPDATE", "PERMISSION_DELETE",
+  "CUSTOM_ROLE_CREATE", "CUSTOM_ROLE_DELETE", "ROLE_IMPLICIT_PERMS",
+  "USER_PERMISSIONS_SET",
+  // Classifications
+  "CLASSIFICATION_PERMISSIONS",
+  // System
+  "DATABASE_RESET",
 ];
 
 const actionColorMap: Record<string, string> = {
@@ -48,6 +46,22 @@ const actionColorMap: Record<string, string> = {
   GOV_REQUEST: "bg-warning/10 text-warning border-warning/20",
   USER_LOGIN: "bg-info/10 text-info border-info/20",
   USER_LOGOUT: "bg-foreground-subtle/10 text-foreground-subtle border-border/20",
+  // Role Builder
+  ROLE_GROUP_CREATE: "bg-accent/10 text-accent border-accent/20",
+  ROLE_GROUP_UPDATE: "bg-accent/10 text-accent border-accent/20",
+  ROLE_GROUP_DELETE: "bg-destructive/10 text-destructive border-destructive/20",
+  ROLE_GROUP_DUPLICATE: "bg-accent/10 text-accent border-accent/20",
+  ROLE_GROUP_PERMISSIONS: "bg-warning/10 text-warning border-warning/20",
+  ROLE_GROUP_USERS: "bg-info/10 text-info border-info/20",
+  PERMISSION_CREATE: "bg-accent/10 text-accent border-accent/20",
+  PERMISSION_UPDATE: "bg-accent/10 text-accent border-accent/20",
+  PERMISSION_DELETE: "bg-destructive/10 text-destructive border-destructive/20",
+  CUSTOM_ROLE_CREATE: "bg-accent/10 text-accent border-accent/20",
+  CUSTOM_ROLE_DELETE: "bg-destructive/10 text-destructive border-destructive/20",
+  ROLE_IMPLICIT_PERMS: "bg-warning/10 text-warning border-warning/20",
+  USER_PERMISSIONS_SET: "bg-info/10 text-info border-info/20",
+  CLASSIFICATION_PERMISSIONS: "bg-warning/10 text-warning border-warning/20",
+  DATABASE_RESET: "bg-destructive/10 text-destructive border-destructive/20",
 };
 
 function exportCSV(headers: string[], rows: string[][], filename: string) {

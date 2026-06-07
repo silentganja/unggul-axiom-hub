@@ -376,6 +376,10 @@ async fn main() -> std::io::Result<()> {
                         "/permissions/{id}",
                         web::delete().to(handlers::role_group::delete_permission),
                     )
+                    .route(
+                        "/permissions/{id}/usage",
+                        web::get().to(handlers::role_group::get_permission_usage),
+                    )
                     // Custom Roles
                     .route(
                         "/roles",

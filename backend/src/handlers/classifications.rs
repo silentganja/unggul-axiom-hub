@@ -212,17 +212,19 @@ struct PublicClassificationEntry {
     key: String,
     label: String,
     level: i16,
+    is_default: bool,
 }
 
 pub async fn list_classifications_public(
     pool: web::Data<PgPool>,
     _user: AuthUser,
 ) -> Result<HttpResponse, AppError> {
-    let classifications: Vec<PublicClassificationEntry> =
-        sqlx::query_as("SELECT key, label, level FROM classifications ORDER BY level ASC")
-            .fetch_all(pool.get_ref())
-            .await
-            .map_err(AppError::Database)?;
+    let classifications: Vec<PublicClassificationEntry> = sqlx::query_as(
+        "SELECT key, label, level, is_default FROM classifications ORDER BY level ASC",
+    )
+    .fetch_all(pool.get_ref())
+    .await
+    .map_err(AppError::Database)?;
 
     Ok(HttpResponse::Ok().json(classifications))
 }

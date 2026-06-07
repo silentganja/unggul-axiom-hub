@@ -37,7 +37,7 @@ import FileAccessSheet from "@/components/features/FileAccessSheet";
 import FloatingActionBar from "@/components/features/FloatingActionBar";
 import ExecutiveOverview from "@/components/features/ExecutiveOverview";
 import FilePreviewOverlay from "@/components/features/FilePreviewOverlay";
-import { cn } from "@/lib/utils";
+import { cn, classificationBadge } from "@/lib/utils";
 import { publicApi, PublicClassificationEntry } from "@/lib/api";
 
 // ── Portal-based dropdown that escapes parent overflow clipping ─────────────
@@ -327,6 +327,15 @@ export default function FileExplorerPage() {
   // Form states
   const [newFolderName, setNewFolderName] = useState("");
   const [uploadClassification, setUploadClassification] = useState<string>("TERBUKA");
+
+  // Update upload classification to the system default once tiers are loaded
+  // ── Classification filter for My Files ──────────────────────────────────
+  const [classificationFilter, setClassificationFilter] = useState<string>("");
+
+  useEffect(() => {
+    const defaultTier = classificationTiers.find((c) => c.isDefault);
+    if (defaultTier) setUploadClassification(defaultTier.key);
+  }, [classificationTiers]);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
@@ -365,7 +374,9 @@ export default function FileExplorerPage() {
     const matchesFolder = file.parentId === currentFolderId;
     const matchesSearch =
       !searchQuery || file.name.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesFolder && matchesSearch;
+    const matchesClass =
+      !classificationFilter || file.classification === classificationFilter;
+    return matchesFolder && matchesSearch && matchesClass;
   });
 
   const allFilteredIds = filteredFiles.map((f) => f.id);
@@ -809,10 +820,7 @@ export default function FileExplorerPage() {
                       <div className="flex items-center gap-2">
                         <span className={cn(
                           "px-1 py-0.5 rounded-sm text-[8px] font-bold tracking-wider font-mono uppercase border",
-                          file.classification === "RAHSIA" && "bg-destructive/15 text-destructive border-destructive/25",
-                          file.classification === "SULIT" && "bg-warning/15 text-warning border-warning/25",
-                          file.classification === "TERHAD" && "bg-info/15 text-info border-info/25",
-                          file.classification === "TERBUKA" && "bg-background-muted/40 text-foreground-subtle border-border/40"
+                          classificationBadge(file.classification, classificationLevels)
                         )}>{file.classification}</span>
                         <span className="font-mono text-[9px] text-foreground-subtle">ID: {file.id.slice(0, 8)}</span>
                       </div>
@@ -892,10 +900,7 @@ export default function FileExplorerPage() {
                           <span className="truncate flex-1">{selectedFileObj.name}</span>
                           <span className={cn(
                             "px-1 py-0.5 rounded-sm text-[7px] font-bold font-mono uppercase border shrink-0",
-                            selectedFileObj.classification === "RAHSIA" && "bg-destructive/15 text-destructive border-destructive/25",
-                            selectedFileObj.classification === "SULIT" && "bg-warning/15 text-warning border-warning/25",
-                            selectedFileObj.classification === "TERHAD" && "bg-info/15 text-info border-info/25",
-                            selectedFileObj.classification === "TERBUKA" && "bg-background-muted/40 text-foreground-subtle border-border/40"
+                            classificationBadge(selectedFileObj.classification, classificationLevels)
                           )}>{selectedFileObj.classification}</span>
                         </>
                       ) : (
@@ -942,10 +947,7 @@ export default function FileExplorerPage() {
                                   <span className="truncate flex-1 text-foreground">{pf.name}</span>
                                   <span className={cn(
                                     "px-1 py-0.5 rounded-sm text-[7px] font-bold font-mono uppercase border shrink-0",
-                                    pf.classification === "RAHSIA" && "bg-destructive/15 text-destructive border-destructive/25",
-                                    pf.classification === "SULIT" && "bg-warning/15 text-warning border-warning/25",
-                                    pf.classification === "TERHAD" && "bg-info/15 text-info border-info/25",
-                                    pf.classification === "TERBUKA" && "bg-background-muted/40 text-foreground-subtle border-border/40"
+                                    classificationBadge(pf.classification, classificationLevels)
                                   )}>{pf.classification}</span>
                                 </button>
                               ))
@@ -1351,10 +1353,7 @@ export default function FileExplorerPage() {
                       <td className="px-4 py-2 text-center select-none">
                         <span className={cn(
                           "inline-block px-1.5 py-0.5 rounded-sm text-[9px] font-bold tracking-wider font-mono uppercase border",
-                          file.classification === "RAHSIA" && "bg-destructive/15 text-destructive border-destructive/25",
-                          file.classification === "SULIT" && "bg-warning/15 text-warning border-warning/25",
-                          file.classification === "TERHAD" && "bg-info/15 text-info border-info/25",
-                          file.classification === "TERBUKA" && "bg-background-muted/40 text-foreground-subtle border-border/40"
+                          classificationBadge(file.classification, classificationLevels)
                         )}>{file.classification}</span>
                       </td>
                       <td className="px-4 py-2 font-mono text-[11px] text-foreground-muted truncate max-w-[140px]">
@@ -1560,10 +1559,7 @@ export default function FileExplorerPage() {
                       <td className="px-4 py-2 text-center">
                         <span className={cn(
                           "inline-block px-1.5 py-0.5 rounded-sm text-[9px] font-bold tracking-wider font-mono uppercase border",
-                          file.classification === "RAHSIA" && "bg-destructive/15 text-destructive border-destructive/25",
-                          file.classification === "SULIT" && "bg-warning/15 text-warning border-warning/25",
-                          file.classification === "TERHAD" && "bg-info/15 text-info border-info/25",
-                          file.classification === "TERBUKA" && "bg-background-muted/40 text-foreground-subtle border-border/40"
+                          classificationBadge(file.classification, classificationLevels)
                         )}>{file.classification}</span>
                       </td>
                       <td className="px-4 py-2 font-mono text-[11px] text-foreground-muted">{file.modifiedAt}</td>
@@ -1663,6 +1659,18 @@ export default function FileExplorerPage() {
           placeholder="Search files..."
           className="h-8 w-full pl-8 pr-3 rounded border border-input-border bg-input-bg text-xs text-foreground focus:outline-none focus:border-accent"
         />
+        {classificationTiers.length > 0 && (
+          <select
+            value={classificationFilter}
+            onChange={(e) => setClassificationFilter(e.target.value)}
+            className="h-8 px-2 rounded border border-input-border bg-input-bg text-xs text-foreground focus:outline-none focus:border-accent font-mono"
+          >
+            <option value="">All Tiers</option>
+            {classificationTiers.map((c) => (
+              <option key={c.key} value={c.key}>{c.key}</option>
+            ))}
+          </select>
+        )}
       </div>
 
       {/* ── File explorer table ── */}
@@ -1767,10 +1775,7 @@ export default function FileExplorerPage() {
                       <td className="px-4 py-2 text-center select-none">
                         <span className={cn(
                           "inline-block px-1.5 py-0.5 rounded-sm text-[9px] font-bold tracking-wider font-mono uppercase border",
-                          file.classification === "RAHSIA" && "bg-destructive/15 text-destructive border-destructive/25",
-                          file.classification === "SULIT" && "bg-warning/15 text-warning border-warning/25",
-                          file.classification === "TERHAD" && "bg-info/15 text-info border-info/25",
-                          file.classification === "TERBUKA" && "bg-background-muted/40 text-foreground-subtle border-border/40"
+                          classificationBadge(file.classification, classificationLevels)
                         )}>{file.classification}</span>
                       </td>
                       <td className="px-4 py-2 font-mono text-[11px] text-foreground-muted select-none">{file.modifiedAt}</td>
