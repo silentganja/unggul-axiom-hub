@@ -1,21 +1,27 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useFileStore } from "@/store/useFileStore";
 import { useOperationsStore } from "@/store/useOperationsStore";
 import { Trash2, Download, FolderInput, X, Folder, ArrowLeft, Loader2, Shield, AlertCircle } from "lucide-react";
-
-// ── Classification hierarchy ─────────────────────────────────────────────────
-const CLASSIFICATION_LEVELS: Record<string, number> = {
-  TERBUKA: 0,
-  TERHAD: 1,
-  SULIT: 2,
-  RAHSIA: 3,
-};
-
-const VALID_CLASSIFICATIONS = ["TERBUKA", "TERHAD", "SULIT", "RAHSIA"] as const;
+import { publicApi, PublicClassificationEntry } from "@/lib/api";
 
 export default function FloatingActionBar() {
+  // ── Dynamic classification tiers ──────────────────────────────────────────
+  const [classificationTiers, setClassificationTiers] = useState<
+    PublicClassificationEntry[]
+  >([]);
+  const classificationLevels: Record<string, number> = Object.fromEntries(
+    classificationTiers.map((c) => [c.key, c.level]),
+  );
+  const validClassificationKeys = classificationTiers.map((c) => c.key);
+
+  useEffect(() => {
+    publicApi
+      .listClassifications()
+      .then(setClassificationTiers)
+      .catch(() => {});
+  }, []);
   const selectedIds = useFileStore((state) => state.selectedIds);
   const clearSelection = useFileStore((state) => state.clearSelection);
   const deleteSelected = useFileStore((state) => state.deleteSelected);
@@ -263,12 +269,12 @@ export default function FloatingActionBar() {
                   >
                     {(() => {
                       if (govType === "CLASSIFICATION_UPGRADE") {
-                        const minLevel = Math.min(...selectedFiles.map(f => CLASSIFICATION_LEVELS[f.classification] ?? 0));
-                        return VALID_CLASSIFICATIONS.filter(c => CLASSIFICATION_LEVELS[c] > minLevel);
+                        const minLevel = Math.min(...selectedFiles.map(f => classificationLevels[f.classification] ?? 0));
+                        return validClassificationKeys.filter(c => (classificationLevels[c] ?? 0) > minLevel);
                       }
                       if (govType === "CLASSIFICATION_DOWNGRADE") {
-                        const maxLevel = Math.max(...selectedFiles.map(f => CLASSIFICATION_LEVELS[f.classification] ?? 0));
-                        return VALID_CLASSIFICATIONS.filter(c => CLASSIFICATION_LEVELS[c] < maxLevel);
+                        const maxLevel = Math.max(...selectedFiles.map(f => classificationLevels[f.classification] ?? 0));
+                        return validClassificationKeys.filter(c => (classificationLevels[c] ?? 0) < maxLevel);
                       }
                       return [];
                     })().map((c) => (

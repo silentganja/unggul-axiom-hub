@@ -13,6 +13,7 @@ use actix_web::{get, web, App, HttpResponse, HttpServer, Responder};
 use argon2::PasswordHash;
 use sqlx::postgres::PgPoolOptions;
 use std::env;
+use std::sync::Mutex;
 use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
@@ -45,6 +46,9 @@ pub struct AppConfig {
     pub max_upload_size_bytes: i64,
     /// AES-256-GCM encryption key (32 raw bytes), or None to disable encryption.
     pub encryption_key: Option<Vec<u8>>,
+    /// When set to `true`, the POST /api/admin/reset-database endpoint is enabled.
+    /// Must NEVER be true in production. Guardrail: reset handler refuses if false.
+    pub allow_database_reset: bool,
 }
 
 // ─── Response types ─────────────────────────────────────────────────────────
@@ -158,6 +162,18 @@ async fn main() -> std::io::Result<()> {
         );
     }
 
+    // Database-reset guardrail: must be explicitly "true" to enable the wipe endpoint.
+    let allow_database_reset = env::var("ALLOW_DATABASE_RESET")
+        .map(|v| v.to_lowercase() == "true")
+        .unwrap_or(false);
+
+    if allow_database_reset {
+        tracing::warn!(
+            "⚠ ALLOW_DATABASE_RESET=true — the database wipe endpoint is ACTIVE. \
+             This MUST NOT be set in production."
+        );
+    }
+
     // Ensure the storage directory exists on startup
     tokio::fs::create_dir_all(&storage_path)
         .await
@@ -170,6 +186,7 @@ async fn main() -> std::io::Result<()> {
         admin_password_hash,
         max_upload_size_bytes,
         encryption_key,
+        allow_database_reset,
     };
 
     // ── Database pool ─────────────────────────────────────────────────────────
@@ -214,6 +231,8 @@ async fn main() -> std::io::Result<()> {
     let pool_data = web::Data::new(pool);
     let config_data = web::Data::new(config);
     let redis_data = web::Data::new(redis_client);
+    let reset_token_data: web::Data<handlers::reset::ResetTokenStore> =
+        web::Data::new(Mutex::new(None));
 
     // Hard request-body limit at the HTTP level (multipart overhead allowance)
     let payload_limit = (max_upload_size_bytes as usize).saturating_add(2 * 1024 * 1024);
@@ -262,6 +281,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(pool_data.clone())
             .app_data(config_data.clone())
             .app_data(redis_data.clone())
+            .app_data(reset_token_data.clone())
             // ── Routes ────────────────────────────────────────────────────────
             .service(root)
             .service(health_check)
@@ -464,6 +484,15 @@ async fn main() -> std::io::Result<()> {
                     .route(
                         "/classifications/{id}/permissions",
                         web::put().to(handlers::classifications::set_classification_permissions),
+                    )
+                    // ── Database Reset (danger zone) ──────────────────────────
+                    .route(
+                        "/reset-token",
+                        web::get().to(handlers::reset::get_reset_token),
+                    )
+                    .route(
+                        "/reset-database",
+                        web::post().to(handlers::reset::reset_database),
                     ),
             )
             // /api/auth
@@ -535,6 +564,11 @@ async fn main() -> std::io::Result<()> {
                         web::post().to(handlers::auth_extras::webauthn_login_complete),
                     ),
             )
+            // /api/classifications — public, any authenticated user
+            .service(web::scope("/api/classifications").route(
+                "",
+                web::get().to(handlers::classifications::list_classifications_public),
+            ))
             // /api/governance  - approval workflow (submit: any user, approve/reject: admin)
             .service(
                 web::scope("/api/governance")

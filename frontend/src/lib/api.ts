@@ -1299,6 +1299,34 @@ export const adminApi = {
       body: JSON.stringify({ classificationId }),
     }, true);
   },
+
+  // ── Database Reset (danger zone) ────────────────────────────────────────
+
+  getResetToken(): Promise<{ token: string; expiresInSeconds: number }> {
+    return apiFetch("/api/admin/reset-token", {}, true);
+  },
+
+  resetDatabase(token: string): Promise<ResetDatabaseResponse> {
+    return apiFetch("/api/admin/reset-database", {
+      method: "POST",
+      body: JSON.stringify({ token }),
+    }, true);
+  },
+};
+
+// ── Public API (authenticated, not admin-gated) ─────────────────────────────
+
+export interface PublicClassificationEntry {
+  key: string;
+  label: string;
+  level: number;
+}
+
+export const publicApi = {
+  /** Fetch all classification tiers for dashboard dropdowns. */
+  listClassifications(): Promise<PublicClassificationEntry[]> {
+    return apiFetch("/api/classifications", {}, false);
+  },
 };
 
 // ── Auth: effective permissions ───────────────────────────────────────────
@@ -1391,6 +1419,21 @@ export interface ClassificationAccessDetail {
   classificationKey: string;
   readPermissions: Permission[];
   writePermissions: Permission[];
+}
+
+// ── Database Reset types ─────────────────────────────────────────────────
+
+export interface TableWipeResult {
+  tableName: string;
+  rowsDeleted: number;
+}
+
+export interface ResetDatabaseResponse {
+  wiped: {
+    tables: TableWipeResult[];
+    totalRowsDeleted: number;
+  };
+  preserved: string[];
 }
 
 export interface UserStorageRow {

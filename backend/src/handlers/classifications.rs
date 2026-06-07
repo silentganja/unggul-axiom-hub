@@ -5,6 +5,7 @@
 
 use crate::{
     app_middleware::admin::AdminUser,
+    app_middleware::auth::AuthUser,
     errors::AppError,
     models::{
         classification::{
@@ -82,6 +83,33 @@ pub async fn list_classifications(
     .fetch_all(pool.get_ref())
     .await
     .map_err(AppError::Database)?;
+
+    Ok(HttpResponse::Ok().json(classifications))
+}
+
+// ── GET /api/classifications (public, any authenticated user) ─────────────────
+//
+// Returns a lightweight list of classification tiers for dashboard dropdowns
+// (upload, governance classification change targets, etc.). Unlike the admin
+// endpoint this does not expose file counts or internal metadata.
+
+#[derive(serde::Serialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+struct PublicClassificationEntry {
+    key: String,
+    label: String,
+    level: i16,
+}
+
+pub async fn list_classifications_public(
+    pool: web::Data<PgPool>,
+    _user: AuthUser,
+) -> Result<HttpResponse, AppError> {
+    let classifications: Vec<PublicClassificationEntry> =
+        sqlx::query_as("SELECT key, label, level FROM classifications ORDER BY level ASC")
+            .fetch_all(pool.get_ref())
+            .await
+            .map_err(AppError::Database)?;
 
     Ok(HttpResponse::Ok().json(classifications))
 }

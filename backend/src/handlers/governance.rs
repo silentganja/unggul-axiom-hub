@@ -488,12 +488,21 @@ pub async fn approve_request(
                 if let Some(ref meta) = metadata {
                     if let Some(new_class) = meta.get("newClassification").and_then(|v| v.as_str())
                     {
-                        if !crate::models::classification::is_valid_classification(
-                            pool.get_ref(),
-                            new_class,
+                        // All classification reads use the transaction handle so the
+                        // validation snapshot is consistent with the UPDATE below.
+                        // Prevents TOCTOU: an admin deleting the target tier between
+                        // validation and write.
+
+                        // Validate the target classification exists
+                        let class_exists: bool = sqlx::query_scalar(
+                            "SELECT EXISTS(SELECT 1 FROM classifications WHERE key = $1)",
                         )
+                        .bind(new_class)
+                        .fetch_one(&mut *tx)
                         .await
-                        {
+                        .map_err(AppError::Database)?;
+
+                        if !class_exists {
                             return Err(AppError::BadRequest("Invalid classification".into()));
                         }
 
@@ -501,22 +510,31 @@ pub async fn approve_request(
                         let current_class: Option<String> =
                             sqlx::query_scalar("SELECT classification FROM files WHERE id = $1")
                                 .bind(file_id)
-                                .fetch_optional(pool.get_ref())
+                                .fetch_optional(&mut *tx)
                                 .await
                                 .map_err(AppError::Database)?
                                 .flatten();
 
                         if let Some(ref cur) = current_class {
-                            let cur_level = crate::models::classification::classification_level(
-                                pool.get_ref(),
-                                cur.as_str(),
+                            // Fetch levels from the classifications table inside the txn
+                            let cur_level: Option<i16> = sqlx::query_scalar(
+                                "SELECT level FROM classifications WHERE key = $1",
                             )
-                            .await;
-                            let new_level = crate::models::classification::classification_level(
-                                pool.get_ref(),
-                                new_class,
+                            .bind(cur.as_str())
+                            .fetch_optional(&mut *tx)
+                            .await
+                            .map_err(AppError::Database)?
+                            .flatten();
+
+                            let new_level: Option<i16> = sqlx::query_scalar(
+                                "SELECT level FROM classifications WHERE key = $1",
                             )
-                            .await;
+                            .bind(new_class)
+                            .fetch_optional(&mut *tx)
+                            .await
+                            .map_err(AppError::Database)?
+                            .flatten();
+
                             if let (Some(cl), Some(nl)) = (cur_level, new_level) {
                                 let is_upgrade = req_type.as_str() == "CLASSIFICATION_UPGRADE";
                                 if is_upgrade && cl >= nl {

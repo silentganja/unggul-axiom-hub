@@ -17,9 +17,20 @@ import {
 import { useFileStore, FileNode, Collaborator } from "@/store/useFileStore";
 import { useOperationsStore } from "@/store/useOperationsStore";
 import { useToastStore } from "@/components/ui/Toast";
-import { formatTimestamp } from "@/lib/api";
+import { formatTimestamp, publicApi, PublicClassificationEntry } from "@/lib/api";
 
 export default function FileAccessSheet() {
+  // ── Dynamic classification tiers ──────────────────────────────────────────
+  const [classificationTiers, setClassificationTiers] = useState<
+    PublicClassificationEntry[]
+  >([]);
+
+  useEffect(() => {
+    publicApi
+      .listClassifications()
+      .then(setClassificationTiers)
+      .catch(() => {});
+  }, []);
   const addPersonEmailId = useId();
   const addPersonRoleId = useId();
   const fileClassificationSelectId = useId();
@@ -211,10 +222,20 @@ export default function FileAccessSheet() {
                 onChange={(e) => { setPendingClass(e.target.value); setClassSaved(false); setClassError(null); }}
                 className="h-8 flex-grow max-w-[140px] px-2 rounded border border-input-border bg-input-bg text-xs text-foreground focus:outline-none focus:border-accent"
               >
-                <option value="TERBUKA">TERBUKA</option>
-                <option value="TERHAD">TERHAD</option>
-                <option value="SULIT">SULIT</option>
-                <option value="RAHSIA">RAHSIA</option>
+                {classificationTiers.length > 0 ? (
+                  classificationTiers.map((c) => (
+                    <option key={c.key} value={c.key}>
+                      {c.key}
+                    </option>
+                  ))
+                ) : (
+                  <>
+                    <option value="TERBUKA">TERBUKA</option>
+                    <option value="TERHAD">TERHAD</option>
+                    <option value="SULIT">SULIT</option>
+                    <option value="RAHSIA">RAHSIA</option>
+                  </>
+                )}
               </select>
               <button
                 onClick={handleSaveClassification}

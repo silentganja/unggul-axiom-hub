@@ -37,16 +37,7 @@ import FloatingActionBar from "@/components/features/FloatingActionBar";
 import ExecutiveOverview from "@/components/features/ExecutiveOverview";
 import FilePreviewOverlay from "@/components/features/FilePreviewOverlay";
 import { cn } from "@/lib/utils";
-
-// ── Classification hierarchy ─────────────────────────────────────────────────
-const CLASSIFICATION_LEVELS: Record<string, number> = {
-  TERBUKA: 0,
-  TERHAD: 1,
-  SULIT: 2,
-  RAHSIA: 3,
-};
-
-const VALID_CLASSIFICATIONS = ["TERBUKA", "TERHAD", "SULIT", "RAHSIA"] as const;
+import { publicApi, PublicClassificationEntry } from "@/lib/api";
 
 // ── Portal-based dropdown that escapes parent overflow clipping ─────────────
 function RowDropdownMenu({
@@ -184,6 +175,22 @@ export default function FileExplorerPage() {
   const govTotal = useOperationsStore((state) => state.total);
   const submitRequest = useOperationsStore((state) => state.submitRequest);
 
+  // ── Classification tiers (dynamic — fetched from backend, not hardcoded) ──
+  const [classificationTiers, setClassificationTiers] = useState<
+    PublicClassificationEntry[]
+  >([]);
+  const classificationLevels: Record<string, number> = Object.fromEntries(
+    classificationTiers.map((c) => [c.key, c.level]),
+  );
+  const validClassificationKeys = classificationTiers.map((c) => c.key);
+
+  useEffect(() => {
+    publicApi
+      .listClassifications()
+      .then(setClassificationTiers)
+      .catch(() => {}); // fall back to empty — dropdowns will be empty if API fails
+  }, []);
+
   // ── Fetch files on mount and when folder changes ───────────────────────────
   useEffect(() => {
     if (activeView !== "files") return;
@@ -307,7 +314,7 @@ export default function FileExplorerPage() {
 
   // Form states
   const [newFolderName, setNewFolderName] = useState("");
-  const [uploadClassification, setUploadClassification] = useState<"RAHSIA" | "SULIT" | "TERHAD" | "TERBUKA">("TERBUKA");
+  const [uploadClassification, setUploadClassification] = useState<string>("TERBUKA");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
@@ -481,15 +488,15 @@ export default function FileExplorerPage() {
 
     // ── Classification filter helpers ──
     const getClassificationsForTarget = () => {
-      if (!selectedFileObj) return VALID_CLASSIFICATIONS;
-      const currentLevel = CLASSIFICATION_LEVELS[selectedFileObj.classification] ?? 0;
+      if (!selectedFileObj) return validClassificationKeys;
+      const currentLevel = classificationLevels[selectedFileObj.classification] ?? 0;
       if (govForm.type === "CLASSIFICATION_UPGRADE") {
-        return VALID_CLASSIFICATIONS.filter((c) => CLASSIFICATION_LEVELS[c] > currentLevel);
+        return validClassificationKeys.filter((c) => (classificationLevels[c] ?? 0) > currentLevel);
       }
       if (govForm.type === "CLASSIFICATION_DOWNGRADE") {
-        return VALID_CLASSIFICATIONS.filter((c) => CLASSIFICATION_LEVELS[c] < currentLevel);
+        return validClassificationKeys.filter((c) => (classificationLevels[c] ?? 0) < currentLevel);
       }
-      return VALID_CLASSIFICATIONS;
+      return validClassificationKeys;
     };
 
     const isClassificationType =
@@ -1872,13 +1879,23 @@ export default function FileExplorerPage() {
                   <select
                     id={classificationInputId}
                     value={uploadClassification}
-                    onChange={(e) => setUploadClassification(e.target.value as "RAHSIA" | "SULIT" | "TERHAD" | "TERBUKA")}
+                    onChange={(e) => setUploadClassification(e.target.value)}
                     className="h-8 w-full px-2 rounded-sm border border-border bg-background text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent"
                   >
-                    <option value="TERBUKA">TERBUKA (Unrestricted)</option>
-                    <option value="TERHAD">TERHAD (Limited Access)</option>
-                    <option value="SULIT">SULIT (Restricted C-Suite)</option>
-                    <option value="RAHSIA">RAHSIA (Highest Protocol)</option>
+                    {classificationTiers.length > 0 ? (
+                      classificationTiers.map((c) => (
+                        <option key={c.key} value={c.key}>
+                          {c.key} ({c.label})
+                        </option>
+                      ))
+                    ) : (
+                      <>
+                        <option value="TERBUKA">TERBUKA</option>
+                        <option value="TERHAD">TERHAD</option>
+                        <option value="SULIT">SULIT</option>
+                        <option value="RAHSIA">RAHSIA</option>
+                      </>
+                    )}
                   </select>
                 </div>
               </div>
