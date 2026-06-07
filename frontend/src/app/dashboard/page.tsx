@@ -31,7 +31,7 @@ import {
 import { useFileStore, FileNode } from "@/store/useFileStore";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useOperationsStore, ApprovalTask } from "@/store/useOperationsStore";
-import { authApi, EffectivePermissions } from "@/lib/api";
+import { authApi } from "@/lib/api";
 import { useNotificationStore } from "@/store/useNotificationStore";
 import FileAccessSheet from "@/components/features/FileAccessSheet";
 import FloatingActionBar from "@/components/features/FloatingActionBar";
@@ -326,16 +326,15 @@ export default function FileExplorerPage() {
 
   // Form states
   const [newFolderName, setNewFolderName] = useState("");
-  const [uploadClassification, setUploadClassification] = useState<string>("TERBUKA");
+  const [uploadClassification, setUploadClassification] = useState<string>("");
 
-  // Update upload classification to the system default once tiers are loaded
   // ── Classification filter for My Files ──────────────────────────────────
   const [classificationFilter, setClassificationFilter] = useState<string>("");
 
-  useEffect(() => {
-    const defaultTier = classificationTiers.find((c) => c.isDefault);
-    if (defaultTier) setUploadClassification(defaultTier.key);
-  }, [classificationTiers]);
+  // Compute system default classification for upload — derived from tiers
+  const uploadDefaultClass =
+    classificationTiers.find((c) => c.isDefault)?.key ?? "TERBUKA";
+  const effectiveUploadClass = uploadClassification || uploadDefaultClass;
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
@@ -1927,7 +1926,7 @@ export default function FileExplorerPage() {
                   <label htmlFor={classificationInputId} className="block text-[9px] font-bold font-mono uppercase text-foreground-subtle mb-1">Classification Security Level</label>
                   <select
                     id={classificationInputId}
-                    value={uploadClassification}
+                    value={effectiveUploadClass}
                     onChange={(e) => setUploadClassification(e.target.value)}
                     className="h-8 w-full px-2 rounded-sm border border-border bg-background text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent"
                   >

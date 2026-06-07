@@ -146,9 +146,7 @@ pub async fn require_permission_or(
     primary: &str,
     fallback: &str,
 ) -> Result<(), AppError> {
-    if admin.has_permission(pool, primary).await {
-        Ok(())
-    } else if admin.has_permission(pool, fallback).await {
+    if admin.has_permission(pool, primary).await || admin.has_permission(pool, fallback).await {
         Ok(())
     } else {
         Err(AppError::Unauthorized)
