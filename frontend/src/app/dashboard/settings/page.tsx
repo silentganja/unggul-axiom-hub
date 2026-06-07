@@ -230,7 +230,9 @@ export default function ProfileSettingsPage() {
       const updatedUser = await authApi.uploadAvatar(base64String);
       setAvatarBase64(base64String);
       localStorage.setItem("auth-user", JSON.stringify(updatedUser));
-      await useAuthStore.getState().hydrate();
+      // Update the store in-place rather than calling hydrate() — avoids
+      // a needless /api/auth/me round-trip and potential stale-data window.
+      useAuthStore.setState({ user: updatedUser });
       setSuccess("Avatar updated successfully.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to upload avatar");
@@ -243,7 +245,7 @@ export default function ProfileSettingsPage() {
       const updatedUser = await authApi.deleteAvatar();
       setAvatarBase64(null);
       localStorage.setItem("auth-user", JSON.stringify(updatedUser));
-      await useAuthStore.getState().hydrate();
+      useAuthStore.setState({ user: updatedUser });
       setSuccess("Avatar removed.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to remove avatar");
@@ -269,7 +271,7 @@ export default function ProfileSettingsPage() {
       }
       const updated = await authApi.updateProfile(payload);
       localStorage.setItem("auth-user", JSON.stringify(updated));
-      await useAuthStore.getState().hydrate();
+      useAuthStore.setState({ user: updated });
       setSuccess("Profile settings updated successfully.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update profile");

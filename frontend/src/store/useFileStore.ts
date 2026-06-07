@@ -45,7 +45,7 @@ export interface FileNode {
 
 const FAVORITES_KEY = "unggul-favorites";
 
-function loadFavorites(): Set<string> {
+function loadFavoriteSet(): Set<string> {
   if (typeof window === "undefined") return new Set();
   try {
     const raw = localStorage.getItem(FAVORITES_KEY);
@@ -55,21 +55,22 @@ function loadFavorites(): Set<string> {
   }
 }
 
-function saveFavorites(ids: Set<string>): void {
+function persistFavoriteSet(ids: Set<string>): void {
+  if (typeof window === "undefined") return;
   localStorage.setItem(FAVORITES_KEY, JSON.stringify([...ids]));
 }
 
 /** Called on logout to clear cross-user cached favorites */
 export function resetFavoriteIds(): void {
-  favoriteIds.clear();
-  saveFavorites(favoriteIds);
+  const store = useFileStore.getState();
+  store.favoriteIds.clear();
+  persistFavoriteSet(store.favoriteIds);
 }
-
-const favoriteIds = loadFavorites();
 
 // ── Transform backend → frontend ─────────────────────────────────────────────
 
 function transformFile(bf: BackendFileNode): FileNode {
+  const favs = useFileStore.getState().favoriteIds;
   return {
     id: bf.id,
     name: bf.name,
@@ -79,7 +80,7 @@ function transformFile(bf: BackendFileNode): FileNode {
     modifiedAt: formatTimestamp(bf.updatedAt),
     classification: bf.classification,
     accessRole: "owner",
-    isFavorite: favoriteIds.has(bf.id),
+    isFavorite: favs.has(bf.id),
     collaborators: [],
     parentId: bf.parentId,
     mimeType: bf.mimeType,
@@ -138,7 +139,11 @@ interface FileState {
   fileShares: Collaborator[]; // Shares for the currently active file
   selectedIds: string[];
   searchQuery: string;
+  /** Set of favorited file IDs (synced to localStorage on mutation) */
+  favoriteIds: Set<string>;
   currentFolderId: string | null;
+  /** Navigation stack of visited folder IDs for correct goBack() */
+  folderNavStack: (string | null)[];
   activeFile: FileNode | null;
   isAccessSheetOpen: boolean;
   activeView: "overview" | "files" | "shared" | "recent" | "favorites" | "trash" | "governance";
@@ -236,6 +241,9 @@ interface FileState {
   setDefaultClassification: (key: string) => void;
 }
 
+// ── Search debounce timer (module-level) ─────────────────────────────────────
+let searchTimer: ReturnType<typeof setTimeout> | null = null;
+
 // ── Store ────────────────────────────────────────────────────────────────────
 
 export const useFileStore = create<FileState>((set, get) => ({
@@ -245,7 +253,9 @@ export const useFileStore = create<FileState>((set, get) => ({
   fileShares: [],
   selectedIds: [],
   searchQuery: "",
+  favoriteIds: loadFavoriteSet(),
   currentFolderId: null,
+  folderNavStack: [],
   activeFile: null,
   isAccessSheetOpen: false,
   activeView: "overview",
@@ -295,19 +305,6 @@ export const useFileStore = create<FileState>((set, get) => ({
     const { currentFolderId, searchQuery, page, perPage, sort, order } = get();
     set({ isLoading: true, error: null });
     try {
-      // Load favorites from backend first so transformFile uses latest data
-      try {
-        const favs = await favoritesApi.list();
-        const backendIds = new Set(favs.map((f) => f.id));
-        const localIds = loadFavorites();
-        localIds.forEach((id) => backendIds.add(id));
-        favoriteIds.clear();
-        backendIds.forEach((id) => favoriteIds.add(id));
-        saveFavorites(favoriteIds);
-      } catch {
-        // Use existing localStorage favorites as fallback
-      }
-
       const res: FileListResponse = await filesApi.list({
         parentId: currentFolderId,
         q: searchQuery || undefined,
@@ -335,11 +332,13 @@ export const useFileStore = create<FileState>((set, get) => ({
     try {
       const favs = await favoritesApi.list();
       const backendIds = new Set(favs.map((f) => f.id));
-      const localIds = loadFavorites();
+      const { favoriteIds } = get();
+      // Merge any locally-favorited IDs that aren't yet on the backend
+      const localIds = loadFavoriteSet();
       localIds.forEach((id) => backendIds.add(id));
       favoriteIds.clear();
       backendIds.forEach((id) => favoriteIds.add(id));
-      saveFavorites(favoriteIds);
+      persistFavoriteSet(favoriteIds);
       // Update files in store with new favorite status
       set((state) => ({
         files: state.files.map((f) => ({
@@ -437,7 +436,14 @@ export const useFileStore = create<FileState>((set, get) => ({
 
   // ── UI state setters ──────────────────────────────────────────────────────
 
-  setSearchQuery: (query) => set({ searchQuery: query }),
+  setSearchQuery: (query) => {
+    set({ searchQuery: query, page: 1 });
+    // Debounce search to avoid flooding the backend on every keystroke
+    if (searchTimer) clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+      get().fetchFiles();
+    }, 300);
+  },
 
   toggleSelection: (id) =>
     set((state) => {
@@ -462,22 +468,21 @@ export const useFileStore = create<FileState>((set, get) => ({
   setPreviewFileId: (id) => set({ previewFileId: id }),
 
   mapsToFolder: (folderId) =>
-    set({
+    set((state) => ({
       currentFolderId: folderId,
+      folderNavStack: [...state.folderNavStack, state.currentFolderId],
       selectedIds: [],
       activeFile: null,
       isAccessSheetOpen: false,
-    }),
+    })),
 
   goBack: () => {
-    const { currentFolderId, files } = get();
-    if (!currentFolderId) return;
-    const currentFolder = files.find(
-      (f) => f.id === currentFolderId && f.type === "folder"
-    );
-    const parentId = currentFolder ? currentFolder.parentId : null;
+    const { folderNavStack } = get();
+    if (folderNavStack.length === 0) return;
+    const parentId = folderNavStack[folderNavStack.length - 1];
     set({
       currentFolderId: parentId,
+      folderNavStack: folderNavStack.slice(0, -1),
       selectedIds: [],
       activeFile: null,
       isAccessSheetOpen: false,
@@ -487,16 +492,29 @@ export const useFileStore = create<FileState>((set, get) => ({
   // ── CRUD operations ───────────────────────────────────────────────────────
 
   createFolder: async (name, classification) => {
-    const { currentFolderId, fetchFiles, defaultClassification: defaultClass } = get();
+    const { currentFolderId, defaultClassification: defaultClass } = get();
     set({ error: null });
+    const tempId = `temp-folder-${Date.now()}`;
+    // Optimistic insert — avoids the loading spinner flash from re-fetching
+    const optimistic: FileNode = {
+      id: tempId, name: name.trim(), type: "folder", size: "--", sizeBytes: 0,
+      modifiedAt: new Date().toISOString().slice(0, 19).replace("T", " "),
+      classification: (classification || defaultClass).toString(),
+      accessRole: "owner", isFavorite: false, collaborators: [], parentId: currentFolderId,
+    };
+    set((s) => ({ files: [optimistic, ...s.files] }));
     try {
-      await filesApi.createFolder({
+      const result = await filesApi.createFolder({
         name: name.trim(),
         parentId: currentFolderId,
-        classification: classification || defaultClass,
+        classification: (classification || defaultClass).toString(),
       });
-      await fetchFiles();
+      // Replace temp node with real data
+      set((s) => ({
+        files: s.files.map((f) => (f.id === tempId ? transformFile(result) : f)),
+      }));
     } catch (err) {
+      set((s) => ({ files: s.files.filter((f) => f.id !== tempId) }));
       set({ error: err instanceof Error ? err.message : "Failed to create folder" });
     }
   },
@@ -532,6 +550,8 @@ export const useFileStore = create<FileState>((set, get) => ({
         set({ uploadProgress: null, uploadFileName: null });
         if (xhr.status >= 200 && xhr.status < 300) {
           await fetchFiles();
+          // Refresh quota so the sidebar storage widget shows accurate usage
+          get().fetchQuota().catch(() => {});
           resolve();
         } else if (xhr.status === 401) {
           // Token expired during upload - try refreshing and retry
@@ -592,16 +612,7 @@ export const useFileStore = create<FileState>((set, get) => ({
     try {
       const file = get().files.find((f) => f.id === id);
       const filename = file?.name || "download";
-      const { data, mimeType } = await filesApi.getContent(id);
-      const blob = new Blob([data], { type: mimeType });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      await filesApi.downloadFile(id, filename);
     } catch (err) {
       set({ error: err instanceof Error ? err.message : "Download failed" });
     }
@@ -673,6 +684,8 @@ export const useFileStore = create<FileState>((set, get) => ({
       await filesApi.delete(id);
       set((state) => ({
         files: state.files.filter((f) => f.id !== id),
+        sharedFiles: state.sharedFiles.filter((f) => f.id !== id),
+        trashFiles: state.trashFiles.filter((f) => f.id !== id),
         selectedIds: state.selectedIds.filter((sid) => sid !== id),
         activeFile: state.activeFile?.id === id ? null : state.activeFile,
         isAccessSheetOpen:
@@ -688,52 +701,53 @@ export const useFileStore = create<FileState>((set, get) => ({
   deleteSelected: async () => {
     const { selectedIds } = get();
     const failed: string[] = [];
-    // Delete sequentially to respect backend rate limits
     for (const id of selectedIds) {
       try {
         await filesApi.delete(id);
-        set((state) => ({
-          files: state.files.filter((f) => f.id !== id),
-          selectedIds: state.selectedIds.filter((sid) => sid !== id),
-          activeFile: state.activeFile?.id === id ? null : state.activeFile,
-          isAccessSheetOpen: state.activeFile?.id === id ? false : state.isAccessSheetOpen,
-          previewFileId: state.previewFileId === id ? null : state.previewFileId,
-        }));
       } catch {
         failed.push(id);
       }
     }
     if (failed.length > 0) {
+      // Keep only the failed file IDs selected so the user can retry them
+      // individually. Re-fetch to get a clean server-synced file list.
       set({
-        error: `Failed to delete ${failed.length} of ${selectedIds.length} item(s). Check file locks or permissions.`,
+        selectedIds: failed,
+        error: `Failed to delete ${failed.length} of ${selectedIds.length} item(s). The failed items remain selected for retry.`,
       });
+    } else {
+      set({ selectedIds: [], error: null });
     }
+    // Always re-fetch to get authoritative state — avoid stale optimistic removal.
+    await get().fetchFiles();
   },
 
   // ── Client-side extras (no backend support yet) ───────────────────────────
 
   toggleFavorite: async (id) => {
-    const state = get();
-    const file = state.files.find((f) => f.id === id);
+    const { favoriteIds, files, sharedFiles, activeFile } = get();
+    const file = files.find((f) => f.id === id);
     const newValue = !file?.isFavorite;
 
+    // Build new Set (don't mutate Zustand state in-place)
+    const nextFavs = new Set(favoriteIds);
+    if (newValue) nextFavs.add(id);
+    else nextFavs.delete(id);
+    persistFavoriteSet(nextFavs);
+
     // Optimistic update
-    set((s) => {
-      if (newValue) favoriteIds.add(id);
-      else favoriteIds.delete(id);
-      saveFavorites(favoriteIds);
-      return {
-        files: s.files.map((f) =>
-          f.id === id ? { ...f, isFavorite: newValue } : f
-        ),
-        sharedFiles: s.sharedFiles.map((f) =>
-          f.id === id ? { ...f, isFavorite: newValue } : f
-        ),
-        activeFile:
-          s.activeFile?.id === id
-            ? { ...s.activeFile, isFavorite: newValue }
-            : s.activeFile,
-      };
+    set({
+      favoriteIds: nextFavs,
+      files: files.map((f) =>
+        f.id === id ? { ...f, isFavorite: newValue } : f
+      ),
+      sharedFiles: sharedFiles.map((f) =>
+        f.id === id ? { ...f, isFavorite: newValue } : f
+      ),
+      activeFile:
+        activeFile?.id === id
+          ? { ...activeFile, isFavorite: newValue }
+          : activeFile,
     });
 
     // Call backend API
@@ -745,22 +759,23 @@ export const useFileStore = create<FileState>((set, get) => ({
       }
     } catch (err) {
       // Revert optimistic update on API error
-      set((s) => {
-        if (!newValue) favoriteIds.add(id);
-        else favoriteIds.delete(id);
-        saveFavorites(favoriteIds);
-        return {
-          files: s.files.map((f) =>
-            f.id === id ? { ...f, isFavorite: !newValue } : f
-          ),
-          sharedFiles: s.sharedFiles.map((f) =>
-            f.id === id ? { ...f, isFavorite: !newValue } : f
-          ),
-          activeFile:
-            s.activeFile?.id === id
-              ? { ...s.activeFile, isFavorite: !newValue }
-              : s.activeFile,
-        };
+      const { favoriteIds, files, sharedFiles, activeFile } = get();
+      const revertFavs = new Set(favoriteIds);
+      if (!newValue) revertFavs.add(id);
+      else revertFavs.delete(id);
+      persistFavoriteSet(revertFavs);
+      set({
+        favoriteIds: revertFavs,
+        files: files.map((f) =>
+          f.id === id ? { ...f, isFavorite: !newValue } : f
+        ),
+        sharedFiles: sharedFiles.map((f) =>
+          f.id === id ? { ...f, isFavorite: !newValue } : f
+        ),
+        activeFile:
+          activeFile?.id === id
+            ? { ...activeFile, isFavorite: !newValue }
+            : activeFile,
       });
       console.error("Failed to toggle favorite:", err);
     }

@@ -62,7 +62,9 @@ let refreshPromise: Promise<boolean> | null = null;
 /**
  * Attempt to refresh the access token using the stored refresh token.
  * Returns true if refresh succeeded, false otherwise.
- * Deduplicates concurrent refresh attempts.
+ * Deduplicates concurrent refresh attempts — closes the TOCTOU window between
+ * `isRefreshing` assignment and `refreshPromise` assignment by building the
+ * promise before setting both flags.
  */
 export async function attemptTokenRefresh(): Promise<boolean> {
   // If already refreshing, wait for the existing attempt
@@ -73,8 +75,11 @@ export async function attemptTokenRefresh(): Promise<boolean> {
   const rt = getRefreshToken();
   if (!rt) return false;
 
-  isRefreshing = true;
-  refreshPromise = (async () => {
+  // Build the promise FIRST, then set both guards atomically.
+  // This closes the window where isRefreshing === true but refreshPromise is
+  // still null, which previously allowed concurrent calls to start a second,
+  // conflicting refresh request.
+  const promise = (async () => {
     try {
       const res = await fetch(`${API_BASE}/api/auth/refresh`, {
         method: "POST",
@@ -88,17 +93,21 @@ export async function attemptTokenRefresh(): Promise<boolean> {
       setToken(data.token);
       setRefreshToken(data.refreshToken);
 
-      // Also update the cached user if we have it (token rotation keeps same user)
       return true;
     } catch {
       return false;
-    } finally {
-      isRefreshing = false;
-      refreshPromise = null;
     }
   })();
 
-  return refreshPromise;
+  isRefreshing = true;
+  refreshPromise = promise;
+
+  try {
+    return await promise;
+  } finally {
+    isRefreshing = false;
+    refreshPromise = null;
+  }
 }
 
 // ── Admin token management (separate from user auth) ─────────────────────────
@@ -125,6 +134,31 @@ class AuthError extends Error {
   constructor() {
     super("Unauthorized");
     this.name = "AuthError";
+  }
+}
+
+/**
+ * Force-clear all auth state and redirect to the appropriate login page.
+ * Called when the 401 handler determines the session is unrecoverable.
+ * Uses a synchronous module-level dispatch so api.ts doesn't circular-import
+ * from the Zustand stores.
+ */
+let onForceLogout: (() => void) | null = null;
+
+export function registerForceLogoutHandler(handler: () => void): void {
+  onForceLogout = handler;
+}
+
+function forceLogout(useAdminToken: boolean): void {
+  if (useAdminToken) {
+    clearAdminToken();
+  } else {
+    clearToken();
+  }
+  // Notify the auth stores to reset their in-memory state BEFORE the redirect
+  if (onForceLogout) onForceLogout();
+  if (typeof window !== "undefined") {
+    window.location.href = useAdminToken ? "/dev/admin" : "/login";
   }
 }
 
@@ -166,20 +200,15 @@ async function apiFetch<T>(
   clearTimeout(timeoutId);
 
   if (res.status === 401) {
-    // If an admin endpoint returned 401 but we're NOT using the admin token,
-    // this is an admin authentication failure - never touch the regular user session.
-    if (path.includes("/api/admin") && !useAdminToken) {
-      throw new Error("Admin authentication failed");
-    }
-
     // Only redirect if we're NOT already on a login page -
     // a 401 from /api/auth/login means "wrong credentials", not "expired session".
     const isOnLoginPage =
       typeof window !== "undefined" &&
-      window.location.pathname === "/login";
+      (window.location.pathname === "/login" || window.location.pathname === "/dev/admin");
 
     if (!isOnLoginPage) {
-      // Try to refresh the access token first (silent renewal)
+      // Try to refresh the access token first (silent renewal).
+      // Admin tokens use an 8h expiry and are validated on hydrate — no refresh.
       if (!useAdminToken) {
         const refreshed = await attemptTokenRefresh();
         if (refreshed) {
@@ -209,17 +238,7 @@ async function apiFetch<T>(
       }
 
       // Refresh failed or not applicable - redirect to login
-      if (useAdminToken) {
-        clearAdminToken();
-        if (typeof window !== "undefined") {
-          window.location.href = "/dev/admin";
-        }
-      } else {
-        clearToken();
-        if (typeof window !== "undefined") {
-          window.location.href = "/login";
-        }
-      }
+      forceLogout(useAdminToken);
     }
     throw new AuthError();
   }
@@ -611,13 +630,25 @@ export const filesApi = {
     return { data, mimeType };
   },
 
-  /** Download a file with auth header and trigger browser save dialog. */
+  /** Download a file with auth header, 401 auto-refresh, and browser save dialog. */
   async downloadFile(id: string, filename: string): Promise<void> {
     const token = getToken();
     if (!token) throw new Error("Not authenticated");
-    const res = await fetch(`${API_BASE}/api/files/${id}/download`, {
+
+    let res = await fetch(`${API_BASE}/api/files/${id}/download`, {
       headers: { Authorization: `Bearer ${token}` },
     });
+
+    // If 401, try refreshing the token (same pattern as getContent)
+    if (res.status === 401) {
+      const refreshed = await attemptTokenRefresh();
+      if (refreshed) {
+        res = await fetch(`${API_BASE}/api/files/${id}/download`, {
+          headers: { Authorization: `Bearer ${getToken()}` },
+        });
+      }
+    }
+
     if (!res.ok) throw new Error("Download failed");
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);

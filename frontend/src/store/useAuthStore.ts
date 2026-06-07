@@ -5,6 +5,7 @@ import {
   setToken,
   setRefreshToken,
   clearToken,
+  registerForceLogoutHandler,
 } from "@/lib/api";
 import { resetFavoriteIds } from "@/store/useFileStore";
 
@@ -15,11 +16,29 @@ interface AuthState {
   isLoading: boolean;
   isAuthenticated: boolean;
   error: string | null;
+  /** Tracks whether the role-based landing view has been applied this session */
+  roleLandingDone: boolean;
 
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   hydrate: () => Promise<void>; // Restore session from localStorage on app boot
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// When an unrecoverable 401 is caught in api.ts, this handler resets in-memory
+// Zustand state BEFORE the hard redirect. Previously the hard redirect masked
+// a window where `isAuthenticated` was still true and `user` held stale data.
+// ═══════════════════════════════════════════════════════════════════════════════
+registerForceLogoutHandler(() => {
+  useAuthStore.setState({
+    token: null,
+    refreshToken: null,
+    user: null,
+    isAuthenticated: false,
+    error: null,
+  });
+  resetFavoriteIds();
+});
 
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
@@ -28,6 +47,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   isLoading: false,
   isAuthenticated: false,
   error: null,
+  roleLandingDone: false,
 
   login: async (email: string, password: string) => {
     set({ isLoading: true, error: null });
@@ -76,10 +96,11 @@ export const useAuthStore = create<AuthState>((set) => ({
       user: null,
       isAuthenticated: false,
       error: null,
+      roleLandingDone: false,
     });
-    if (typeof window !== "undefined") {
-      window.location.href = "/login";
-    }
+    // The caller (dashboard layout) watches isAuthenticated and will
+    // redirect via Next.js router. This avoids a hard page reload that
+    // discards all client-side state (scroll positions, cache, etc.).
   },
 
   hydrate: async () => {

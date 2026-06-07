@@ -16,6 +16,10 @@ use uuid::Uuid;
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Submit a new governance request (file lock, unlock, classification change).
+///
+/// Wrapped in a database transaction so the file-existence check and the
+/// INSERT are atomic — no TOCTOU window where another transaction deletes
+/// the file between the SELECT and INSERT.
 pub async fn create_request(
     pool: web::Data<PgPool>,
     user: AuthUser,
@@ -40,23 +44,7 @@ pub async fn create_request(
         return Err(AppError::BadRequest("Title is required".into()));
     }
 
-    // If a target file is specified, verify it exists and belongs to the user
-    if let Some(file_id) = body.target_file_id {
-        let file_exists: bool = sqlx::query_scalar(
-            "SELECT EXISTS(SELECT 1 FROM files WHERE id = $1 AND owner_id = $2)",
-        )
-        .bind(file_id)
-        .bind(user.id)
-        .fetch_one(pool.get_ref())
-        .await
-        .map_err(AppError::Database)?;
-
-        if !file_exists {
-            return Err(AppError::NotFound);
-        }
-    }
-
-    // Type-specific validations
+    // Type-specific validations (no DB access — safe before transaction)
     match req_type.as_str() {
         "FILE_DELETE" => {
             if body.target_file_id.is_none() {
@@ -87,6 +75,26 @@ pub async fn create_request(
         _ => {}
     }
 
+    // ── Transaction: verify file ownership + insert atomically ────────────
+    let mut tx = pool.begin().await.map_err(AppError::Database)?;
+
+    // If a target file is specified, verify it exists and belongs to the user
+    // WITHIN the transaction (FOR UPDATE prevents concurrent deletion).
+    if let Some(file_id) = body.target_file_id {
+        let file_exists: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM files WHERE id = $1 AND owner_id = $2 FOR UPDATE)",
+        )
+        .bind(file_id)
+        .bind(user.id)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(AppError::Database)?;
+
+        if !file_exists {
+            return Err(AppError::NotFound);
+        }
+    }
+
     let request: GovernanceRequestResponse = sqlx::query_as::<_, GovernanceRequestResponse>(
         "INSERT INTO governance_requests (type, title, description, requested_by, target_file_id, metadata)
          VALUES ($1, $2, $3, $4, $5, $6)
@@ -106,9 +114,20 @@ pub async fn create_request(
     .bind(user.id)
     .bind(body.target_file_id)
     .bind(&body.metadata)
-    .fetch_one(pool.get_ref())
+    .fetch_one(&mut *tx)
     .await
     .map_err(AppError::Database)?;
+
+    // Fetch supervisor inside transaction for consistency
+    let supervisor_id: Option<Uuid> =
+        sqlx::query_scalar("SELECT supervisor_id FROM users WHERE id = $1")
+            .bind(user.id)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(AppError::Database)?
+            .flatten();
+
+    tx.commit().await.map_err(AppError::Database)?;
 
     tracing::info!(
         user_id = %user.id,
@@ -117,16 +136,7 @@ pub async fn create_request(
         "Governance request submitted"
     );
 
-    // Notify the requester's supervisor (if any) via SSE
-    let supervisor_id: Option<Uuid> =
-        sqlx::query_scalar("SELECT supervisor_id FROM users WHERE id = $1")
-            .bind(user.id)
-            .fetch_optional(pool.get_ref())
-            .await
-            .map_err(AppError::Database)?
-            .flatten();
-
-    // Notify the supervisor specifically; fall back to broadcast if no supervisor
+    // Notify the supervisor AFTER commit — notification is best-effort
     crate::handlers::notifications::emit_notification_to(
         supervisor_id,
         crate::models::notification::NotificationEvent::GovernanceRequested {

@@ -127,7 +127,13 @@ export const useOperationsStore = create<OperationsState>((set, get) => ({
     set({ error: null });
     try {
       await governanceApi.approve(id, reason);
-      await get().fetchTasks({ page: get().page, perPage: get().perPage, status: "PENDING" });
+      // If only 1 pending task was on the current page and we just moved it,
+      // go back one page. Otherwise stay on the same page.
+      const state = get();
+      const taskCount = state.tasks.filter((t) => t.status === "PENDING").length;
+      const newPage = taskCount <= 1 && state.page > 1 ? state.page - 1 : state.page;
+      set({ page: newPage });
+      await get().fetchTasks({ page: newPage, perPage: state.perPage, status: "PENDING" });
     } catch (err) {
       set({ error: err instanceof Error ? err.message : "Failed to approve" });
     }
@@ -137,7 +143,11 @@ export const useOperationsStore = create<OperationsState>((set, get) => ({
     set({ error: null });
     try {
       await governanceApi.reject(id, reason);
-      await get().fetchTasks({ page: get().page, perPage: get().perPage, status: "PENDING" });
+      const state = get();
+      const taskCount = state.tasks.filter((t) => t.status === "PENDING").length;
+      const newPage = taskCount <= 1 && state.page > 1 ? state.page - 1 : state.page;
+      set({ page: newPage });
+      await get().fetchTasks({ page: newPage, perPage: state.perPage, status: "PENDING" });
     } catch (err) {
       set({ error: err instanceof Error ? err.message : "Failed to reject" });
     }
@@ -147,7 +157,10 @@ export const useOperationsStore = create<OperationsState>((set, get) => ({
     set({ error: null });
     try {
       await governanceApi.batchApprove(ids, reason);
-      await get().fetchTasks({ page: get().page, perPage: get().perPage, status: "PENDING" });
+      // After batch mutation the current page may be empty; reset to page 1
+      // for a clean re-fetch of the freshest pending tasks.
+      set({ page: 1 });
+      await get().fetchTasks({ page: 1, perPage: get().perPage, status: "PENDING" });
     } catch (err) {
       set({ error: err instanceof Error ? err.message : "Failed to batch approve" });
     }
@@ -157,7 +170,8 @@ export const useOperationsStore = create<OperationsState>((set, get) => ({
     set({ error: null });
     try {
       await governanceApi.batchReject(ids, reason);
-      await get().fetchTasks({ page: get().page, perPage: get().perPage, status: "PENDING" });
+      set({ page: 1 });
+      await get().fetchTasks({ page: 1, perPage: get().perPage, status: "PENDING" });
     } catch (err) {
       set({ error: err instanceof Error ? err.message : "Failed to batch reject" });
     }
@@ -167,7 +181,9 @@ export const useOperationsStore = create<OperationsState>((set, get) => ({
     set({ error: null });
     try {
       await governanceApi.undo(id);
-      await get().fetchTasks();
+      // Undo returns a task to PENDING — always go to page 1 to see the restored item.
+      set({ page: 1 });
+      await get().fetchTasks({ page: 1, perPage: get().perPage, status: "PENDING" });
     } catch (err) {
       set({ error: err instanceof Error ? err.message : "Failed to undo" });
     }

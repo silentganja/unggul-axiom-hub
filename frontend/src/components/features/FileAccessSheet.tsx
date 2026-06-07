@@ -15,6 +15,8 @@ import {
   CheckCircle,
 } from "lucide-react";
 import { useFileStore, FileNode, Collaborator } from "@/store/useFileStore";
+import { useOperationsStore } from "@/store/useOperationsStore";
+import { useToastStore } from "@/components/ui/Toast";
 import { filesApi, formatTimestamp } from "@/lib/api";
 
 export default function FileAccessSheet() {
@@ -96,16 +98,32 @@ export default function FileAccessSheet() {
   };
 
   const handleSaveClassification = async () => {
+    if (editClass === activeFile.classification) return;
     setClassSaving(true);
     setClassSaved(false);
     setClassError(null);
     try {
-      const updated = await filesApi.updateClassification(activeFile.id, editClass);
-      updateFileInStore(activeFile.id, updated.classification as "RAHSIA" | "SULIT" | "TERHAD" | "TERBUKA");
+      // Classification changes must go through the Governance workflow.
+      // Direct API calls bypass the authorization chain and violate
+      // the principle that classification mutations require sign-off.
+      const classifyType =
+        (activeFile.classification < editClass)
+          ? "CLASSIFICATION_UPGRADE"
+          : "CLASSIFICATION_DOWNGRADE";
+      await useOperationsStore.getState().submitRequest({
+        type: classifyType,
+        title: `Classification change: ${activeFile.name}`,
+        description: `Reclassify from ${activeFile.classification} to ${editClass}`,
+        targetFileId: activeFile.id,
+        metadata: { newClassification: editClass },
+      });
       setPendingClass(null);
       setClassSaved(true);
+      useToastStore.getState().success(
+        `Governance request submitted: ${activeFile.classification} → ${editClass}`
+      );
     } catch (err) {
-      setClassError(err instanceof Error ? err.message : "Failed to update classification");
+      setClassError(err instanceof Error ? err.message : "Failed to submit governance request");
     } finally {
       setClassSaving(false);
     }

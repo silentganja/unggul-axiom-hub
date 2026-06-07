@@ -116,10 +116,6 @@ function RowDropdownMenu({
   );
 }
 
-// Module-level: only set role-based landing view once per app session.
-// Survives page remounts (e.g. navigating from /dashboard/audit back to /dashboard).
-let roleLandingDone = false;
-
 export default function FileExplorerPage() {
   const folderNameInputId = useId();
   const classificationInputId = useId();
@@ -233,6 +229,7 @@ export default function FileExplorerPage() {
 
   // ── Role-based landing page ────────────────────────────────────────────────
   const user = useAuthStore((state) => state.user);
+  const roleLandingDone = useAuthStore((state) => state.roleLandingDone);
 
   useEffect(() => {
     // 1. If navigating from another page (e.g. /dashboard/audit), restore the
@@ -249,7 +246,7 @@ export default function FileExplorerPage() {
     // 2. On first app load, set the role-based default view (once).
     if (!user?.role) return;
     if (roleLandingDone) return;
-    roleLandingDone = true;
+    useAuthStore.setState({ roleLandingDone: true });
     const roleViewMap: Record<string, string> = {
       chief: "overview",
       director: "governance",

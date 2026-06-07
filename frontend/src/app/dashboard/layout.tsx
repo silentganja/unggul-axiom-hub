@@ -68,12 +68,11 @@ export default function DashboardLayout({
   const fetchQuota = useFileStore((state) => state.fetchQuota);
 
   useEffect(() => {
-    // Use getState() to avoid dependency on the hook reference
+    // Hydrate once on mount. Session validity is verified transparently by
+    // the 401 handler in apiFetch (which attempts token refresh before
+    // redirecting). The 5-minute polling interval previously used here was
+    // redundant with that mechanism and added unnecessary /api/auth/me calls.
     useAuthStore.getState().hydrate();
-    const interval = setInterval(() => {
-      useAuthStore.getState().hydrate();
-    }, 5 * 60 * 1000);
-    return () => clearInterval(interval);
   }, []);
 
   // Timeout: if auth check takes >10s, force-show login

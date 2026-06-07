@@ -1,5 +1,17 @@
 import { create } from "zustand";
-import { adminApi, setAdminToken, clearAdminToken } from "@/lib/api";
+import { adminApi, setAdminToken, clearAdminToken, registerForceLogoutHandler } from "@/lib/api";
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Reset in-memory admin state BEFORE the hard redirect on unrecoverable 401.
+// ═══════════════════════════════════════════════════════════════════════════════
+registerForceLogoutHandler(() => {
+  useAdminStore.setState({
+    token: null,
+    username: null,
+    isAuthenticated: false,
+    error: null,
+  });
+});
 
 // The admin JWT is issued with an 8-hour expiry by the backend.
 // We store the issue timestamp locally so we can pre-emptively detect

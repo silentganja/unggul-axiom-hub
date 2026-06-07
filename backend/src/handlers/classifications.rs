@@ -8,7 +8,8 @@ use crate::{
     errors::AppError,
     models::{
         classification::{
-            Classification, ClassificationAccessDetail, ClassificationSummary,
+            Classification, ClassificationAccessDetail, ClassificationPermission,
+            ClassificationSummary,
         },
         role_group::Permission,
     },
@@ -350,31 +351,55 @@ pub async fn get_classification_permissions(
 
     let key = key.ok_or(AppError::NotFound)?;
 
-    let read_permissions: Vec<Permission> = sqlx::query_as(
-        "SELECT p.id, p.key, p.description
-         FROM permissions p
-         JOIN classification_permissions cp ON cp.permission_id = p.id
-         JOIN classifications c ON c.id = cp.classification_id
-         WHERE c.id = $1 AND cp.access_type = 'read'
-         ORDER BY p.key",
+    // Read all junction rows in one query — ClassificationPermission is the
+    // canonical row type for the classification_permissions table.
+    let junctions: Vec<ClassificationPermission> = sqlx::query_as(
+        "SELECT classification_id, permission_id, access_type
+         FROM classification_permissions
+         WHERE classification_id = $1
+         ORDER BY access_type",
     )
     .bind(id)
     .fetch_all(pool.get_ref())
     .await
     .map_err(AppError::Database)?;
 
-    let write_permissions: Vec<Permission> = sqlx::query_as(
-        "SELECT p.id, p.key, p.description
-         FROM permissions p
-         JOIN classification_permissions cp ON cp.permission_id = p.id
-         JOIN classifications c ON c.id = cp.classification_id
-         WHERE c.id = $1 AND cp.access_type = 'write'
-         ORDER BY p.key",
-    )
-    .bind(id)
-    .fetch_all(pool.get_ref())
-    .await
-    .map_err(AppError::Database)?;
+    // Collect unique permission IDs from junction rows
+    let perm_ids: Vec<Uuid> = junctions.iter().map(|j| j.permission_id).collect();
+    let read_ids: Vec<Uuid> = junctions
+        .iter()
+        .filter(|j| j.access_type == "read")
+        .map(|j| j.permission_id)
+        .collect();
+    let write_ids: Vec<Uuid> = junctions
+        .iter()
+        .filter(|j| j.access_type == "write")
+        .map(|j| j.permission_id)
+        .collect();
+
+    // Fetch all referenced permissions in one query
+    let all_perms: Vec<Permission> = if perm_ids.is_empty() {
+        vec![]
+    } else {
+        sqlx::query_as(
+            "SELECT id, key, description FROM permissions WHERE id = ANY($1) ORDER BY key",
+        )
+        .bind(&perm_ids)
+        .fetch_all(pool.get_ref())
+        .await
+        .map_err(AppError::Database)?
+    };
+
+    let read_permissions: Vec<Permission> = all_perms
+        .iter()
+        .filter(|p| read_ids.contains(&p.id))
+        .cloned()
+        .collect();
+    let write_permissions: Vec<Permission> = all_perms
+        .iter()
+        .filter(|p| write_ids.contains(&p.id))
+        .cloned()
+        .collect();
 
     Ok(HttpResponse::Ok().json(ClassificationAccessDetail {
         classification_id: id,

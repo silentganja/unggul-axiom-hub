@@ -24,6 +24,11 @@ interface NotificationState {
   setOnGovernanceUpdate: (cb: (() => void) | null) => void;
 }
 
+// ── Module-level guard for synchronous deduplication ──────────────────────────
+// Prevents double EventSource in React Strict Mode double-mount and rapid
+// re-renders where Zustand state hasn't committed yet.
+let subscriptionActive = false;
+
 // ── Store ────────────────────────────────────────────────────────────────────
 
 export const useNotificationStore = create<NotificationState>((set, get) => ({
@@ -52,8 +57,10 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
   setOnGovernanceUpdate: (cb) => set({ onGovernanceUpdate: cb }),
 
   subscribe: () => {
-    const { isSubscribed } = get();
-    if (isSubscribed) return () => {};
+    // Use module-level guard so rapid double-invocations (Strict Mode, re-render
+    // before Zustand commit) never create duplicate EventSource connections.
+    if (subscriptionActive) return () => {};
+    subscriptionActive = true;
 
     const unsubscribe = subscribeToNotifications((event) => {
       const id = `notif-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -75,6 +82,7 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
     set({ isSubscribed: true });
     return () => {
       unsubscribe();
+      subscriptionActive = false;
       set({ isSubscribed: false });
     };
   },

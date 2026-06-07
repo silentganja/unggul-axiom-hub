@@ -43,6 +43,9 @@ pub struct ClassificationSummary {
 
 // ── ClassificationPermission (junction row) ──────────────────────────────────
 
+/// Row from the `classification_permissions` junction table.
+/// Read by `get_classification_permissions` to resolve which permissions grant
+/// read/write access to a given classification tier.
 #[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
 pub struct ClassificationPermission {
@@ -66,8 +69,8 @@ pub struct ClassificationAccessDetail {
 // ── Async helpers (replace the old VALID_CLASSIFICATIONS const) ─────────────
 
 /// Returns true if the given classification key exists in the database.
-/// Falls back to the hardcoded list if the classifications table is empty
-/// (e.g. before the migration runs).
+/// Falls back to `fetch_classification_keys` (which itself falls back to the
+/// hardcoded list) when the DB has no classifications yet.
 pub async fn is_valid_classification(pool: &PgPool, key: &str) -> bool {
     let exists: bool = sqlx::query_scalar(
         "SELECT EXISTS(SELECT 1 FROM classifications WHERE key = $1)",
@@ -81,24 +84,29 @@ pub async fn is_valid_classification(pool: &PgPool, key: &str) -> bool {
         return true;
     }
 
-    // Fallback for bootstrapping before migration runs
-    super::file::VALID_CLASSIFICATIONS.contains(&key)
+    // Fallback: use the canonical key list (DB → hardcoded bootstrap list)
+    fetch_classification_keys(pool).await.iter().any(|k| k == key)
 }
 
 /// Returns the hierarchy level for a classification key (higher = more restricted).
+/// Falls back to `fetch_classification_keys` (DB → bootstrap list) position
+/// when the DB has no entry for this key.
 pub async fn classification_level(pool: &PgPool, key: &str) -> Option<i16> {
-    sqlx::query_scalar("SELECT level FROM classifications WHERE key = $1")
+    if let Some(level) = sqlx::query_scalar("SELECT level FROM classifications WHERE key = $1")
         .bind(key)
         .fetch_optional(pool)
         .await
         .ok()
         .flatten()
-        .or_else(|| {
-            super::file::VALID_CLASSIFICATIONS
-                .iter()
-                .position(|&c| c == key)
-                .map(|i| i as i16)
-        })
+    {
+        return Some(level);
+    }
+    // Fallback: use canonical key list as positional hierarchy
+    fetch_classification_keys(pool)
+        .await
+        .iter()
+        .position(|k| k == key)
+        .map(|i| i as i16)
 }
 
 /// Fetch all valid classification keys (sorted by level ascending).
@@ -226,7 +234,21 @@ pub async fn user_can_read_classification(
     .await
     .map_err(crate::errors::AppError::Database)?;
 
-    Ok(has_access)
+    if has_access {
+        return Ok(true);
+    }
+
+    // Defensive fallback: when the bulk ANY query returns false, re-check each
+    // permission individually. This guards against edge cases with very large
+    // permission arrays exceeding PostgreSQL parameter limits. In normal
+    // operation this path is rarely taken.
+    for pk in &perm_keys {
+        if permission_has_classification_access(pool, pk, classification_key, "read").await {
+            return Ok(true);
+        }
+    }
+
+    Ok(false)
 }
 
 /// Check whether a user can assign/write files of a given classification.

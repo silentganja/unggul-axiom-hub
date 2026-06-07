@@ -13,7 +13,7 @@ use uuid::Uuid;
 // ── Permission ────────────────────────────────────────────────────────────────
 
 /// A single granular permission from the seeded `permissions` table.
-#[derive(Debug, Serialize, sqlx::FromRow)]
+#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
 pub struct Permission {
     pub id: Uuid,

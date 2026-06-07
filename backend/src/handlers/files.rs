@@ -19,20 +19,16 @@ use uuid::Uuid;
 /// Get a single file or folder by ID (must be owned by the authenticated user).
 ///
 /// Returns `404` if not found or ownership mismatch.
+///
+/// Orphaned lock cleanup (where the locking user was deleted) is handled by a
+/// database trigger (`trg_cleanup_locks_on_user_delete`) rather than an unbounded
+/// UPDATE on every file GET request.
 pub async fn get_file(
     pool: web::Data<PgPool>,
     user: AuthUser,
     path: web::Path<Uuid>,
 ) -> Result<HttpResponse, AppError> {
     let file_id = path.into_inner();
-
-    // Auto-clear orphaned locks where the user was deleted
-    let _ = sqlx::query(
-        "UPDATE files SET locked_by = NULL, locked_at = NULL, lock_reason = NULL \
-         WHERE locked_by IS NOT NULL AND NOT EXISTS (SELECT 1 FROM users WHERE id = files.locked_by)"
-    )
-    .execute(pool.get_ref())
-    .await;
 
     let file: Option<FileNode> = sqlx::query_as::<_, FileNode>(
         "SELECT id, parent_id, owner_id, name, is_folder,
