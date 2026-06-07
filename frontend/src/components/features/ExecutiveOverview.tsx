@@ -18,15 +18,12 @@ import {
 import { useFileStore, FileNode } from "@/store/useFileStore";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useOperationsStore } from "@/store/useOperationsStore";
-import { activityApi, authApi, ActivityEntry, formatTimestamp } from "@/lib/api";
+import { activityApi, authApi, governanceApi, ActivityEntry, formatTimestamp } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 export default function ExecutiveOverview() {
   const tasks = useOperationsStore((state) => state.tasks);
   const fetchTasks = useOperationsStore((state) => state.fetchTasks);
-  const approveTask = useOperationsStore((state) => state.approveTask);
-  const rejectTask = useOperationsStore((state) => state.rejectTask);
-
   const files = useFileStore((state) => state.files);
   const sharedFiles = useFileStore((state) => state.sharedFiles);
   const setActiveFile = useFileStore((state) => state.setActiveFile);
@@ -167,13 +164,16 @@ export default function ExecutiveOverview() {
     setConfirmError(null);
     try {
       const id = confirmModal.taskId;
+      const reason = confirmReason.trim();
       if (confirmModal.action === "APPROVE") {
-        await approveTask(id, confirmReason.trim());
+        await governanceApi.approve(id, reason);
       } else {
-        await rejectTask(id, confirmReason.trim());
+        await governanceApi.reject(id, reason);
       }
       setConfirmModal(null);
       setConfirmReason("");
+      // Refresh tasks after mutation
+      fetchTasks({ page: 1, perPage: 20, status: "PENDING" });
     } catch (err) {
       setConfirmError(err instanceof Error ? err.message : "Action failed");
     } finally {

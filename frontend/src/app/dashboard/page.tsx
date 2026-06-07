@@ -31,7 +31,7 @@ import {
 import { useFileStore, FileNode } from "@/store/useFileStore";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useOperationsStore, ApprovalTask } from "@/store/useOperationsStore";
-import { authApi, adminApi } from "@/lib/api";
+import { authApi, adminApi, governanceApi } from "@/lib/api";
 import { useNotificationStore } from "@/store/useNotificationStore";
 import FileAccessSheet from "@/components/features/FileAccessSheet";
 import FloatingActionBar from "@/components/features/FloatingActionBar";
@@ -166,10 +166,6 @@ export default function FileExplorerPage() {
   const isLoadingTasks = useOperationsStore((state) => state.isLoading);
   const errorTasks = useOperationsStore((state) => state.error);
   const fetchTasks = useOperationsStore((state) => state.fetchTasks);
-  const approveTask = useOperationsStore((state) => state.approveTask);
-  const rejectTask = useOperationsStore((state) => state.rejectTask);
-  const batchApproveTasks = useOperationsStore((state) => state.batchApproveTasks);
-  const batchRejectTasks = useOperationsStore((state) => state.batchRejectTasks);
   const undoTask = useOperationsStore((state) => state.undoTask);
   const govPage = useOperationsStore((state) => state.page);
   const govTotalPages = useOperationsStore((state) => state.totalPages);
@@ -550,7 +546,7 @@ export default function FileExplorerPage() {
     const isClassificationType =
       govForm.type === "CLASSIFICATION_UPGRADE" || govForm.type === "CLASSIFICATION_DOWNGRADE";
 
-    // ── Confirm approve/reject handler ──
+    // ── Confirm approve/reject handler (unified single + batch) ──
     const handleConfirmAction = async () => {
       if (!confirmModal) return;
       if (!confirmReason.trim() || confirmReason.trim().length < 10) {
@@ -560,42 +556,34 @@ export default function FileExplorerPage() {
       setConfirmLoading(true);
       setConfirmError(null);
       try {
-        if (confirmModal.batch) {
-          const ids = confirmModal.taskId as string[];
-          if (confirmModal.action === "APPROVE") {
-            if (govReviewerId) {
-              for (const rid of ids) await adminApi.forceApprove(rid, govReviewerId);
+        // Normalise: always work with an array of IDs
+        const ids: string[] = Array.isArray(confirmModal.taskId)
+          ? confirmModal.taskId
+          : [confirmModal.taskId];
+        const reason = confirmReason.trim();
+        const isApprove = confirmModal.action === "APPROVE";
+
+        for (const rid of ids) {
+          if (govReviewerId) {
+            if (isApprove) {
+              await adminApi.forceApprove(rid, govReviewerId);
             } else {
-              await batchApproveTasks(ids, confirmReason.trim());
+              await adminApi.forceReject(rid, govReviewerId, reason);
             }
           } else {
-            if (govReviewerId) {
-              for (const rid of ids) await adminApi.forceReject(rid, govReviewerId, confirmReason.trim());
+            if (isApprove) {
+              await governanceApi.approve(rid, reason);
             } else {
-              await batchRejectTasks(ids, confirmReason.trim());
-            }
-          }
-          setBatchSelectedIds([]);
-        } else {
-          const id = confirmModal.taskId as string;
-          if (confirmModal.action === "APPROVE") {
-            if (govReviewerId) {
-              await adminApi.forceApprove(id, govReviewerId);
-            } else {
-              await approveTask(id, confirmReason.trim());
-            }
-          } else {
-            if (govReviewerId) {
-              await adminApi.forceReject(id, govReviewerId, confirmReason.trim());
-            } else {
-              await rejectTask(id, confirmReason.trim());
+              await governanceApi.reject(rid, reason);
             }
           }
         }
+
         setConfirmModal(null);
         setConfirmReason("");
-        // Refresh after force actions (bypass the store, need explicit re-fetch)
-        if (govReviewerId) refreshGovernance();
+        setBatchSelectedIds([]);
+        // Always refresh after mutation
+        refreshGovernance();
       } catch (err) {
         setConfirmError(err instanceof Error ? err.message : "Action failed");
       } finally {
