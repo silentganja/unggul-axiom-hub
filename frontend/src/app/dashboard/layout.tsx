@@ -264,7 +264,7 @@ export default function DashboardLayout({
               </p>
 
               <div className="flex items-center gap-1.5 text-[8px] text-foreground-subtle font-mono uppercase tracking-wider pt-1.5 border-t border-border/20">
-                <Lock size={9} className="text-accent" /> Restricted Sandbox
+                <Lock size={9} className="text-accent" /> Protected Session
               </div>
             </div>
           </div>
