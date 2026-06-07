@@ -15,7 +15,6 @@
 
 use crate::app_middleware::admin::AdminUser;
 use crate::errors::AppError;
-use crate::AppConfig;
 use actix_web::{web, HttpRequest, HttpResponse};
 use rand_core::{OsRng, RngCore};
 use serde::Serialize;
@@ -112,18 +111,10 @@ pub struct ResetDatabaseRequest {
 // Only the hardcoded super-admin can request it.
 
 pub async fn get_reset_token(
-    config: web::Data<AppConfig>,
     admin: AdminUser,
     token_store: web::Data<ResetTokenStore>,
 ) -> Result<HttpResponse, AppError> {
-    // Guard 1: env flag must be enabled
-    if !config.allow_database_reset {
-        return Err(AppError::Forbidden(
-            "Database reset is not enabled on this deployment.".into(),
-        ));
-    }
-
-    // Guard 2: only the hardcoded super-admin
+    // Guard: only the hardcoded super-admin
     if !admin.is_super_admin() {
         return Err(AppError::Forbidden(
             "Only the hardcoded super-admin can initiate a database reset.".into(),
@@ -166,29 +157,19 @@ pub async fn get_reset_token(
 
 pub async fn reset_database(
     pool: web::Data<PgPool>,
-    config: web::Data<AppConfig>,
     admin: AdminUser,
     req: HttpRequest,
     token_store: web::Data<ResetTokenStore>,
     body: web::Json<ResetDatabaseRequest>,
 ) -> Result<HttpResponse, AppError> {
-    // Guard 1: env flag must be enabled
-    if !config.allow_database_reset {
-        return Err(AppError::Forbidden(
-            "Database reset is not enabled on this deployment. \
-             Set ALLOW_DATABASE_RESET=true to enable."
-                .into(),
-        ));
-    }
-
-    // Guard 2: only the hardcoded super-admin
+    // Guard: only the hardcoded super-admin
     if !admin.is_super_admin() {
         return Err(AppError::Forbidden(
             "Only the hardcoded super-admin can execute a database reset.".into(),
         ));
     }
 
-    // Guard 3: validate the consent token
+    // Guard 2: validate the consent token
     {
         let mut store = token_store
             .lock()

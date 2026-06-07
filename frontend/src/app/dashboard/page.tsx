@@ -569,7 +569,11 @@ export default function FileExplorerPage() {
               await batchApproveTasks(ids, confirmReason.trim());
             }
           } else {
-            await batchRejectTasks(ids, confirmReason.trim());
+            if (govReviewerId) {
+              for (const rid of ids) await adminApi.forceReject(rid, govReviewerId, confirmReason.trim());
+            } else {
+              await batchRejectTasks(ids, confirmReason.trim());
+            }
           }
           setBatchSelectedIds([]);
         } else {
@@ -581,11 +585,17 @@ export default function FileExplorerPage() {
               await approveTask(id, confirmReason.trim());
             }
           } else {
-            await rejectTask(id, confirmReason.trim());
+            if (govReviewerId) {
+              await adminApi.forceReject(id, govReviewerId, confirmReason.trim());
+            } else {
+              await rejectTask(id, confirmReason.trim());
+            }
           }
         }
         setConfirmModal(null);
         setConfirmReason("");
+        // Refresh after force actions (bypass the store, need explicit re-fetch)
+        if (govReviewerId) refreshGovernance();
       } catch (err) {
         setConfirmError(err instanceof Error ? err.message : "Action failed");
       } finally {
@@ -928,8 +938,20 @@ export default function FileExplorerPage() {
                   <select
                     value={govForm.type}
                     onChange={(e) => {
-                      setGovForm((f) => ({ ...f, type: e.target.value }));
-                      setClassificationTarget("SULIT");
+                      const newType = e.target.value;
+                      setGovForm((f) => ({ ...f, type: newType }));
+                      // Auto-set a sensible default target based on type
+                      if (newType === "CLASSIFICATION_UPGRADE") {
+                        const currentLevel = selectedFileObj ? (classificationLevels[selectedFileObj.classification] ?? 0) : 0;
+                        const higher = classificationTiers.find((c) => c.level > currentLevel);
+                        setClassificationTarget(higher?.key ?? "SULIT");
+                      } else if (newType === "CLASSIFICATION_DOWNGRADE") {
+                        const currentLevel = selectedFileObj ? (classificationLevels[selectedFileObj.classification] ?? 99) : 99;
+                        const lower = [...classificationTiers].reverse().find((c) => c.level < currentLevel);
+                        setClassificationTarget(lower?.key ?? "TERBUKA");
+                      } else {
+                        setClassificationTarget("SULIT");
+                      }
                     }}
                     className="h-8 w-full px-2 rounded-sm border border-border bg-background text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
                   >
@@ -1052,7 +1074,20 @@ export default function FileExplorerPage() {
                     </label>
                     <select
                       value={classificationTarget}
-                      onChange={(e) => setClassificationTarget(e.target.value)}
+                      onChange={(e) => {
+                        const newTarget = e.target.value;
+                        setClassificationTarget(newTarget);
+                        // Auto-correct the request type based on level comparison
+                        if (selectedFileObj && isClassificationType) {
+                          const curLvl = classificationLevels[selectedFileObj.classification] ?? 0;
+                          const newLvl = classificationLevels[newTarget] ?? 0;
+                          if (newLvl > curLvl) {
+                            setGovForm((f) => ({ ...f, type: "CLASSIFICATION_UPGRADE" }));
+                          } else if (newLvl < curLvl) {
+                            setGovForm((f) => ({ ...f, type: "CLASSIFICATION_DOWNGRADE" }));
+                          }
+                        }
+                      }}
                       className="h-8 w-full px-2 rounded-sm border border-border bg-background text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
                     >
                       {getClassificationsForTarget().map((c) => (

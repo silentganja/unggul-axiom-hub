@@ -112,7 +112,11 @@ export default function GovernanceTab({ govRequests, setGovRequests, govLoading,
 
   const handleReject = async (reqId: string, reason: string) => {
     try {
-      await governanceApi.reject(reqId, reason);
+      if (selectedReviewer) {
+        await adminApi.forceReject(reqId, selectedReviewer, reason);
+      } else {
+        await governanceApi.reject(reqId, reason);
+      }
       setGovRequests(govRequests.filter(r => r.id !== reqId));
       setRejectModal(null);
       setBatchSelectedIds(prev => prev.filter(id => id !== reqId));
@@ -291,8 +295,8 @@ export default function GovernanceTab({ govRequests, setGovRequests, govLoading,
                           <>
                             <button onClick={() => handleForceApprove(r.id)} disabled={!selectedReviewer}
                               className="h-6 px-2 rounded-sm border border-success/20 text-success bg-success/5 hover:bg-success/15 text-[8px] font-bold uppercase font-mono transition-all disabled:opacity-30 cursor-pointer">Approve</button>
-                            <button onClick={() => setRejectModal({ requestId: r.id, reason: "", error: null, loading: false })}
-                              className="h-6 px-2 rounded-sm border border-destructive/20 text-destructive bg-destructive/5 hover:bg-destructive/15 text-[8px] font-bold uppercase font-mono transition-all cursor-pointer">Reject</button>
+                            <button onClick={() => setRejectModal({ requestId: r.id, reason: "", error: null, loading: false })} disabled={!selectedReviewer}
+                              className="h-6 px-2 rounded-sm border border-destructive/20 text-destructive bg-destructive/5 hover:bg-destructive/15 text-[8px] font-bold uppercase font-mono transition-all disabled:opacity-30 cursor-pointer">Reject</button>
                           </>
                         ) : (
                           <>

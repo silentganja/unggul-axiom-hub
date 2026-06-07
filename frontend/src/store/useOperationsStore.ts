@@ -127,15 +127,15 @@ export const useOperationsStore = create<OperationsState>((set, get) => ({
     set({ error: null });
     try {
       await governanceApi.approve(id, reason);
-      // If only 1 pending task was on the current page and we just moved it,
-      // go back one page. Otherwise stay on the same page.
       const state = get();
       const taskCount = state.tasks.filter((t) => t.status === "PENDING").length;
       const newPage = taskCount <= 1 && state.page > 1 ? state.page - 1 : state.page;
       set({ page: newPage });
       await get().fetchTasks({ page: newPage, perPage: state.perPage, status: "PENDING" });
     } catch (err) {
-      set({ error: err instanceof Error ? err.message : "Failed to approve" });
+      const msg = err instanceof Error ? err.message : "Failed to approve";
+      set({ error: msg });
+      throw err; // Re-throw so callers can display the error
     }
   },
 
@@ -149,7 +149,9 @@ export const useOperationsStore = create<OperationsState>((set, get) => ({
       set({ page: newPage });
       await get().fetchTasks({ page: newPage, perPage: state.perPage, status: "PENDING" });
     } catch (err) {
-      set({ error: err instanceof Error ? err.message : "Failed to reject" });
+      const msg = err instanceof Error ? err.message : "Failed to reject";
+      set({ error: msg });
+      throw err; // Re-throw so callers can display the error
     }
   },
 

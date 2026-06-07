@@ -219,6 +219,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { key: "classifications", label: "Classifications", href: "/dev/admin/classifications" },
     { key: "uiux", label: "UI/UX Templates", href: "/dev/admin/uiux" },
     { key: "system", label: "System", href: "/dev/admin/system" },
+    { key: "doc", label: "Documentation", href: "/dev/admin/doc" },
   ];
 
   const uiTheme = configMap["ui_theme"] || "midnight";

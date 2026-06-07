@@ -46,9 +46,6 @@ pub struct AppConfig {
     pub max_upload_size_bytes: i64,
     /// AES-256-GCM encryption key (32 raw bytes), or None to disable encryption.
     pub encryption_key: Option<Vec<u8>>,
-    /// When set to `true`, the POST /api/admin/reset-database endpoint is enabled.
-    /// Must NEVER be true in production. Guardrail: reset handler refuses if false.
-    pub allow_database_reset: bool,
 }
 
 // ─── Response types ─────────────────────────────────────────────────────────
@@ -162,18 +159,6 @@ async fn main() -> std::io::Result<()> {
         );
     }
 
-    // Database-reset guardrail: must be explicitly "true" to enable the wipe endpoint.
-    let allow_database_reset = env::var("ALLOW_DATABASE_RESET")
-        .map(|v| v.to_lowercase() == "true")
-        .unwrap_or(false);
-
-    if allow_database_reset {
-        tracing::warn!(
-            "⚠ ALLOW_DATABASE_RESET=true — the database wipe endpoint is ACTIVE. \
-             This MUST NOT be set in production."
-        );
-    }
-
     // Ensure the storage directory exists on startup
     tokio::fs::create_dir_all(&storage_path)
         .await
@@ -186,7 +171,6 @@ async fn main() -> std::io::Result<()> {
         admin_password_hash,
         max_upload_size_bytes,
         encryption_key,
-        allow_database_reset,
     };
 
     // ── Database pool ─────────────────────────────────────────────────────────
@@ -300,6 +284,10 @@ async fn main() -> std::io::Result<()> {
                     .route(
                         "/governance/{id}/force-approve",
                         web::post().to(handlers::admin::force_approve),
+                    )
+                    .route(
+                        "/governance/{id}/force-reject",
+                        web::post().to(handlers::admin::force_reject),
                     )
                     .route(
                         "/storage-breakdown",

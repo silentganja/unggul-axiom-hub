@@ -1059,6 +1059,12 @@ export const adminApi = {
     }, true);
   },
 
+  forceReject(requestId: string, reviewerId: string, reason?: string): Promise<void> {
+    return apiFetch(`/api/admin/governance/${requestId}/force-reject`, {
+      method: "POST", body: JSON.stringify({ reviewerId, reason }),
+    }, true);
+  },
+
   getStorageBreakdown(): Promise<UserStorageRow[]> {
     return apiFetch("/api/admin/storage-breakdown", {}, true);
   },

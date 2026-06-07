@@ -1232,6 +1232,58 @@ pub async fn force_approve(
     Ok(HttpResponse::Ok().json(serde_json::json!({ "status": "approved" })))
 }
 
+// ── POST /api/admin/governance/{id}/force-reject ────────────────────────────
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ForceRejectRequest {
+    pub reviewer_id: Uuid,
+    pub reason: Option<String>,
+}
+
+pub async fn force_reject(
+    pool: web::Data<PgPool>,
+    admin: AdminUser,
+    req: HttpRequest,
+    path: web::Path<Uuid>,
+    body: web::Json<ForceRejectRequest>,
+) -> Result<HttpResponse, AppError> {
+    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "governance:approve")
+        .await?;
+    let request_id = path.into_inner();
+
+    let mut tx = pool.begin().await.map_err(AppError::Database)?;
+
+    let updated = sqlx::query(
+        "UPDATE governance_requests SET status = 'REJECTED', reviewed_by = $1, review_note = $2, updated_at = NOW()
+         WHERE id = $3 AND status = 'PENDING'",
+    )
+    .bind(body.reviewer_id)
+    .bind(&body.reason)
+    .bind(request_id)
+    .execute(&mut *tx)
+    .await
+    .map_err(AppError::Database)?;
+
+    if updated.rows_affected() == 0 {
+        return Err(AppError::NotFound);
+    }
+
+    tx.commit().await.map_err(AppError::Database)?;
+
+    let ip = req.peer_addr().map(|a| a.to_string()).unwrap_or_default();
+    let _ = crate::handlers::files::write_audit_log_internal(
+        pool.get_ref(),
+        body.reviewer_id,
+        "GOVERNANCE_FORCE_REJECT",
+        &request_id.to_string(),
+        &ip,
+    )
+    .await;
+
+    Ok(HttpResponse::Ok().json(serde_json::json!({ "status": "rejected" })))
+}
+
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // Tier 2: Storage Breakdown
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
