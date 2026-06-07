@@ -451,12 +451,10 @@ pub async fn update_classification(
             "Classification write-access DB check failed in update_classification");
         AppError::Internal(anyhow::anyhow!("Access check failed"))
     })? {
-        return Err(AppError::Forbidden(
-            format!(
-                "You do not have permission to assign classification '{}'",
-                body.classification
-            ),
-        ));
+        return Err(AppError::Forbidden(format!(
+            "You do not have permission to assign classification '{}'",
+            body.classification
+        )));
     }
 
     // ── Enforce lock: hierarchical - must be the locker or have >= role level ──
