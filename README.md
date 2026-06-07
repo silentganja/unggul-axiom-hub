@@ -18,15 +18,15 @@
 
 ---
 
-> **Live app:** [hub.unggulaxiom.com](https://hub.unggulaxiom.com) &nbsp;|&nbsp; **Demo login:** `demo@unggulaxiom.com` / `demo` &nbsp;|&nbsp; **Project specs:** [hub.unggulaxiom.com/v/info](https://hub.unggulaxiom.com/v/info)
+> **Live app:** [hub.unggulaxiom.com](https://hub.unggulaxiom.com) &nbsp;|&nbsp; **Demo login:** `demo@unggulaxiom.com` / `demo` &nbsp;|&nbsp; **Documentation:** [hub.unggulaxiom.com/dev/admin/doc](https://hub.unggulaxiom.com/dev/admin/doc)
 
 ---
 
 ## What I built
 
-A secure document collaboration platform that handles the full lifecycle of classified files: upload, encrypt, classify, share, approve, audit, and recover.
+A secure document collaboration platform that handles the full lifecycle of classified files: upload, encrypt, classify, share, approve, audit, and recover. At its core is a **dynamic RBAC engine** with granular permission resolution, a **classification access control system** that enforces tier-based read/write rules, and a **dual-signature governance workflow** for all sensitive operations.
 
-Most projects stop at authentication and CRUD. I went further: dual-signature governance workflows, AES-256-GCM file encryption, immutable audit trails, WebAuthn passkeys, SSE-based notifications, full-text search, versioning with soft-delete recovery. The kind of system a government agency or regulated enterprise actually needs.
+The system goes beyond authentication and CRUD. It includes: AES-256-GCM file encryption, immutable audit trails with before/after diffs, WebAuthn passkeys, SSE-based real-time notifications, full-text search via PostgreSQL tsvector, file versioning with soft-delete recovery, and a database reset tool for production go-live. Built for the kind of environment where a single permission misconfiguration can have real consequences.
 
 This isn't a tutorial project. It's a demonstration of what production engineering looks like when you treat security, observability, and deployment as first-class concerns.
 
@@ -38,7 +38,7 @@ This isn't a tutorial project. It's a demonstration of what production engineeri
 
 **I make deliberate architectural choices.** Rust on the backend was not the easy path. It meant slower initial development. I chose it anyway because memory safety and predictable latency matter for a storage platform. Raw SQL over an ORM means more boilerplate upfront, but every query is visible, reviewable, and optimized. These trade-offs show judgment, not just technical ability.
 
-**I think about failure modes.** What happens when a JWT expires mid-session? (Silent refresh with retry.) What if someone brute-forces the login? (Redis-backed rate limiting.) What if a file gets deleted accidentally? (Soft delete with configurable retention and permanent purge.) What if an admin abuses their access? (Dual-signature approval, append-only audit logs.) These aren't afterthoughts. They're baked into the architecture.
+**I think about failure modes.** What happens when a JWT expires mid-session? (Silent refresh with retry.) What if someone brute-forces the login? (Redis-backed rate limiting.) What if a file gets deleted accidentally? (Soft delete with configurable retention and permanent purge.) What if an admin abuses their access? (Dual-signature approval, append-only audit logs with before/after diffs.) These aren't afterthoughts. They're baked into the architecture.
 
 **I understand the operational side.** Multi-stage Docker builds separate build dependencies from runtime. Non-root container users. Health checks on every service. TLS termination at the reverse proxy. Environment variables for all configuration. No hardcoded secrets anywhere. These are the habits of someone who has run production systems, not just built them for a portfolio.
 
@@ -60,9 +60,10 @@ Client (Browser)
 │  Next.js 16  │  │  Rust API (Actix-Web 4)  │
 │  React 19    │──│                          │
 │  SSR + RSC   │  │  Auth: JWT + WebAuthn    │
-│  Zustand     │  │  RBAC middleware          │
-│  React Query │  │  AES-256-GCM encryption  │
+│  Zustand     │  │  Dynamic RBAC engine      │
+│  Tailwind v4 │  │  Classification access    │
 └──────────────┘  │  Governance engine       │
+                  │  AES-256-GCM encryption  │
                   │  SSE notifications        │
                   │  Redis rate limiter       │
                   └────────┬─────────────────┘
@@ -72,7 +73,7 @@ Client (Browser)
         ┌──────────┐            ┌──────────┐
         │PostgreSQL│            │  Redis 7 │
         │   16     │            │          │
-        │15 migrat.│            │sessions  │
+        │19 migrat.│            │sessions  │
         │FTS, JSON │            │rate lim. │
         └──────────┘            │pub/sub   │
                                 └──────────┘
@@ -82,15 +83,15 @@ Client (Browser)
 unggul-axiom-hub/
 ├── backend/                  Rust API
 │   ├── src/
-│   │   ├── handlers/         10 modules, 60+ endpoints
+│   │   ├── handlers/         13 modules, 75+ endpoints
 │   │   ├── models/           8 domain models
-│   │   ├── utils/            crypto, jwt, redis, email, storage
-│   │   └── app_middleware/   auth extraction, admin guard
-│   ├── migrations/           15 versioned SQLx migrations
+│   │   ├── utils/            crypto, jwt, redis, email, storage, migrations
+│   │   └── app_middleware/   auth extraction, admin guard, rate limiting
+│   ├── migrations/           19 versioned SQLx auto-migrations
 │   └── Dockerfile            rust:slim -> debian:bookworm-slim (non-root)
 │
 ├── frontend/                 Next.js 16
-│   ├── app/                  20+ routes including interactive spec portal
+│   ├── app/                  25+ routes including admin panel + documentation
 │   ├── components/           UI primitives + feature components
 │   ├── lib/                  API client with automatic token refresh
 │   └── store/                Zustand stores
@@ -104,29 +105,91 @@ unggul-axiom-hub/
 └── docker-compose.prod.yml   Production stack (ECR images, env-var driven)
 ```
 
-More detail with interactive diagrams: [hub.unggulaxiom.com/v/info/architecture](https://hub.unggulaxiom.com/v/info/architecture)
-
 ---
 
 ## Feature depth
 
-**File management.** Upload (multipart for large files), download, preview, rename, move, delete. Folder hierarchy. Full-text search powered by PostgreSQL tsvector.
+### Dynamic Role-Based Access Control
 
-**Versioning and recovery.** Every file modification preserves the previous version. Soft delete moves files to trash. Restore within the retention window. Permanent purge after expiry. All tracked.
+The system has a fully dynamic RBAC engine — not hardcoded role checks. 19 atomic permission keys (files:read, governance:approve, classifications:manage, etc.) flow through a single resolution function (`user_has_permission`) that evaluates three sources in a UNION query: direct user overrides, base role implicit grants, and role group memberships. Permissions are additive — users get the union of all their groups.
 
-**Classification and governance.** Files carry classification labels (RAHSIA, SULIT, TERHAD, TERBUKA). Sensitive operations trigger dual-signature approval workflows. One person initiates. A second authorized person approves or rejects. Every action logged.
+**Role Builder admin panel** with four sub-tabs:
+- **Groups** — Named bundles of permissions with user assignment. Quick presets (Read-Only Auditor, Content Manager, User Manager, Governance Officer, Full Access). Duplicate functionality for templating.
+- **Permissions** — Full CRUD for permission definitions. Before-delete warnings show exactly where each permission is used (groups, roles, classification rules, user overrides).
+- **Roles** — Custom base roles with configurable hierarchy levels (1-10) and implicit permission grants. The 4 core roles (chief, director, officer, staff) are protected from deletion.
+- **Audit** — Per-user effective permissions matrix with source attribution (base role, group inheritance, or direct override). Direct overrides for exceptions.
 
-**Authentication.** Argon2id password hashing (memory-hard, GPU-resistant). WebAuthn/FIDO2 passkeys. Magic link login via email. JWT with access and refresh token rotation. Sessions viewable and revocable per device.
+**Granular admin delegation** splits the legacy `users:manage` umbrella into `permissions:manage`, `role_groups:manage`, and `role_groups:assign` — with backward-compatible fallback.
 
-**Sharing and access control.** Share files and folders with role-based permissions (viewer, editor, admin). Revoke anytime. Hierarchical RBAC across the platform. All share activity tracked.
+### Classification Access Control
 
-**Admin panel.** Full user lifecycle management. Bulk operations. Storage analytics with per-user breakdown. Governance queue for forced approval or rejection. Complete audit log viewer. System configuration management.
+Dynamic classification tiers (TERBUKA, TERHAD, SULIT, RAHSIA + custom tiers) with per-tier read/write access rules. Each tier defines which permissions grant read access (who can view) and write access (who can assign/change). Chief and Director bypass all checks. All other roles are evaluated against the configured rules.
 
-**Real-time updates.** SSE stream for live notifications on shares, approvals, and system events. No polling.
+**Classification Builder admin panel** with two sub-tabs:
+- **Tiers** — Create, edit, delete. Key changes cascade to all files in a single transaction. Deletion blocked if files use the tier.
+- **Access Control** — Per-tier permission checkboxes for read and write access. Site-wide default rules auto-apply to newly created tiers.
 
-**Audit trail.** Append-only log of every critical action. Actor, action, resource, timestamp, IP address. Filterable by user, action type, resource, and date range. Immutable by design.
+Classification enforcement at every boundary: file listing, download, preview, upload, classification change, sharing, and governance approval.
 
-**Security hardening.** AES-256-GCM file encryption at rest. Redis-backed distributed rate limiting. Security headers via Nginx (CSP, HSTS, X-Frame-Options, Referrer-Policy). Non-root container users. No hardcoded secrets. CI/CD authenticates to AWS via OIDC — no static IAM keys stored in GitHub.
+### Governance & Approval Workflow
+
+Dual-signature approval for sensitive operations: FILE_LOCK, FILE_UNLOCK, CLASSIFICATION_UPGRADE, CLASSIFICATION_DOWNGRADE, FILE_MOVE, FILE_DELETE. Users submit requests; authorized approvers review and approve/reject with written justification.
+
+**Governance engine** features:
+- Supervisor notification — requests notify the user's designated supervisor via SSE
+- Classification direction validation — upgrades must go to higher levels, downgrades to lower
+- Force Approve/Reject — admins can act on behalf of a selected reviewer
+- Undo — revert approved/rejected requests to PENDING
+- Batch operations — approve or reject multiple requests at once
+- Self-approval prevention — you cannot approve your own requests
+
+### File Management
+
+Upload (with classification selection), download, preview, rename, move, delete. Folder hierarchy with breadcrumb navigation. Full-text search via PostgreSQL tsvector. Classification filter in the file browser. Dynamic classification badges color-coded by hierarchy level (gray → blue → yellow → red).
+
+### Sharing & Collaboration
+
+Share files with role-based permissions (viewer, editor). Classification-gated sharing — restricted files require recipient clearance. Locked files protected from unauthorized sharing. Shared files filtered by classification read access.
+
+### Versioning & Recovery
+
+Every file modification preserves the previous version. Soft delete moves files to trash. Restore within retention window. Permanent purge after expiry. All tracked in audit log.
+
+### Authentication
+
+Argon2id password hashing (memory-hard, GPU-resistant). WebAuthn/FIDO2 passkeys. Magic link login via email. JWT with access and refresh token rotation. Sessions viewable and revocable per device. Two admin auth paths: hardcoded super-admin and delegated admin via `admin:access` permission.
+
+### Admin Panel
+
+12-tab admin console with granular permission gating:
+- **Dashboard** — System metrics (users, files, storage, governance)
+- **Users** — Full lifecycle management, bulk import, role assignment
+- **Governance** — Force approve/reject, undo, batch operations with reviewer selection
+- **Files** — Browse all files, force delete, transfer ownership
+- **Audit** — Chronological log viewer with 30+ action types, JSON diff rendering for permission/classification changes
+- **Shares** — All sharing relationships with revoke capability
+- **Storage** — Per-user analytics, classification breakdown
+- **Roles** — Full RBAC management (4 sub-tabs)
+- **Classifications** — Tier and access rule management (2 sub-tabs)
+- **Config** — System-wide settings (theme, org name, logo, default classification rules)
+- **System** — Database Reset tool with multi-factor consent
+- **Documentation** — 10-page comprehensive guide covering all features
+
+### Database Reset & Initialize
+
+Multi-guard destructive operation for production go-live. Wipes 9 transactional tables (files, shares, audit logs, governance requests, memberships, overrides, auth tokens) while preserving 10 structural tables (users, permissions, groups, roles, classifications, system config). Safety model: super-admin only, one-time 8-char consent token with 5-minute expiry, single database transaction with full rollback on failure, audit logged.
+
+### Real-Time Updates
+
+SSE stream for live notifications on shares, approvals, governance updates, and system events. No polling. Notifications targeted to specific users and supervisors.
+
+### Audit Trail
+
+Append-only log of every critical action — 30+ action types covering file operations, governance, user management, role builder mutations, classification changes, and system events. Rich diffs for permission and classification rule changes: JSON before/after snapshots stored in the audit record, enabling full reconstruction of who changed what and when.
+
+### Security Hardening
+
+AES-256-GCM file encryption at rest. Redis-backed distributed rate limiting (login, governance actions). Security headers via Nginx (CSP, HSTS, X-Frame-Options, Referrer-Policy). Non-root container users. Argon2id password hashing. No hardcoded secrets. CI/CD authenticates to AWS via OIDC — no static IAM keys stored in GitHub. 15-minute idle timeout on admin panel. Step-up authentication for critical actions.
 
 ---
 
@@ -135,11 +198,14 @@ More detail with interactive diagrams: [hub.unggulaxiom.com/v/info/architecture]
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
 | Backend runtime | Rust (Actix-Web 4) | Memory safety without garbage collection. Predictable p95 latency under 10ms. The learning curve and slower iteration speed are real costs, but justified for a storage platform where correctness and throughput matter. |
-| Database access | SQLx with raw SQL | No ORM abstraction. Every query lives in source code where it can be reviewed, explained, and optimized. Migrations are versioned and checked into the repo. |
+| Database access | SQLx with raw SQL | No ORM abstraction. Every query lives in source code where it can be reviewed, explained, and optimized. 19 versioned, idempotent auto-migrations checked into the repo. |
+| RBAC architecture | Dynamic DB-driven | Permissions, roles, groups, and assignments all live in PostgreSQL — not hardcoded. Adding a new permission or role requires zero code changes. The `user_has_permission` function is the single resolution entry point. |
+| Classification model | Tier-based with access rules | Each classification tier has configurable read/write rules mapping permissions to access types. New tiers auto-inherit site-wide defaults. Chief/Director fast-path bypasses checks. |
+| Governance model | Dual-signature with force path | Sensitive operations require approval. Force Approve/Reject enables admin override with reviewer selection. Supervisor notification creates accountability without blocking workflow. |
 | Password hashing | Argon2id | Winner of the Password Hashing Competition. Memory-hard makes GPU/ASIC attacks impractical. The standard choice for systems that take credential storage seriously. |
 | File encryption | AES-256-GCM | Authenticated encryption. Confidentiality and integrity in a single pass. The GCM mode provides built-in authentication, so tampered ciphertext is detected before decryption. |
 | Auth architecture | JWT + refresh tokens + WebAuthn | Stateless API auth keeps latency low. Refresh tokens allow revocation without hitting the database on every request. Passkeys eliminate phishing as an attack vector. |
-| Frontend state | React Query + Zustand | Server cache and client state are fundamentally different problems. React Query handles caching, invalidation, and refetching. Zustand manages local UI state with minimal boilerplate. |
+| Frontend state | Zustand | Client state management with minimal boilerplate. Stores for files, auth, operations, notifications, and admin — each independently testable. |
 | CI/CD authentication | AWS OIDC | GitHub Actions gets temporary AWS credentials per workflow run. No IAM user access keys exist to leak or rotate. This is the gold standard for cloud CI/CD auth. |
 | Container strategy | Multi-stage Docker | Build stage has the full Rust toolchain and dev dependencies. Runtime image is bare Debian Slim running as non-root. Attack surface minimized. Image size kept small. |
 
@@ -164,7 +230,7 @@ Prerequisites: Rust 1.85+, Node 20+, PostgreSQL 16, Redis 7.
 
 ```bash
 # Backend
-cd backend && cp .env.example .env && sqlx migrate run && cargo run
+cd backend && cp .env.example .env && cargo run
 
 # Frontend (separate terminal)
 cd frontend && npm install && npm run dev
@@ -176,12 +242,28 @@ cd frontend && npm install && npm run dev
 
 | Layer | Technologies |
 |-------|-------------|
-| Backend | Rust, Actix-Web 4, SQLx 0.8, Redis 0.25, Argon2id, AES-256-GCM, Lettre, Tokio |
-| Frontend | Next.js 16, React 19, TypeScript 5, Tailwind CSS v4, TanStack React Query, Zustand, Lucide |
-| Data | PostgreSQL 16 (15 versioned migrations, tsvector FTS), Redis 7 (sessions, rate limiting, pub/sub) |
+| Backend | Rust, Actix-Web 4, SQLx 0.8, Redis 0.25, Argon2id, AES-256-GCM, Lettre, Tokio, Anyhow |
+| Frontend | Next.js 16, React 19, TypeScript 5, Tailwind CSS v4, Zustand, Lucide Icons |
+| Data | PostgreSQL 16 (19 versioned auto-migrations, tsvector FTS, JSON), Redis 7 (sessions, rate limiting, pub/sub) |
 | Infrastructure | Nginx (TLS 1.3, HTTP/2, security headers), Docker multi-stage, GitHub Actions, AWS OIDC |
 | Cloud | AWS Lightsail (VPS), AWS ECR (container registry) |
-| Observability | Tokio Tracing, append-only audit trail, SSE notifications, container health checks |
+| Observability | Tokio Tracing, append-only audit trail (30+ action types), SSE notifications, container health checks |
+| Testing | Rust unit tests (80 tests: auth, crypto, files, RBAC, classifications), TypeScript store tests |
+
+---
+
+## Live system stats
+
+| Metric | Value |
+|--------|-------|
+| Backend endpoints | 75+ |
+| Auto-migrations | 19 |
+| Permission keys | 19 |
+| Audit action types | 30+ |
+| Admin panel tabs | 12 |
+| Documentation pages | 10 |
+| Rust unit tests | 80 |
+| Classification tiers | 4 default + dynamic custom |
 
 ---
 
@@ -201,4 +283,4 @@ I'm looking for backend, full-stack, or platform engineering roles where I can w
 
 ---
 
-*Interactive architecture diagrams, full API reference, performance benchmarks, and live telemetry: [hub.unggulaxiom.com/v/info](https://hub.unggulaxiom.com/v/info)*
+*Full documentation, interactive architecture diagrams, API reference, and live telemetry: [hub.unggulaxiom.com/dev/admin/doc](https://hub.unggulaxiom.com/dev/admin/doc)*
