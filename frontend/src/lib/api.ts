@@ -193,7 +193,7 @@ async function apiFetch<T>(
   } catch (err) {
     clearTimeout(timeoutId);
     if (err instanceof DOMException && err.name === "AbortError") {
-      throw new Error("Request timed out - server may be unreachable");
+      throw err; // Re-throw as AbortError so callers can distinguish aborted requests
     }
     throw err;
   }

@@ -273,6 +273,17 @@ export default function ClassificationBuilderTab() {
   const selected = classifications.find((c) => c.id === selectedId);
   const selectedAccess = classifications.find((c) => c.id === selectedAccessId);
 
+  // Only file-relevant permissions belong in classification access rules.
+  // User management, storage, config, and RBAC admin permissions are unrelated.
+  const CLASSIFICATION_RELEVANT_PERMS = new Set([
+    "files:read", "files:write", "files:delete", "files:classify",
+    "shares:manage", "governance:approve", "governance:reject",
+    "admin:access", "audit:read",
+  ]);
+  const classificationPerms = permissions.filter((p) =>
+    CLASSIFICATION_RELEVANT_PERMS.has(p.key),
+  );
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -596,7 +607,7 @@ export default function ClassificationBuilderTab() {
                     </h4>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    {permissions.map((perm) => {
+                    {classificationPerms.map((perm) => {
                       const pid = perm.id;
                       const checked = selectedReadIds.has(pid);
                       return (
@@ -636,7 +647,7 @@ export default function ClassificationBuilderTab() {
                     </h4>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    {permissions.map((perm) => {
+                    {classificationPerms.map((perm) => {
                       const pid = perm.id;
                       const checked = selectedWriteIds.has(pid);
                       return (

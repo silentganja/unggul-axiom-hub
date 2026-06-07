@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Loader2, AlertCircle } from "lucide-react";
 import { adminApi, AdminDashboard, formatFileSize } from "@/lib/api";
 import { useNotificationStore } from "@/store/useNotificationStore";
@@ -11,37 +11,42 @@ export default function AdminDashboardPage() {
   const [dashboard, setDashboard] = useState<AdminDashboard | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const mountedRef = useRef(true);
+  const dashboardRef = useRef<AdminDashboard | null>(null);
 
-  // Used from event handlers only (retry button, notification callbacks)
   const fetchDashboard = useCallback(async () => {
+    if (!mountedRef.current) return;
     setIsLoading(true);
     setError(null);
     try {
-      setDashboard(await adminApi.getDashboard());
+      const data = await adminApi.getDashboard();
+      if (!mountedRef.current) return;
+      setDashboard(data);
+      dashboardRef.current = data;
+      setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load metrics");
+      if (!mountedRef.current) return;
+      if (e instanceof DOMException && e.name === "AbortError") return;
+      const msg = e instanceof Error ? e.message : "Failed to load metrics";
+      // If we already have cached data, keep showing it instead of flashing error
+      if (dashboardRef.current) {
+        setError(null);
+      } else {
+        setError(msg);
+      }
     } finally {
-      setIsLoading(false);
+      if (mountedRef.current) setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    async function run() {
-      setIsLoading(true);
-      setError(null);
-      try {
-        const data = await adminApi.getDashboard();
-        if (!cancelled) setDashboard(data);
-      } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load metrics");
-      } finally {
-        if (!cancelled) setIsLoading(false);
-      }
-    }
-    void run();
-    return () => { cancelled = true; };
-  }, []);
+    mountedRef.current = true;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchDashboard();
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Real-time update subscriptions
   useEffect(() => {
