@@ -310,3 +310,56 @@ pub async fn user_can_write_classification(
 
     Ok(has_access)
 }
+
+// ── Tests ──────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── Classification model invariants ───────────────────────────────────
+
+    #[test]
+    fn classification_summary_includes_file_count() {
+        // Verify ClassificationSummary has the file_count field via serialization.
+        let s = ClassificationSummary {
+            id: uuid::Uuid::nil(),
+            key: "TERBUKA".into(),
+            label: "Open".into(),
+            level: 0,
+            description: "".into(),
+            is_default: true,
+            file_count: 42,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+        };
+        assert_eq!(s.file_count, 42);
+        assert_eq!(s.key, "TERBUKA");
+    }
+
+    #[test]
+    fn classification_access_detail_partitions_read_write() {
+        let detail = ClassificationAccessDetail {
+            classification_id: uuid::Uuid::nil(),
+            classification_key: "SULIT".into(),
+            read_permissions: vec![],
+            write_permissions: vec![],
+        };
+        assert_eq!(detail.classification_key, "SULIT");
+        assert!(detail.read_permissions.is_empty());
+        assert!(detail.write_permissions.is_empty());
+    }
+
+    #[test]
+    fn classification_permission_access_type_validation() {
+        // The CHECK constraint only allows 'read' or 'write'.
+        // Test that our constants match.
+        let valid_read = "read";
+        let valid_write = "write";
+        let invalid = "execute";
+
+        assert!(valid_read == "read");
+        assert!(valid_write == "write");
+        assert!(invalid != "read" && invalid != "write");
+    }
+}

@@ -30,7 +30,8 @@ import {
 } from "lucide-react";
 import { useFileStore, FileNode } from "@/store/useFileStore";
 import { useAuthStore } from "@/store/useAuthStore";
-import { useOperationsStore } from "@/store/useOperationsStore";
+import { useOperationsStore, ApprovalTask } from "@/store/useOperationsStore";
+import { authApi, EffectivePermissions } from "@/lib/api";
 import { useNotificationStore } from "@/store/useNotificationStore";
 import FileAccessSheet from "@/components/features/FileAccessSheet";
 import FloatingActionBar from "@/components/features/FloatingActionBar";
@@ -211,10 +212,21 @@ export default function FileExplorerPage() {
     }
   }, [activeView, fetchTrash]);
 
+  // ── Current user identity (for governance button visibility) ─────────────
+  const currentUser = useAuthStore((state) => state.user);
+
+  // ── Effective permissions for governance approval gating ─────────────────
+  const [effectivePerms, setEffectivePerms] = useState<string[]>([]);
+
   // ── Fetch governance tasks when switching to governance view ──────────────
   useEffect(() => {
     if (activeView === "governance") {
       fetchTasks({ page: 1, perPage: 20, status: "PENDING" });
+      // Also refresh effective permissions so button visibility is accurate
+      authApi
+        .mePermissions()
+        .then((ep) => setEffectivePerms(ep.permissions))
+        .catch(() => setEffectivePerms([]));
     }
   }, [activeView, fetchTasks]);
 
@@ -499,6 +511,19 @@ export default function FileExplorerPage() {
       return validClassificationKeys;
     };
 
+    // ── Governance button visibility ──────────────────────────────────────
+    // Only users with governance:approve permission (or chief/director/officer
+    // base role) can see Approve/Decline. Requesters see status instead.
+    const canApproveGovernance = (task: ApprovalTask): boolean => {
+      if (!currentUser) return false;
+      // Cannot approve own request
+      if (currentUser.email === task.requestedByEmail) return false;
+      // Base role fast-path (mirrors backend can_govern)
+      if (["chief", "director", "officer"].includes(currentUser.role)) return true;
+      // Effective permission check
+      return effectivePerms.includes("governance:approve");
+    };
+
     const isClassificationType =
       govForm.type === "CLASSIFICATION_UPGRADE" || govForm.type === "CLASSIFICATION_DOWNGRADE";
 
@@ -626,24 +651,26 @@ export default function FileExplorerPage() {
                   return (
                     <div key={task.id} className="p-3 border border-border/30 rounded-sm bg-background-panel/40 flex items-center justify-between gap-3 transition-all">
                       <div className="flex items-center gap-3 min-w-0">
-                        {/* Batch checkbox */}
-                        <label className="relative flex items-center justify-center cursor-pointer shrink-0">
-                          <input
-                            type="checkbox"
-                            checked={isBatchChecked}
-                            onChange={() => {
-                              setBatchSelectedIds((prev) =>
-                                prev.includes(task.id)
-                                  ? prev.filter((id) => id !== task.id)
-                                  : [...prev, task.id]
-                              );
-                            }}
-                            className="sr-only peer"
-                          />
-                          <span className="h-3.5 w-3.5 rounded-sm border border-input-border bg-input-bg transition-all peer-checked:bg-accent peer-checked:border-accent flex items-center justify-center">
-                            <Check size={8} className="text-accent-foreground hidden peer-checked:block" strokeWidth={3} />
-                          </span>
-                        </label>
+                        {/* Batch checkbox — only visible to approvers */}
+                        {canApproveGovernance(task) && (
+                          <label className="relative flex items-center justify-center cursor-pointer shrink-0">
+                            <input
+                              type="checkbox"
+                              checked={isBatchChecked}
+                              onChange={() => {
+                                setBatchSelectedIds((prev) =>
+                                  prev.includes(task.id)
+                                    ? prev.filter((id) => id !== task.id)
+                                    : [...prev, task.id]
+                                );
+                              }}
+                              className="sr-only peer"
+                            />
+                            <span className="h-3.5 w-3.5 rounded-sm border border-input-border bg-input-bg transition-all peer-checked:bg-accent peer-checked:border-accent flex items-center justify-center">
+                              <Check size={8} className="text-accent-foreground hidden peer-checked:block" strokeWidth={3} />
+                            </span>
+                          </label>
+                        )}
                         <div className="space-y-1">
                           <div className="flex items-center gap-2">
                             <span className={cn(
@@ -661,26 +688,41 @@ export default function FileExplorerPage() {
                         </div>
                       </div>
                       <div className="flex items-center gap-1.5 font-mono shrink-0">
-                        <button
-                          onClick={() => {
-                            setConfirmModal({ show: true, taskId: task.id, action: "REJECT", batch: false });
-                            setConfirmReason("");
-                            setConfirmError(null);
-                          }}
-                          className="h-6 px-2.5 rounded-sm border border-destructive/20 text-destructive bg-destructive/5 hover:bg-destructive/15 text-[9px] font-bold uppercase transition-all cursor-pointer"
-                        >
-                          Decline
-                        </button>
-                        <button
-                          onClick={() => {
-                            setConfirmModal({ show: true, taskId: task.id, action: "APPROVE", batch: false });
-                            setConfirmReason("");
-                            setConfirmError(null);
-                          }}
-                          className="h-6 px-2.5 rounded-sm border border-success/20 text-success bg-success/5 hover:bg-success/15 text-[9px] font-bold uppercase transition-all cursor-pointer"
-                        >
-                          Approve
-                        </button>
+                        {canApproveGovernance(task) ? (
+                          <>
+                            <button
+                              onClick={() => {
+                                setConfirmModal({ show: true, taskId: task.id, action: "REJECT", batch: false });
+                                setConfirmReason("");
+                                setConfirmError(null);
+                              }}
+                              className="h-6 px-2.5 rounded-sm border border-destructive/20 text-destructive bg-destructive/5 hover:bg-destructive/15 text-[9px] font-bold uppercase transition-all cursor-pointer"
+                            >
+                              Decline
+                            </button>
+                            <button
+                              onClick={() => {
+                                setConfirmModal({ show: true, taskId: task.id, action: "APPROVE", batch: false });
+                                setConfirmReason("");
+                                setConfirmError(null);
+                              }}
+                              className="h-6 px-2.5 rounded-sm border border-success/20 text-success bg-success/5 hover:bg-success/15 text-[9px] font-bold uppercase transition-all cursor-pointer"
+                            >
+                              Approve
+                            </button>
+                          </>
+                        ) : (
+                          <span
+                            className={cn(
+                              "px-2.5 py-1 rounded-sm text-[8px] font-bold uppercase tracking-wider border",
+                              task.status === "PENDING" && "bg-warning/10 text-warning border-warning/20",
+                              task.status === "APPROVED" && "bg-success/10 text-success border-success/20",
+                              task.status === "REJECTED" && "bg-destructive/10 text-destructive border-destructive/20",
+                            )}
+                          >
+                            {task.status === "PENDING" ? "Pending" : task.status === "APPROVED" ? "Approved" : "Rejected"}
+                          </span>
+                        )}
                       </div>
                     </div>
                   );
@@ -1174,8 +1216,10 @@ export default function FileExplorerPage() {
           </div>
         )}
 
-        {/* ── Batch Action Bar ── */}
-        {batchSelectedIds.length > 0 && (
+        {/* ── Batch Action Bar (approvers only) ── */}
+        {batchSelectedIds.length > 0 &&
+          (["chief", "director", "officer"].includes(currentUser?.role ?? "") ||
+            effectivePerms.includes("governance:approve")) && (
           <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 w-full max-w-lg px-4 animate-in fade-in slide-in-from-bottom-4 duration-250 select-none">
             <div className="flex items-center justify-between gap-4 px-4 py-3 rounded-lg border border-accent/20 bg-background-panel/90 backdrop-blur-md shadow-md text-foreground">
               <div className="flex items-center gap-2">

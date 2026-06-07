@@ -136,3 +136,21 @@ pub async fn require_permission(
         Err(AppError::Unauthorized)
     }
 }
+
+/// Require `primary` permission OR `fallback` permission.
+/// Enables granular permissions (e.g. `role_groups:manage`) with backward
+/// compatibility for the legacy umbrella permission (`users:manage`).
+pub async fn require_permission_or(
+    admin: &AdminUser,
+    pool: &PgPool,
+    primary: &str,
+    fallback: &str,
+) -> Result<(), AppError> {
+    if admin.has_permission(pool, primary).await {
+        Ok(())
+    } else if admin.has_permission(pool, fallback).await {
+        Ok(())
+    } else {
+        Err(AppError::Unauthorized)
+    }
+}

@@ -26,7 +26,7 @@ const PERM_CATEGORIES: PermCategory[] = [
   { label: "Files", keys: ["files:read", "files:write", "files:delete", "files:classify"] },
   { label: "Users", keys: ["users:read", "users:manage", "users:delete"] },
   { label: "Governance", keys: ["governance:approve", "governance:reject"] },
-  { label: "Admin", keys: ["admin:access", "shares:manage", "audit:read"] },
+  { label: "Admin", keys: ["admin:access", "shares:manage", "audit:read", "permissions:manage", "role_groups:manage", "role_groups:assign"] },
   { label: "System", keys: ["storage:manage", "config:read", "config:write", "classifications:manage"] },
 ];
 
@@ -659,6 +659,33 @@ export default function RoleBuilderTab() {
                     />
                   </div>
                 </div>
+
+                {/* Permission dependency warnings */}
+                {(() => {
+                  const warnings: string[] = [];
+                  const has = (k: string) => selectedPermIds.has(permKeyToId.get(k) ?? "");
+                  if (has("files:delete") && !has("files:read"))
+                    warnings.push("files:delete without files:read — user can delete files they cannot see.");
+                  if (has("users:delete") && !has("users:read"))
+                    warnings.push("users:delete without users:read — user can delete users they cannot find.");
+                  if (has("config:write") && !has("config:read"))
+                    warnings.push("config:write without config:read — user can modify config they cannot view.");
+                  if (has("governance:reject") && !has("governance:approve"))
+                    warnings.push("governance:reject without governance:approve — user can reject but not approve.");
+                  if (warnings.length === 0) return null;
+                  return (
+                    <div className="p-3 rounded-md border border-warning/30 bg-warning/5 space-y-1.5 mb-4">
+                      <span className="text-[10px] font-bold font-sans uppercase text-warning tracking-wider">
+                        ⚠ Permission Warnings
+                      </span>
+                      {warnings.map((w, i) => (
+                        <p key={i} className="text-[10px] text-warning/80 font-mono leading-relaxed">
+                          {w}
+                        </p>
+                      ))}
+                    </div>
+                  );
+                })()}
 
                 {/* Template Presets */}
                 <div>

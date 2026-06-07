@@ -253,3 +253,115 @@ impl From<User> for UserProfile {
         }
     }
 }
+
+// ── Tests ──────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── role_level ───────────────────────────────────────────────────────
+
+    #[test]
+    fn role_level_admin_panel_is_highest() {
+        assert_eq!(role_level("admin_panel"), 5);
+    }
+
+    #[test]
+    fn role_level_chief() {
+        assert_eq!(role_level("chief"), 4);
+    }
+
+    #[test]
+    fn role_level_director() {
+        assert_eq!(role_level("director"), 3);
+    }
+
+    #[test]
+    fn role_level_officer() {
+        assert_eq!(role_level("officer"), 2);
+    }
+
+    #[test]
+    fn role_level_staff() {
+        assert_eq!(role_level("staff"), 1);
+    }
+
+    #[test]
+    fn role_level_unknown_is_zero() {
+        assert_eq!(role_level("contractor"), 0);
+        assert_eq!(role_level(""), 0);
+    }
+
+    // ── can_govern ───────────────────────────────────────────────────────
+
+    #[test]
+    fn can_govern_officer_and_above() {
+        assert!(can_govern("admin_panel"));
+        assert!(can_govern("chief"));
+        assert!(can_govern("director"));
+        assert!(can_govern("officer"));
+    }
+
+    #[test]
+    fn cannot_govern_staff_and_below() {
+        assert!(!can_govern("staff"));
+        assert!(!can_govern("contractor"));
+        assert!(!can_govern(""));
+    }
+
+    // ── can_govern_classified ────────────────────────────────────────────
+
+    #[test]
+    fn can_govern_classified_director_and_above() {
+        assert!(can_govern_classified("admin_panel"));
+        assert!(can_govern_classified("chief"));
+        assert!(can_govern_classified("director"));
+    }
+
+    #[test]
+    fn cannot_govern_classified_officer_and_below() {
+        assert!(!can_govern_classified("officer"));
+        assert!(!can_govern_classified("staff"));
+        assert!(!can_govern_classified(""));
+    }
+
+    // ── role level ordering invariant ────────────────────────────────────
+
+    #[test]
+    fn role_levels_are_monotonic() {
+        // Higher-authority roles must have higher numeric levels.
+        // If this fails, the governance escalation model is broken.
+        assert!(role_level("admin_panel") > role_level("chief"));
+        assert!(role_level("chief") > role_level("director"));
+        assert!(role_level("director") > role_level("officer"));
+        assert!(role_level("officer") > role_level("staff"));
+        assert!(role_level("staff") > role_level("unknown_role"));
+    }
+
+    // ── UserProfile projection ───────────────────────────────────────────
+
+    #[test]
+    fn user_to_profile_excludes_password_hash() {
+        let user = User {
+            id: uuid::Uuid::nil(),
+            email: "test@example.com".into(),
+            password_hash: "secret_hash".into(),
+            full_name: "Test User".into(),
+            role: "staff".into(),
+            active: true,
+            storage_quota_bytes: None,
+            avatar_data: None,
+            department: None,
+            supervisor_id: None,
+            notification_prefs: None,
+            created_at: chrono::Utc::now(),
+        };
+        let profile: UserProfile = user.into();
+        assert_eq!(profile.email, "test@example.com");
+        assert_eq!(profile.full_name, "Test User");
+        assert_eq!(profile.role, "staff");
+        assert!(profile.active);
+        // password_hash must NOT be exposed on UserProfile
+    }
+}

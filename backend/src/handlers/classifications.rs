@@ -60,6 +60,119 @@ pub struct SetDefaultClassificationRequest {
     pub classification_id: Uuid,
 }
 
+// ── Helper: apply default access rules to a newly created classification ──────
+
+/// Reads `classification_default_read_perms` and `classification_default_write_perms`
+/// from `system_config` (comma-separated permission keys). If configured, those
+/// permissions are granted read/write access to the new tier automatically.
+async fn apply_default_access_rules(pool: &PgPool, classification_id: uuid::Uuid) {
+    // Read default config keys (best-effort — if not set, we skip silently)
+    let default_read: Option<String> =
+        sqlx::query_scalar("SELECT value FROM system_config WHERE key = $1")
+            .bind("classification_default_read_perms")
+            .fetch_optional(pool)
+            .await
+            .ok()
+            .flatten()
+            .flatten();
+
+    let default_write: Option<String> =
+        sqlx::query_scalar("SELECT value FROM system_config WHERE key = $1")
+            .bind("classification_default_write_perms")
+            .fetch_optional(pool)
+            .await
+            .ok()
+            .flatten()
+            .flatten();
+
+    let read_keys: Vec<&str> = default_read
+        .as_deref()
+        .map(|s| {
+            s.split(',')
+                .map(str::trim)
+                .filter(|k| !k.is_empty())
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let write_keys: Vec<&str> = default_write
+        .as_deref()
+        .map(|s| {
+            s.split(',')
+                .map(str::trim)
+                .filter(|k| !k.is_empty())
+                .collect()
+        })
+        .unwrap_or_default();
+
+    if read_keys.is_empty() && write_keys.is_empty() {
+        return;
+    }
+
+    // Resolve permission keys → IDs in bulk
+    let mut all_keys = read_keys.clone();
+    all_keys.extend(write_keys.clone());
+
+    #[derive(sqlx::FromRow)]
+    struct PermId {
+        id: uuid::Uuid,
+        key: String,
+    }
+
+    let perm_rows: Vec<PermId> =
+        match sqlx::query_as("SELECT id, key FROM permissions WHERE key = ANY($1)")
+            .bind(&all_keys)
+            .fetch_all(pool)
+            .await
+        {
+            Ok(rows) => rows,
+            Err(e) => {
+                tracing::warn!(error = %e, "Failed to resolve default classification permissions");
+                return;
+            }
+        };
+
+    let perm_map: std::collections::HashMap<&str, uuid::Uuid> =
+        perm_rows.iter().map(|p| (p.key.as_str(), p.id)).collect();
+
+    // Insert read grants
+    for rk in &read_keys {
+        if let Some(pid) = perm_map.get(rk) {
+            let _ = sqlx::query(
+                "INSERT INTO classification_permissions (classification_id, permission_id, access_type)
+                 VALUES ($1, $2, 'read') ON CONFLICT DO NOTHING",
+            )
+            .bind(classification_id)
+            .bind(pid)
+            .execute(pool)
+            .await;
+        }
+    }
+
+    // Insert write grants
+    for wk in &write_keys {
+        if let Some(pid) = perm_map.get(wk) {
+            let _ = sqlx::query(
+                "INSERT INTO classification_permissions (classification_id, permission_id, access_type)
+                 VALUES ($1, $2, 'write') ON CONFLICT DO NOTHING",
+            )
+            .bind(classification_id)
+            .bind(pid)
+            .execute(pool)
+            .await;
+        }
+    }
+
+    if !read_keys.is_empty() || !write_keys.is_empty() {
+        tracing::info!(
+            classification_id = %classification_id,
+            read_count = %read_keys.len(),
+            write_count = %write_keys.len(),
+            "Applied default access rules to new classification"
+        );
+    }
+}
+
 // ── GET /api/admin/classifications ────────────────────────────────────────────
 
 pub async fn list_classifications(
@@ -165,6 +278,14 @@ pub async fn create_classification(
         }
         AppError::Database(e)
     })?;
+
+    // ── Auto-apply site-wide default access rules to the new tier ─────────
+    // Admins can configure `classification_default_read_perms` and
+    // `classification_default_write_perms` in System Config (comma-separated
+    // permission keys). If set, those permissions are automatically granted
+    // read/write access to every newly created classification tier so the
+    // admin doesn't have to remember to configure the Access Control tab.
+    apply_default_access_rules(pool.get_ref(), classification.id).await;
 
     tracing::info!(
         admin = %admin.username,
@@ -452,17 +573,39 @@ pub async fn set_classification_permissions(
 
     let id = path.into_inner();
 
-    // Verify classification exists
-    let exists: bool =
-        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM classifications WHERE id = $1)")
+    // Verify classification exists and snapshot current rules for audit diff
+    let class_key: Option<String> =
+        sqlx::query_scalar("SELECT key FROM classifications WHERE id = $1")
             .bind(id)
-            .fetch_one(pool.get_ref())
+            .fetch_optional(pool.get_ref())
             .await
-            .map_err(AppError::Database)?;
+            .map_err(AppError::Database)?
+            .flatten();
 
-    if !exists {
-        return Err(AppError::NotFound);
-    }
+    let class_key = class_key.ok_or(AppError::NotFound)?;
+
+    // Snapshot existing permission keys for audit diff
+    let before_read: Vec<String> = sqlx::query_scalar(
+        "SELECT p.key FROM classification_permissions cp
+         JOIN permissions p ON p.id = cp.permission_id
+         WHERE cp.classification_id = $1 AND cp.access_type = 'read'
+         ORDER BY p.key",
+    )
+    .bind(id)
+    .fetch_all(pool.get_ref())
+    .await
+    .unwrap_or_default();
+
+    let before_write: Vec<String> = sqlx::query_scalar(
+        "SELECT p.key FROM classification_permissions cp
+         JOIN permissions p ON p.id = cp.permission_id
+         WHERE cp.classification_id = $1 AND cp.access_type = 'write'
+         ORDER BY p.key",
+    )
+    .bind(id)
+    .fetch_all(pool.get_ref())
+    .await
+    .unwrap_or_default();
 
     // Use a transaction for atomic replacement
     let mut tx = pool.begin().await.map_err(AppError::Database)?;
@@ -503,6 +646,42 @@ pub async fn set_classification_permissions(
     }
 
     tx.commit().await.map_err(AppError::Database)?;
+
+    // ── Audit log with before/after diff ──────────────────────────────────
+    let after_read_keys: Vec<String> = if body.read_permission_ids.is_empty() {
+        vec![]
+    } else {
+        sqlx::query_scalar("SELECT key FROM permissions WHERE id = ANY($1) ORDER BY key")
+            .bind(&body.read_permission_ids)
+            .fetch_all(pool.get_ref())
+            .await
+            .unwrap_or_default()
+    };
+    let after_write_keys: Vec<String> = if body.write_permission_ids.is_empty() {
+        vec![]
+    } else {
+        sqlx::query_scalar("SELECT key FROM permissions WHERE id = ANY($1) ORDER BY key")
+            .bind(&body.write_permission_ids)
+            .fetch_all(pool.get_ref())
+            .await
+            .unwrap_or_default()
+    };
+
+    let diff = serde_json::json!({
+        "classification_id": id.to_string(),
+        "classification_key": class_key,
+        "before": { "read": before_read, "write": before_write },
+        "after": { "read": after_read_keys, "write": after_write_keys },
+    });
+
+    let _ = crate::handlers::files::write_audit_log_internal(
+        pool.get_ref(),
+        uuid::Uuid::nil(),
+        "CLASSIFICATION_PERMISSIONS",
+        &diff.to_string(),
+        "",
+    )
+    .await;
 
     tracing::info!(
         admin = %admin.username,

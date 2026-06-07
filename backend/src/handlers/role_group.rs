@@ -99,8 +99,13 @@ pub async fn create_role_group(
     req: HttpRequest,
     body: web::Json<CreateRoleGroupRequest>,
 ) -> Result<HttpResponse, AppError> {
-    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:manage")
-        .await?;
+    crate::app_middleware::admin::require_permission_or(
+        &admin,
+        pool.get_ref(),
+        "role_groups:manage",
+        "users:manage",
+    )
+    .await?;
     let name = body.name.trim().to_string();
     let description = body.description.trim().to_string();
 
@@ -230,8 +235,13 @@ pub async fn update_role_group(
     path: web::Path<Uuid>,
     body: web::Json<UpdateRoleGroupRequest>,
 ) -> Result<HttpResponse, AppError> {
-    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:manage")
-        .await?;
+    crate::app_middleware::admin::require_permission_or(
+        &admin,
+        pool.get_ref(),
+        "role_groups:manage",
+        "users:manage",
+    )
+    .await?;
     let group_id = path.into_inner();
     let existing = fetch_group(pool.get_ref(), group_id).await?;
 
@@ -319,8 +329,13 @@ pub async fn delete_role_group(
     req: HttpRequest,
     path: web::Path<Uuid>,
 ) -> Result<HttpResponse, AppError> {
-    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:manage")
-        .await?;
+    crate::app_middleware::admin::require_permission_or(
+        &admin,
+        pool.get_ref(),
+        "role_groups:manage",
+        "users:manage",
+    )
+    .await?;
     let group_id = path.into_inner();
 
     // Verify the group exists before deleting
@@ -371,8 +386,13 @@ pub async fn duplicate_role_group(
     path: web::Path<Uuid>,
     body: web::Json<DuplicateRoleGroupRequest>,
 ) -> Result<HttpResponse, AppError> {
-    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:manage")
-        .await?;
+    crate::app_middleware::admin::require_permission_or(
+        &admin,
+        pool.get_ref(),
+        "role_groups:manage",
+        "users:manage",
+    )
+    .await?;
     let source_id = path.into_inner();
     let source = fetch_group(pool.get_ref(), source_id).await?;
     let source_perms = fetch_group_permissions(pool.get_ref(), source_id).await?;
@@ -454,12 +474,18 @@ pub async fn set_group_permissions(
     path: web::Path<Uuid>,
     body: web::Json<SetPermissionsRequest>,
 ) -> Result<HttpResponse, AppError> {
-    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:manage")
-        .await?;
+    crate::app_middleware::admin::require_permission_or(
+        &admin,
+        pool.get_ref(),
+        "role_groups:manage",
+        "users:manage",
+    )
+    .await?;
     let group_id = path.into_inner();
 
-    // Verify the group exists
-    let _existing = fetch_group(pool.get_ref(), group_id).await?;
+    // Verify the group exists and snapshot current permissions for audit diff
+    let existing = fetch_group(pool.get_ref(), group_id).await?;
+    let existing_perms = fetch_group_permissions(pool.get_ref(), group_id).await?;
 
     // Validate all permission IDs exist
     if !body.permission_ids.is_empty() {
@@ -501,13 +527,29 @@ pub async fn set_group_permissions(
 
     tx.commit().await.map_err(AppError::Database)?;
 
-    // Audit log
+    // Audit log with before/after permission diff
     let ip = req.peer_addr().map(|a| a.to_string()).unwrap_or_default();
+    let before_keys: Vec<&str> = existing_perms.iter().map(|p| p.key.as_str()).collect();
+    let after_keys: Vec<String> = if body.permission_ids.is_empty() {
+        vec![]
+    } else {
+        sqlx::query_scalar("SELECT key FROM permissions WHERE id = ANY($1) ORDER BY key")
+            .bind(&body.permission_ids)
+            .fetch_all(pool.get_ref())
+            .await
+            .unwrap_or_default()
+    };
+    let diff = serde_json::json!({
+        "group_id": group_id.to_string(),
+        "group_name": existing.name,
+        "before": before_keys,
+        "after": after_keys,
+    });
     let _ = crate::handlers::files::write_audit_log_internal(
         pool.get_ref(),
         uuid::Uuid::nil(),
         "ROLE_GROUP_PERMISSIONS",
-        &format!("{} ({} perms)", group_id, body.permission_ids.len()),
+        &diff.to_string(),
         &ip,
     )
     .await;
@@ -564,8 +606,13 @@ pub async fn set_group_users(
     path: web::Path<Uuid>,
     body: web::Json<SetUsersRequest>,
 ) -> Result<HttpResponse, AppError> {
-    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:manage")
-        .await?;
+    crate::app_middleware::admin::require_permission_or(
+        &admin,
+        pool.get_ref(),
+        "role_groups:assign",
+        "users:manage",
+    )
+    .await?;
     let group_id = path.into_inner();
 
     // Verify the group exists
@@ -719,8 +766,13 @@ pub async fn create_permission(
     req: HttpRequest,
     body: web::Json<CreatePermissionRequest>,
 ) -> Result<HttpResponse, AppError> {
-    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:manage")
-        .await?;
+    crate::app_middleware::admin::require_permission_or(
+        &admin,
+        pool.get_ref(),
+        "permissions:manage",
+        "users:manage",
+    )
+    .await?;
 
     let key = body.key.trim().to_lowercase().replace(' ', "_");
     let description = body.description.trim().to_string();
@@ -784,8 +836,13 @@ pub async fn update_permission(
     path: web::Path<Uuid>,
     body: web::Json<UpdatePermissionRequest>,
 ) -> Result<HttpResponse, AppError> {
-    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:manage")
-        .await?;
+    crate::app_middleware::admin::require_permission_or(
+        &admin,
+        pool.get_ref(),
+        "permissions:manage",
+        "users:manage",
+    )
+    .await?;
 
     let perm_id = path.into_inner();
     let description = body.description.trim().to_string();
@@ -826,8 +883,13 @@ pub async fn delete_permission(
     req: HttpRequest,
     path: web::Path<Uuid>,
 ) -> Result<HttpResponse, AppError> {
-    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:manage")
-        .await?;
+    crate::app_middleware::admin::require_permission_or(
+        &admin,
+        pool.get_ref(),
+        "permissions:manage",
+        "users:manage",
+    )
+    .await?;
 
     let perm_id = path.into_inner();
 
@@ -897,8 +959,13 @@ pub async fn create_custom_role(
     req: HttpRequest,
     body: web::Json<CreateCustomRoleRequest>,
 ) -> Result<HttpResponse, AppError> {
-    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:manage")
-        .await?;
+    crate::app_middleware::admin::require_permission_or(
+        &admin,
+        pool.get_ref(),
+        "role_groups:manage",
+        "users:manage",
+    )
+    .await?;
 
     let role_key = body.role_key.trim().to_lowercase().replace(' ', "_");
     let label = body.label.trim().to_string();
@@ -951,8 +1018,13 @@ pub async fn delete_custom_role(
     req: HttpRequest,
     path: web::Path<String>,
 ) -> Result<HttpResponse, AppError> {
-    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:manage")
-        .await?;
+    crate::app_middleware::admin::require_permission_or(
+        &admin,
+        pool.get_ref(),
+        "role_groups:manage",
+        "users:manage",
+    )
+    .await?;
 
     let role_key = path.into_inner();
 
@@ -1030,8 +1102,13 @@ pub async fn set_role_implicit_permissions(
     path: web::Path<String>,
     body: web::Json<SetRoleImplicitPermissionsRequest>,
 ) -> Result<HttpResponse, AppError> {
-    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:manage")
-        .await?;
+    crate::app_middleware::admin::require_permission_or(
+        &admin,
+        pool.get_ref(),
+        "role_groups:manage",
+        "users:manage",
+    )
+    .await?;
 
     let role_key = path.into_inner();
 
@@ -1119,8 +1196,13 @@ pub async fn set_user_permissions(
     path: web::Path<Uuid>,
     body: web::Json<SetUserPermissionsRequest>,
 ) -> Result<HttpResponse, AppError> {
-    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:manage")
-        .await?;
+    crate::app_middleware::admin::require_permission_or(
+        &admin,
+        pool.get_ref(),
+        "role_groups:assign",
+        "users:manage",
+    )
+    .await?;
 
     let user_id = path.into_inner();
 

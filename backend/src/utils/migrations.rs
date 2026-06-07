@@ -522,6 +522,28 @@ pub async fn run_migrations(pool: &PgPool) {
                 "CREATE INDEX IF NOT EXISTS idx_file_shares_file_user ON file_shares (file_id, user_id)",
             ],
         ),
+        // 9029 - Granular admin permissions (split users:manage)
+        (
+            "9029",
+            "Auto: Granular admin permissions for role builder delegation",
+            vec![
+                // Seed new granular permissions
+                "INSERT INTO permissions (key, description) VALUES
+                    ('role_groups:manage',  'Create, edit, and delete role groups'),
+                    ('role_groups:assign',  'Assign users to role groups and manage direct overrides'),
+                    ('permissions:manage',  'Create, edit, and delete permission definitions')
+                 ON CONFLICT (key) DO NOTHING",
+                // Grant to chief/director implicitly
+                "INSERT INTO role_implicit_permissions (role_key, permission_id)
+                 SELECT 'chief', id FROM permissions
+                 WHERE key IN ('role_groups:manage','role_groups:assign','permissions:manage')
+                 ON CONFLICT DO NOTHING",
+                "INSERT INTO role_implicit_permissions (role_key, permission_id)
+                 SELECT 'director', id FROM permissions
+                 WHERE key IN ('role_groups:manage','role_groups:assign','permissions:manage')
+                 ON CONFLICT DO NOTHING",
+            ],
+        ),
     ];
 
     for (version, description, statements) in &migrations {
