@@ -212,9 +212,10 @@ pub async fn update_classification(
 
     // If setting this as default, clear previous default
     if new_is_default && !existing.is_default {
-        let _ = sqlx::query("UPDATE classifications SET is_default = FALSE WHERE is_default = TRUE")
-            .execute(&mut *tx)
-            .await;
+        let _ =
+            sqlx::query("UPDATE classifications SET is_default = FALSE WHERE is_default = TRUE")
+                .execute(&mut *tx)
+                .await;
     }
 
     // If key changed, update file references
