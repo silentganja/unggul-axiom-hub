@@ -283,9 +283,9 @@ export default function FileExplorerPage() {
       chief: "overview",
       director: "governance",
       officer: "governance",
-      staff: "files",
+      staff: "overview",
     };
-    const targetView = roleViewMap[user.role.toLowerCase()] || "files";
+    const targetView = roleViewMap[user.role.toLowerCase()] || "overview";
     if (targetView !== activeView) {
       setActiveView(targetView as "overview" | "files" | "shared" | "recent" | "favorites" | "trash" | "governance");
     }
