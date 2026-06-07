@@ -1,4 +1,4 @@
-﻿import { create } from "zustand";
+import { create } from "zustand";
 import { governanceApi, GovernanceRequest, formatTimestamp, ListGovernanceParams } from "@/lib/api";
 
 // ── Frontend-facing task shape ──────────────────────────────────────────────
@@ -183,7 +183,7 @@ export const useOperationsStore = create<OperationsState>((set, get) => ({
     set({ error: null });
     try {
       await governanceApi.undo(id);
-      // Undo returns a task to PENDING — always go to page 1 to see the restored item.
+      // Undo returns a task to PENDING - always go to page 1 to see the restored item.
       set({ page: 1 });
       await get().fetchTasks({ page: 1, perPage: get().perPage, status: "PENDING" });
     } catch (err) {

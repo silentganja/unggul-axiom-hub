@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /* ============================================================
-   UNGGUL AXIOM — DESIGN SYSTEM TOKENS
+   UNGGUL AXIOM - DESIGN SYSTEM TOKENS
    Corporate-grade, Cloudflare-inspired dual-mode palette
    ============================================================ */
 
@@ -396,6 +396,18 @@ body {
 
 .animate-core-pulse {
   animation: core-pulse 4s ease-in-out infinite;
+}
+
+/* Animated dashed border for drag overlay */
+@keyframes drag-dash {
+  to {
+    stroke-dashoffset: -20;
+  }
+}
+
+.animate-drag-draw {
+  stroke-dasharray: 8, 6;
+  animation: drag-dash 1s linear infinite;
 }
 
 

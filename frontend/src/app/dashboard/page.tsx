@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useId, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
@@ -27,6 +27,8 @@ import {
   Undo2,
   AlertTriangle,
   X,
+  LayoutGrid,
+  List,
 } from "lucide-react";
 import { useFileStore, FileNode } from "@/store/useFileStore";
 import { useAuthStore } from "@/store/useAuthStore";
@@ -141,6 +143,8 @@ export default function FileExplorerPage() {
   const createFolder = useFileStore((state) => state.createFolder);
   const uploadFileReal = useFileStore((state) => state.uploadFileReal);
   const toggleFavorite = useFileStore((state) => state.toggleFavorite);
+  const clearSelection = useFileStore((state) => state.clearSelection);
+  const deleteSelected = useFileStore((state) => state.deleteSelected);
 
   const setActiveFile = useFileStore((state) => state.setActiveFile);
   const setAccessSheetOpen = useFileStore((state) => state.setAccessSheetOpen);
@@ -172,7 +176,7 @@ export default function FileExplorerPage() {
   const govTotal = useOperationsStore((state) => state.total);
   const submitRequest = useOperationsStore((state) => state.submitRequest);
 
-  // ── Classification tiers (dynamic — fetched from backend, not hardcoded) ──
+  // ── Classification tiers (dynamic - fetched from backend, not hardcoded) ──
   const [classificationTiers, setClassificationTiers] = useState<
     PublicClassificationEntry[]
   >([]);
@@ -294,6 +298,22 @@ export default function FileExplorerPage() {
   const [isRenameModalOpen, setIsRenameModalOpen] = useState(false);
   const [renameTargetId, setRenameTargetId] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+
+  // View Mode: grid or list (saved to localStorage for convenience)
+  const [viewMode, setViewMode] = useState<"list" | "grid">(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("unggul-view-mode");
+      if (saved === "list" || saved === "grid") return saved;
+    }
+    return "list";
+  });
+
+  const handleSetViewMode = (mode: "list" | "grid") => {
+    setViewMode(mode);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("unggul-view-mode", mode);
+    }
+  };
 
   // Governance modal state
   const [isGovModalOpen, setIsGovModalOpen] = useState(false);
@@ -1711,6 +1731,34 @@ export default function FileExplorerPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* View mode toggle */}
+          <div className="flex items-center rounded border border-border bg-background-panel/85 p-0.5 mr-1 select-none">
+            <button
+              onClick={() => handleSetViewMode("list")}
+              className={cn(
+                "h-7 w-7 rounded-sm flex items-center justify-center transition-all cursor-pointer",
+                viewMode === "list"
+                  ? "bg-accent/15 text-accent border border-accent/20"
+                  : "text-foreground-subtle hover:text-foreground hover:bg-background-subtle/40 border border-transparent"
+              )}
+              title="List View"
+            >
+              <List size={13} />
+            </button>
+            <button
+              onClick={() => handleSetViewMode("grid")}
+              className={cn(
+                "h-7 w-7 rounded-sm flex items-center justify-center transition-all cursor-pointer",
+                viewMode === "grid"
+                  ? "bg-accent/15 text-accent border border-accent/20"
+                  : "text-foreground-subtle hover:text-foreground hover:bg-background-subtle/40 border border-transparent"
+              )}
+              title="Grid View"
+            >
+              <LayoutGrid size={13} />
+            </button>
+          </div>
+
           <button
             onClick={() => setIsFolderModalOpen(true)}
             className="h-8 px-3 rounded border border-border bg-background-panel hover:bg-background-subtle/50 text-[11px] font-bold tracking-wider uppercase font-mono text-foreground-muted flex items-center gap-1.5 transition-colors"
@@ -1764,20 +1812,174 @@ export default function FileExplorerPage() {
         )}
       </div>
 
-      {/* ── File explorer table ── */}
-      <div className="border border-border/40 rounded bg-background-panel/40 backdrop-blur-sm overflow-hidden shadow-sm">
+      {/* ── File explorer container ── */}
+      <div className={cn(
+        "border border-border/40 rounded bg-background-panel/40 backdrop-blur-sm overflow-hidden shadow-sm",
+        viewMode === "grid" && "bg-transparent border-transparent shadow-none"
+      )}>
         {isLoading ? (
-          <div className="p-12 text-center space-y-3">
+          <div className="p-12 text-center space-y-3 bg-background-panel/40 border border-border/40 rounded shadow-sm">
             <Loader2 size={32} className="mx-auto text-accent animate-spin" />
             <p className="text-xs text-foreground-subtle font-mono">FETCHING CORPORATE DIRECTORY...</p>
           </div>
         ) : filteredFiles.length === 0 ? (
-          <div className="p-12 text-center space-y-3">
+          <div className="p-12 text-center space-y-3 bg-background-panel/40 border border-border/40 rounded shadow-sm">
             <Folder className="mx-auto text-foreground-subtle/40" size={32} />
             <h3 className="text-sm font-semibold text-foreground">No files located</h3>
             <p className="text-xs text-foreground-subtle max-w-sm mx-auto leading-relaxed">
               No directories or objects match your current directory filters or search queries.
             </p>
+          </div>
+        ) : viewMode === "grid" ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 animate-in fade-in duration-300">
+            {filteredFiles.map((file) => {
+              const isSelected = selectedIds.includes(file.id);
+              const isPdfDocxTxt =
+                file.name.toLowerCase().endsWith(".pdf") ||
+                file.name.toLowerCase().endsWith(".docx") ||
+                file.name.toLowerCase().endsWith(".txt");
+              return (
+                <div
+                  key={file.id}
+                  onDoubleClick={() => {
+                    if (file.type === "folder") {
+                      mapsToFolder(file.id);
+                    } else {
+                      setPreviewFileId(file.id);
+                    }
+                  }}
+                  className={cn(
+                    "glass-premium rounded-xl p-4 flex flex-col justify-between h-36 select-none hover:border-accent/40 transition-all duration-300 group hover:-translate-y-0.5 cursor-pointer relative overflow-hidden",
+                    isSelected ? "border-accent/60 bg-accent-subtle/10" : "border-border/30"
+                  )}
+                >
+                  {/* Top row: Checkbox and options menu */}
+                  <div className="flex items-center justify-between z-10">
+                    <label className="relative flex items-center justify-center cursor-pointer" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleSelection(file.id)}
+                        className="sr-only peer"
+                      />
+                      <span className="h-3.5 w-3.5 rounded-sm border border-input-border bg-input-bg transition-all peer-checked:bg-accent peer-checked:border-accent peer-focus-visible:ring-1 peer-focus-visible:ring-accent flex items-center justify-center">
+                        <Check size={8} className="text-accent-foreground hidden peer-checked:block" strokeWidth={3} />
+                      </span>
+                    </label>
+                    <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                      {file.isFavorite && <Star className="text-accent fill-accent" size={10} />}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (menuOpenId === file.id) {
+                            setMenuOpenId(null);
+                            setMenuAnchorEl(null);
+                          } else {
+                            setMenuAnchorEl(e.currentTarget as HTMLElement);
+                            setMenuOpenId(file.id);
+                          }
+                        }}
+                        className="h-6 w-6 rounded flex items-center justify-center border border-transparent hover:border-border hover:bg-background/40 text-foreground-subtle hover:text-foreground transition-colors"
+                      >
+                        <MoreHorizontal size={12} />
+                      </button>
+                      <RowDropdownMenu
+                        open={menuOpenId === file.id}
+                        onClose={() => { setMenuOpenId(null); setMenuAnchorEl(null); }}
+                        anchorEl={menuAnchorEl}
+                      >
+                        <button
+                          onClick={() => { setMenuOpenId(null); setMenuAnchorEl(null); if (file.type !== "folder") setPreviewFileId(file.id); else openAccessControl(file); }}
+                          className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[10px] text-foreground-muted hover:text-foreground hover:bg-background-subtle/50 rounded transition-colors"
+                        >
+                          <Eye size={11} className="text-foreground-subtle shrink-0" /> View
+                        </button>
+                        <button onClick={() => { setMenuOpenId(null); setMenuAnchorEl(null); openAccessControl(file); }} className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[10px] text-foreground-muted hover:text-foreground hover:bg-background-subtle/50 rounded transition-colors">
+                          <Share2 size={11} className="text-foreground-subtle shrink-0" /> Manage Access
+                        </button>
+                        {file.lockedBy ? (
+                          <button disabled title={`LOCKED: ${file.lockReason || 'Pending Corporate Approval'}`} className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[10px] text-foreground-subtle/40 bg-background/5 cursor-not-allowed text-left rounded">
+                            <Edit2 size={11} className="text-foreground-subtle/30 shrink-0" /><span>Rename</span>
+                            <span className="ml-auto text-[8px] font-bold text-accent uppercase">LOCKED</span>
+                          </button>
+                        ) : (
+                          <button onClick={() => { setMenuOpenId(null); setMenuAnchorEl(null); initiateRename(file); }} className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[10px] text-foreground-muted hover:text-foreground hover:bg-background-subtle/50 rounded transition-colors">
+                            <Edit2 size={11} className="text-foreground-subtle shrink-0" /> Rename
+                          </button>
+                        )}
+                        <button onClick={() => { setMenuOpenId(null); setMenuAnchorEl(null); toggleFavorite(file.id); }} className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[10px] text-foreground-muted hover:text-foreground hover:bg-background-subtle/50 rounded transition-colors">
+                          <Star size={11} className={cn("shrink-0", file.isFavorite ? "text-accent fill-accent" : "text-foreground-subtle")} />
+                          {file.isFavorite ? "Remove Favorite" : "Add Favorite"}
+                        </button>
+                        <button onClick={() => { setMenuOpenId(null); setMenuAnchorEl(null); downloadFile(file.id); }} className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[10px] text-foreground-muted hover:text-foreground hover:bg-background-subtle/50 rounded transition-colors">
+                          <Download size={11} className="text-foreground-subtle shrink-0" /> Download
+                        </button>
+                        <hr className="border-t border-border/10 my-1" />
+                        {file.lockedBy ? (
+                          <button disabled className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[10px] text-destructive/40 bg-background/5 cursor-not-allowed text-left rounded">
+                            <Trash2 size={11} className="text-destructive/30 shrink-0" /><span>Delete</span>
+                            <span className="ml-auto text-[8px] font-bold text-accent uppercase">LOCKED</span>
+                          </button>
+                        ) : (
+                          <button onClick={() => { setMenuOpenId(null); setMenuAnchorEl(null); deleteFile(file.id); }} className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[10px] text-destructive hover:bg-destructive/15 rounded transition-colors">
+                            <Trash2 size={11} className="text-destructive shrink-0" /> Delete
+                          </button>
+                        )}
+                      </RowDropdownMenu>
+                    </div>
+                  </div>
+
+                  {/* Mid block: Big file/folder icon and status indicators */}
+                  <div className="flex items-center gap-2.5 mt-1 z-10">
+                    <div className="h-9 w-9 rounded bg-background-panel/60 border border-border/10 flex items-center justify-center shrink-0">
+                      {file.type === "folder" ? (
+                        <Folder className="text-accent fill-accent/5" size={18} strokeWidth={2} />
+                      ) : isPdfDocxTxt ? (
+                        <FileText className="text-info shrink-0" size={18} strokeWidth={2} />
+                      ) : (
+                        <File className="text-foreground-subtle shrink-0" size={18} strokeWidth={2} />
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1">
+                        <span
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (file.type === "folder") {
+                              mapsToFolder(file.id);
+                            } else {
+                              openAccessControl(file);
+                            }
+                          }}
+                          className="truncate text-xs font-semibold text-foreground group-hover:text-accent transition-colors font-sans"
+                        >
+                          {file.name}
+                        </span>
+                        {file.lockedBy && (
+                          <span title={`LOCKED: ${file.lockReason || 'Pending Corporate Approval'} (Locked by ${file.lockedBy})`}>
+                            <Lock className="text-accent shrink-0 fill-accent/15 cursor-help" size={10} />
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[9px] text-foreground-muted font-mono leading-none mt-1">
+                        {file.type === "folder" ? "Folder" : file.size}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Bottom row: Classification badge & date */}
+                  <div className="flex items-center justify-between border-t border-border/10 pt-2.5 mt-auto z-10 text-[9px] font-mono select-none">
+                    <span className={cn(
+                      "inline-block px-1.5 py-0.5 rounded-sm text-[8px] font-bold tracking-wider uppercase border",
+                      classificationBadge(file.classification, classificationLevels)
+                    )}>
+                      {file.classification}
+                    </span>
+                    <span className="text-foreground-muted text-[8px]">{file.modifiedAt}</span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -1958,6 +2160,65 @@ export default function FileExplorerPage() {
       <FileAccessSheet />
       <FloatingActionBar />
 
+      {/* ── Files Explorer Batch Action Dock ── */}
+      {selectedIds.length > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 w-full max-w-md px-4 animate-in fade-in slide-in-from-bottom-4 duration-250 select-none">
+          <div className="flex items-center justify-between gap-4 px-4 py-3 rounded-lg border border-accent/20 bg-background-panel/90 backdrop-blur-md shadow-lg text-foreground">
+            <div className="flex items-center gap-2">
+              <div className="h-5 w-5 rounded bg-accent/15 border border-accent/25 text-accent text-[9px] font-bold font-mono flex items-center justify-center">
+                {selectedIds.length}
+              </div>
+              <span className="font-mono text-[11px] font-semibold text-foreground-muted">
+                {selectedIds.length} item{selectedIds.length !== 1 ? "s" : ""} selected
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  selectedIds.forEach((id) => toggleFavorite(id));
+                  clearSelection();
+                }}
+                className="h-7 px-2.5 rounded-sm border border-border bg-background-panel hover:bg-background-subtle/50 text-[9px] font-bold uppercase font-mono transition-all cursor-pointer flex items-center gap-1 text-foreground-muted hover:text-foreground"
+                title="Toggle Favorite"
+              >
+                <Star size={10} className="text-accent fill-accent/10" />
+                Fav
+              </button>
+              <button
+                onClick={() => {
+                  selectedIds.forEach((id) => downloadFile(id));
+                  clearSelection();
+                }}
+                className="h-7 px-2.5 rounded-sm border border-border bg-background-panel hover:bg-background-subtle/50 text-[9px] font-bold uppercase font-mono transition-all cursor-pointer flex items-center gap-1 text-foreground-muted hover:text-foreground"
+                title="Download Selected"
+              >
+                <Download size={10} />
+                DL
+              </button>
+              <button
+                onClick={async () => {
+                  if (confirm(`Move ${selectedIds.length} item(s) to trash?`)) {
+                    await deleteSelected();
+                  }
+                }}
+                className="h-7 px-2.5 rounded-sm border border-destructive/25 text-destructive bg-destructive/5 hover:bg-destructive/15 text-[9px] font-bold uppercase font-mono transition-all cursor-pointer flex items-center gap-1"
+                title="Delete Selected"
+              >
+                <Trash2 size={10} />
+                Delete
+              </button>
+              <span className="h-4 w-px bg-border/30" />
+              <button
+                onClick={clearSelection}
+                className="h-6 w-6 rounded flex items-center justify-center hover:bg-background-subtle/40 border border-transparent hover:border-border text-foreground-subtle hover:text-foreground transition-all cursor-pointer"
+              >
+                <X size={11} />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Folder Creation Modal ── */}
       {isFolderModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/60 backdrop-blur-sm animate-in fade-in duration-200">
@@ -2098,7 +2359,21 @@ export default function FileExplorerPage() {
           onDrop={handleDrop}
           className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-background/60 backdrop-blur-sm animate-in fade-in duration-200 select-none cursor-copy"
         >
-          <div className="absolute inset-6 rounded-sm border border-dashed border-accent/40 flex flex-col items-center justify-center gap-4 bg-background-panel/95 backdrop-blur-md shadow-2xl pointer-events-none">
+          <div className="absolute inset-6 rounded-lg flex flex-col items-center justify-center gap-4 bg-background-panel/95 backdrop-blur-md shadow-2xl pointer-events-none overflow-hidden">
+            {/* SVG Boundary Drawing */}
+            <svg className="absolute inset-0 w-full h-full pointer-events-none rounded-lg" xmlns="http://www.w3.org/2000/svg">
+              <rect
+                x="4"
+                y="4"
+                style={{ width: "calc(100% - 8px)", height: "calc(100% - 8px)" }}
+                rx="8"
+                fill="transparent"
+                stroke="var(--accent)"
+                strokeWidth="2"
+                strokeDasharray="8, 6"
+                className="animate-drag-draw"
+              />
+            </svg>
             <div className="h-12 w-12 rounded-full border border-accent/30 bg-accent/5 flex items-center justify-center animate-pulse">
               <Shield className="text-accent animate-spin-slow" size={24} strokeWidth={1.5} />
             </div>

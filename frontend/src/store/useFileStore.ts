@@ -1,4 +1,4 @@
-﻿import { create } from "zustand";
+import { create } from "zustand";
 import {
   filesApi,
   sharesApi,
@@ -495,7 +495,7 @@ export const useFileStore = create<FileState>((set, get) => ({
     const { currentFolderId, defaultClassification: defaultClass } = get();
     set({ error: null });
     const tempId = `temp-folder-${Date.now()}`;
-    // Optimistic insert — avoids the loading spinner flash from re-fetching
+    // Optimistic insert - avoids the loading spinner flash from re-fetching
     const optimistic: FileNode = {
       id: tempId, name: name.trim(), type: "folder", size: "--", sizeBytes: 0,
       modifiedAt: new Date().toISOString().slice(0, 19).replace("T", " "),
@@ -718,7 +718,7 @@ export const useFileStore = create<FileState>((set, get) => ({
     } else {
       set({ selectedIds: [], error: null });
     }
-    // Always re-fetch to get authoritative state — avoid stale optimistic removal.
+    // Always re-fetch to get authoritative state - avoid stale optimistic removal.
     await get().fetchFiles();
   },
 

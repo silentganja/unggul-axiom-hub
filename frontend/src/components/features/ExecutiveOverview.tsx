@@ -18,7 +18,7 @@ import {
 import { useFileStore, FileNode } from "@/store/useFileStore";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useOperationsStore } from "@/store/useOperationsStore";
-import { activityApi, authApi, governanceApi, ActivityEntry, formatTimestamp } from "@/lib/api";
+import { activityApi, authApi, governanceApi, ActivityEntry, formatTimestamp, publicApi, PublicClassificationEntry } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 export default function ExecutiveOverview() {
@@ -76,12 +76,33 @@ export default function ExecutiveOverview() {
     fetchTasks();
   }, [fetchTasks]);
 
+  // ── Zustand Store Hooks for Quota ──────────────────────────────────────────
+  const quotaUsed = useFileStore((state) => state.quotaUsed);
+  const quotaTotal = useFileStore((state) => state.quotaTotal);
+  const fetchQuota = useFileStore((state) => state.fetchQuota);
+
+  useEffect(() => {
+    fetchQuota().catch(() => {});
+  }, [fetchQuota]);
+
+  // ── Dynamic classification tiers ──────────────────────────────────────────
+  const [classificationTiers, setClassificationTiers] = useState<
+    PublicClassificationEntry[]
+  >([]);
+
+  useEffect(() => {
+    publicApi
+      .listClassifications()
+      .then(setClassificationTiers)
+      .catch(() => {});
+  }, []);
+
   // ── Real computed metrics ──────────────────────────────────────────────────
   const pendingTasks = tasks.filter((t) => t.status === "PENDING");
   const pendingCount = pendingTasks.length;
   const totalFiles = files.filter((f) => f.type === "file").length;
   const totalFolders = files.filter((f) => f.type === "folder").length;
-  const totalStorageBytes = files.reduce((sum, f) => sum + f.sizeBytes, 0);
+  const totalStorageBytes = quotaUsed || files.reduce((sum, f) => sum + f.sizeBytes, 0);
 
   // ── Trend indicators ───────────────────────────────────────────────────────
   const oneWeekAgo = now - 7 * 24 * 60 * 60 * 1000;
@@ -103,28 +124,50 @@ export default function ExecutiveOverview() {
   }
   const maxDaily = Math.max(...dailyCounts, 1);
 
-  // Governance requests by type
-  const govByType: Record<string, number> = {};
-  const typeColorMap: Record<string, string> = {
-    FILE_LOCK: "bg-destructive/60",
-    FILE_UNLOCK: "bg-success/60",
-    CLASSIFICATION: "bg-warning/60",
-    FILE_MOVE: "bg-info/60",
-    FILE_DELETE: "bg-destructive/60",
-  };
-  tasks.forEach((t) => {
-    const key = t.type;
-    govByType[key] = (govByType[key] || 0) + 1;
-  });
-  const govTypeLabels = Object.keys(govByType);
-  const govTypeValues = Object.values(govByType);
-  const maxGovType = Math.max(...govTypeValues, 1);
 
-  // ── Governance approval rate ─────────────────────────────────────────────────
-  const approvedCount = tasks.filter((t) => t.status === "APPROVED").length;
-  const rejectedCount = tasks.filter((t) => t.status === "REJECTED").length;
-  const totalProcessed = approvedCount + rejectedCount;
-  const approvalRate = totalProcessed > 0 ? Math.round((approvedCount / totalProcessed) * 100) : 0;
+
+  // ── Classification ratio calculation ───────────────────────────────────────
+  const defaultTiers = ["TERBUKA", "TERHAD", "SULIT", "RAHSIA"];
+  const classificationCounts: Record<string, number> = {};
+
+  if (classificationTiers.length > 0) {
+    classificationTiers.forEach((tier) => {
+      classificationCounts[tier.key.toUpperCase()] = 0;
+    });
+  } else {
+    defaultTiers.forEach((tier) => {
+      classificationCounts[tier] = 0;
+    });
+  }
+
+  let totalClassifiedFiles = 0;
+  files.forEach((f) => {
+    if (f.type === "file") {
+      const c = f.classification.toUpperCase();
+      if (c in classificationCounts) {
+        classificationCounts[c] += 1;
+      } else {
+        classificationCounts[c] = 1;
+      }
+      totalClassifiedFiles++;
+    }
+  });
+
+  const getLevelBgColor = (tierKey: string): string => {
+    const key = tierKey.toUpperCase();
+    if (classificationTiers.length > 0) {
+      const tierEntry = classificationTiers.find((t) => t.key.toUpperCase() === key);
+      const level = tierEntry ? tierEntry.level : 0;
+      if (level >= 3) return "bg-destructive";
+      if (level >= 2) return "bg-warning";
+      if (level >= 1) return "bg-info";
+      return "bg-background-muted";
+    }
+    if (key === "RAHSIA") return "bg-destructive";
+    if (key === "SULIT") return "bg-warning";
+    if (key === "TERHAD") return "bg-info";
+    return "bg-background-muted";
+  };
 
   const recentFiles = [...files]
     .filter((f) => f.type === "file")
@@ -181,6 +224,13 @@ export default function ExecutiveOverview() {
     }
   };
 
+  // ── Circle progress parameters for storage gauge ───────────────────────────
+  const limit = quotaTotal || 5368709120; // 5 GB
+  const percentageUsed = Math.min(100, (totalStorageBytes / limit) * 100);
+  const strokeRadius = 38;
+  const strokeCircumference = 2 * Math.PI * strokeRadius;
+  const strokeDashoffset = strokeCircumference - (percentageUsed / 100) * strokeCircumference;
+
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       {/* ── Session Status Bar ── */}
@@ -203,52 +253,58 @@ export default function ExecutiveOverview() {
       {/* ── Metrics Grid ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Total Files */}
-        <div className="border border-border/35 rounded-xl bg-background-panel/35 backdrop-blur-sm p-5 flex flex-col justify-between h-[120px] select-none hover:border-accent/40 transition-colors shadow-sm">
-          <span className="font-sans text-[10px] font-bold uppercase tracking-wider text-foreground-subtle">
+        <div className="glass-premium rounded-xl p-5 flex flex-col justify-between h-[128px] select-none hover:border-accent/40 transition-all duration-300 group hover:-translate-y-0.5 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-24 h-24 bg-accent/5 rounded-full blur-2xl group-hover:bg-accent/10 transition-colors pointer-events-none" />
+          <span className="font-sans text-[10px] font-bold uppercase tracking-wider text-foreground-subtle flex items-center gap-1.5">
+            <Folder size={12} className="text-accent" />
             Total Files
           </span>
           <div className="text-3xl font-bold font-sans tracking-tight text-foreground mt-2">
             {totalFiles.toLocaleString()}
           </div>
-          <div className="flex items-center gap-2 text-[10px] font-sans text-foreground-muted mt-auto pt-3 border-t border-border/10">
-            <Folder size={12} className="text-accent" />
-            <span>{totalFolders} folder{totalFolders !== 1 ? "s" : ""}</span>
+          <div className="flex items-center justify-between text-[10px] font-sans text-foreground-muted mt-auto pt-3 border-t border-border/10">
+            <span>Folders: {totalFolders}</span>
+            <span className="text-accent/80 font-mono text-[9px]">ACTIVE</span>
           </div>
         </div>
 
         {/* Pending Signatures */}
-        <div className="border border-border/35 rounded-xl bg-background-panel/35 backdrop-blur-sm p-5 flex flex-col justify-between h-[120px] select-none hover:border-accent/40 transition-colors shadow-sm">
-          <span className="font-sans text-[10px] font-bold uppercase tracking-wider text-foreground-subtle">
+        <div className="glass-premium rounded-xl p-5 flex flex-col justify-between h-[128px] select-none hover:border-accent/40 transition-all duration-300 group hover:-translate-y-0.5 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-24 h-24 bg-warning/5 rounded-full blur-2xl group-hover:bg-warning/10 transition-colors pointer-events-none" />
+          <span className="font-sans text-[10px] font-bold uppercase tracking-wider text-foreground-subtle flex items-center gap-1.5">
+            <Shield size={12} className="text-warning" />
             Pending Signatures
           </span>
           <div className="text-3xl font-bold font-sans tracking-tight text-foreground mt-2 flex items-baseline justify-between gap-2">
             <span>{pendingCount}</span>
             {pendingCount > 0 && (
-              <span className="text-xs font-sans font-medium text-warning bg-warning/10 px-2 py-0.5 rounded-md border border-warning/20 leading-none">
-                Action Required
+              <span className="text-[9px] font-mono font-medium text-warning bg-warning/10 px-2 py-0.5 rounded border border-warning/20 leading-none">
+                ATTN
               </span>
             )}
           </div>
           <div className="flex items-center gap-2 text-[10px] font-bold font-sans mt-auto pt-3 border-t border-border/10">
             {pendingCount > 0 ? (
               <>
-                <span className="relative flex h-2.5 w-2.5">
+                <span className="relative flex h-2 w-2">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-warning opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-warning" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-warning" />
                 </span>
-                <span className="text-warning/80 uppercase tracking-wide">Awaiting Authorization</span>
+                <span className="text-warning/80 uppercase tracking-wide font-mono text-[9px]">Awaiting Sign-off</span>
               </>
             ) : (
-              <span className="text-success flex items-center gap-1.5 uppercase tracking-wide">
-                <CheckCircle size={12} /> All Satisfied
+              <span className="text-success flex items-center gap-1.5 uppercase tracking-wide font-mono text-[9px]">
+                <CheckCircle size={10} /> Protocols Clean
               </span>
             )}
           </div>
         </div>
 
         {/* Storage Used */}
-        <div className="border border-border/35 rounded-xl bg-background-panel/35 backdrop-blur-sm p-5 flex flex-col justify-between h-[120px] select-none hover:border-accent/40 transition-colors shadow-sm">
-          <span className="font-sans text-[10px] font-bold uppercase tracking-wider text-foreground-subtle">
+        <div className="glass-premium rounded-xl p-5 flex flex-col justify-between h-[128px] select-none hover:border-accent/40 transition-all duration-300 group hover:-translate-y-0.5 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-24 h-24 bg-accent/5 rounded-full blur-2xl group-hover:bg-accent/10 transition-colors pointer-events-none" />
+          <span className="font-sans text-[10px] font-bold uppercase tracking-wider text-foreground-subtle flex items-center gap-1.5">
+            <HardDrive size={12} className="text-accent" />
             Storage Used
           </span>
           <div className="text-3xl font-bold font-sans tracking-tight text-foreground mt-2">
@@ -256,21 +312,24 @@ export default function ExecutiveOverview() {
           </div>
           <div className="flex items-center justify-between text-[10px] font-sans text-foreground-subtle mt-auto pt-3 border-t border-border/10">
             <span className="flex items-center gap-1.5">
-              <HardDrive size={12} /> {totalFiles + totalFolders} object{totalFiles + totalFolders !== 1 ? "s" : ""}
+              Quota: {formatStorage(limit)}
             </span>
+            <span className="font-mono text-[9px] text-accent/80">{percentageUsed.toFixed(1)}%</span>
           </div>
         </div>
 
         {/* Shared with Me */}
-        <div className="border border-border/35 rounded-xl bg-background-panel/35 backdrop-blur-sm p-5 flex flex-col justify-between h-[120px] select-none hover:border-accent/40 transition-colors shadow-sm">
-          <span className="font-sans text-[10px] font-bold uppercase tracking-wider text-foreground-subtle">
+        <div className="glass-premium rounded-xl p-5 flex flex-col justify-between h-[128px] select-none hover:border-accent/40 transition-all duration-300 group hover:-translate-y-0.5 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-24 h-24 bg-info/5 rounded-full blur-2xl group-hover:bg-info/10 transition-colors pointer-events-none" />
+          <span className="font-sans text-[10px] font-bold uppercase tracking-wider text-foreground-subtle flex items-center gap-1.5">
+            <User size={12} className="text-info" />
             Shared with Me
           </span>
           <div className="text-3xl font-bold font-sans tracking-tight text-foreground mt-2">
             {sharedFiles.length}
           </div>
           <div className="flex items-center text-[10px] font-sans text-foreground-muted mt-auto pt-3 border-t border-border/10">
-            <span>Files from colleagues</span>
+            <span>Collaborator objects</span>
           </div>
         </div>
       </div>
@@ -278,24 +337,24 @@ export default function ExecutiveOverview() {
       {/* ── Analytics & Trends ── */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         {/* Weekly Activity mini chart */}
-        <div className="lg:col-span-5 border border-border/20 rounded-xl bg-background-panel/35 backdrop-blur-sm p-5 select-none shadow-sm">
-          <div className="flex items-center justify-between mb-4">
+        <div className="lg:col-span-4 glass-premium rounded-xl p-5 select-none shadow-sm flex flex-col justify-between">
+          <div className="flex items-center justify-between mb-2">
             <div>
               <span className="font-sans text-[10px] font-bold uppercase tracking-wider text-foreground-subtle">
-                Files Added This Week
+                Added This Week
               </span>
               <div className="text-2xl font-bold font-sans tracking-tight text-foreground mt-1">
-                {filesThisWeek}
+                {filesThisWeek} files
               </div>
             </div>
           </div>
-          <div className="flex items-end gap-2 h-20 mt-2">
+          <div className="flex items-end gap-2 h-20 mt-4">
             {dailyCounts.map((count, i) => (
-              <div key={i} className="flex-1 flex flex-col items-center gap-2 h-full justify-end">
-                <span className="text-[9px] font-sans text-foreground-subtle/70 leading-none">{count || ""}</span>
+              <div key={i} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end">
+                <span className="text-[9px] font-mono text-foreground-subtle/70 leading-none">{count || "0"}</span>
                 <div
-                  className="w-full rounded-t bg-accent/40 hover:bg-accent/60 transition-colors cursor-pointer"
-                  style={{ height: `${Math.max(8, (count / maxDaily) * 56)}px` }}
+                  className="w-full rounded-t bg-accent/30 hover:bg-accent/60 transition-all duration-200 cursor-pointer"
+                  style={{ height: `${Math.max(4, (count / maxDaily) * 48)}px` }}
                 />
                 <span className="text-[9px] font-sans text-foreground-subtle/50 leading-none">{dailyLabels[i]}</span>
               </div>
@@ -303,93 +362,96 @@ export default function ExecutiveOverview() {
           </div>
         </div>
 
-        {/* Governance Analytics */}
-        <div className="lg:col-span-4 border border-border/20 rounded-xl bg-background-panel/35 backdrop-blur-sm p-5 select-none shadow-sm">
+        {/* Circular SVG Storage Gauge */}
+        <div className="lg:col-span-4 glass-premium rounded-xl p-5 select-none shadow-sm flex flex-col justify-between relative overflow-hidden group">
           <span className="font-sans text-[10px] font-bold uppercase tracking-wider text-foreground-subtle">
-            Governance Analytics
+            Capacity Utilization
           </span>
-
-          {/* Requests by type - mini bar chart */}
-          <div className="mt-4 space-y-2">
-            <span className="text-[9px] font-sans font-semibold uppercase tracking-wider text-foreground-subtle/70">By Type</span>
-            {govTypeLabels.length === 0 ? (
-              <p className="text-xs font-sans text-foreground-subtle py-2 text-center">
-                No governance requests
-              </p>
-            ) : (
-              govTypeLabels.map((label, i) => {
-                const count = govTypeValues[i];
-                const pct = maxGovType > 0 ? (count / maxGovType) * 100 : 0;
-                return (
-                  <div key={label} className="space-y-1">
-                    <div className="flex items-center justify-between text-xs font-sans">
-                      <span className="text-foreground-subtle uppercase tracking-wider">{label.replace("_", " ")}</span>
-                      <span className="font-semibold text-foreground">{count}</span>
-                    </div>
-                    <div className="h-2.5 w-full bg-background-subtle/60 rounded-full overflow-hidden border border-border/10">
-                      <div
-                        className={`h-full rounded-full transition-all duration-300 ${typeColorMap[label] || "bg-accent/60"}`}
-                        style={{ width: `${Math.max(4, pct)}%` }}
-                      />
-                    </div>
-                  </div>
-                );
-              })
-            )}
+          <div className="flex items-center justify-center py-2">
+            <div className="relative h-28 w-28 flex items-center justify-center">
+              <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                <circle
+                  cx="50"
+                  cy="50"
+                  r={strokeRadius}
+                  className="stroke-background-subtle/30"
+                  strokeWidth="6"
+                  fill="transparent"
+                />
+                <circle
+                  cx="50"
+                  cy="50"
+                  r={strokeRadius}
+                  className="stroke-accent transition-all duration-500 ease-out"
+                  strokeWidth="6"
+                  strokeDasharray={strokeCircumference}
+                  strokeDashoffset={strokeDashoffset}
+                  strokeLinecap="round"
+                  fill="transparent"
+                />
+              </svg>
+              <div className="absolute flex flex-col items-center justify-center font-mono select-none">
+                <span className="text-sm font-bold text-foreground">{percentageUsed.toFixed(1)}%</span>
+                <span className="text-[7px] text-foreground-subtle uppercase tracking-widest mt-0.5">USED</span>
+              </div>
+            </div>
           </div>
+          <div className="border-t border-border/10 pt-2 text-[10px] font-mono text-foreground-subtle flex justify-between">
+            <span>USED: {formatStorage(totalStorageBytes)}</span>
+            <span>LIMIT: {formatStorage(limit)}</span>
+          </div>
+        </div>
 
-          {/* Approval rate - horizontal stacked bar */}
-          <div className="mt-4 space-y-2">
-            <span className="text-[9px] font-sans font-semibold uppercase tracking-wider text-foreground-subtle/70">Approval Rate</span>
-            {totalProcessed === 0 ? (
-              <p className="text-xs font-sans text-foreground-subtle py-1 text-center">No processed requests</p>
+        {/* Classification Distribution Stacked Bar */}
+        <div className="lg:col-span-4 glass-premium rounded-xl p-5 select-none shadow-sm flex flex-col justify-between">
+          <span className="font-sans text-[10px] font-bold uppercase tracking-wider text-foreground-subtle">
+            Classification Distribution
+          </span>
+          <div className="space-y-4 py-2">
+            {totalClassifiedFiles === 0 ? (
+              <div className="text-center py-6 text-xs text-foreground-subtle font-mono">
+                NO ENCRYPTED FILES IN DIRECTORY
+              </div>
             ) : (
               <>
-                <div className="flex items-center justify-between text-xs font-sans">
-                  <span className="text-success font-medium">{approvedCount} Approved</span>
-                  <span className="text-destructive font-medium">{rejectedCount} Rejected</span>
+                {/* Horizontal Stacked Bar */}
+                <div className="h-4 w-full bg-background-subtle/40 rounded-sm overflow-hidden border border-border/10 flex">
+                  {Object.entries(classificationCounts).map(([tier, count]) => {
+                    if (count === 0) return null;
+                    const pct = (count / totalClassifiedFiles) * 100;
+                    return (
+                      <div
+                        key={tier}
+                        className={cn(
+                          "h-full transition-all duration-300 relative group/segment cursor-help",
+                          getLevelBgColor(tier)
+                        )}
+                        style={{ width: `${pct}%` }}
+                        title={`${tier}: ${count} file(s) (${pct.toFixed(0)}%)`}
+                      />
+                    );
+                  })}
                 </div>
-                <div className="h-3 w-full bg-background-subtle/60 rounded-full overflow-hidden border border-border/10 flex">
-                  <div
-                    className="h-full bg-success/60 transition-all duration-300"
-                    style={{ width: `${approvalRate}%` }}
-                  />
-                  <div
-                    className="h-full bg-destructive/40 transition-all duration-300"
-                    style={{ width: `${100 - approvalRate}%` }}
-                  />
-                </div>
-                <div className="flex items-center justify-between text-xs font-sans">
-                  <span className="font-bold text-foreground">{approvalRate}%</span>
-                  <span className="text-foreground-subtle">{totalProcessed} total</span>
+                {/* Legend list */}
+                <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">
+                  {Object.entries(classificationCounts).map(([tier, count]) => {
+                    return (
+                      <div key={tier} className="flex items-center gap-1.5">
+                        <span className={cn(
+                          "h-1.5 w-1.5 rounded-full shrink-0",
+                          getLevelBgColor(tier)
+                        )} />
+                        <span className="text-foreground-subtle truncate">{tier}</span>
+                        <span className="text-foreground ml-auto font-bold">{count}</span>
+                      </div>
+                    );
+                  })}
                 </div>
               </>
             )}
           </div>
-        </div>
-
-        {/* Storage distribution hint */}
-        <div className="lg:col-span-3 border border-border/20 rounded-xl bg-background-panel/35 backdrop-blur-sm p-5 select-none shadow-sm">
-          <span className="font-sans text-[10px] font-bold uppercase tracking-wider text-foreground-subtle">
-            Storage Overview
-          </span>
-          <div className="mt-4 space-y-3">
-            <div className="flex items-center justify-between text-xs font-sans">
-              <span className="text-foreground-subtle">Used</span>
-              <span className="font-semibold text-foreground font-mono">{formatStorage(totalStorageBytes)}</span>
-            </div>
-            <div className="flex items-center justify-between text-xs font-sans">
-              <span className="text-foreground-subtle">Files</span>
-              <span className="font-semibold text-foreground">{totalFiles}</span>
-            </div>
-            <div className="flex items-center justify-between text-xs font-sans">
-              <span className="text-foreground-subtle">Folders</span>
-              <span className="font-semibold text-foreground">{totalFolders}</span>
-            </div>
-            <div className="flex items-center justify-between text-xs font-sans">
-              <span className="text-foreground-subtle">Pending Gov</span>
-              <span className="font-semibold text-foreground">{pendingCount}</span>
-            </div>
+          <div className="border-t border-border/10 pt-2 text-[10px] font-mono text-foreground-subtle text-right">
+            Total Classified: {totalClassifiedFiles} files
           </div>
         </div>
       </div>
