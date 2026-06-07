@@ -3,6 +3,7 @@ pub mod admin;
 pub mod audit;
 pub mod auth;
 pub mod auth_extras;
+pub mod classifications;
 pub mod favorites;
 pub mod file_versions;
 pub mod files;

@@ -944,6 +944,11 @@ export const adminApi = {
     });
   },
 
+  /** Lightweight token validation — single-row response, no aggregate queries. */
+  validateToken(): Promise<{ status: string }> {
+    return apiFetch("/api/admin/validate", {}, true);
+  },
+
   listUsers(): Promise<AdminUserEntry[]> {
     return apiFetch("/api/admin/users", {}, true);
   },
@@ -1197,6 +1202,72 @@ export const adminApi = {
       body: JSON.stringify({ permissionIds }),
     }, true);
   },
+
+  // ── Classifications Builder ──────────────────────────────────────────────
+
+  listClassifications(): Promise<ClassificationEntry[]> {
+    return apiFetch("/api/admin/classifications", {}, true);
+  },
+
+  createClassification(payload: {
+    key: string;
+    label: string;
+    level?: number;
+    description?: string;
+    isDefault?: boolean;
+  }): Promise<ClassificationEntry> {
+    return apiFetch("/api/admin/classifications", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }, true);
+  },
+
+  updateClassification(
+    id: string,
+    payload: {
+      key?: string;
+      label?: string;
+      level?: number;
+      description?: string;
+      isDefault?: boolean;
+    }
+  ): Promise<ClassificationEntry> {
+    return apiFetch(`/api/admin/classifications/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }, true);
+  },
+
+  deleteClassification(id: string): Promise<void> {
+    return apiFetch(`/api/admin/classifications/${id}`, { method: "DELETE" }, true);
+  },
+
+  getClassificationPermissions(
+    id: string
+  ): Promise<ClassificationAccessDetail> {
+    return apiFetch(`/api/admin/classifications/${id}/permissions`, {}, true);
+  },
+
+  setClassificationPermissions(
+    id: string,
+    payload: { readPermissionIds: string[]; writePermissionIds: string[] }
+  ): Promise<void> {
+    return apiFetch(`/api/admin/classifications/${id}/permissions`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }, true);
+  },
+
+  getDefaultClassification(): Promise<ClassificationEntry> {
+    return apiFetch("/api/admin/classifications/default", {}, true);
+  },
+
+  setDefaultClassification(classificationId: string): Promise<void> {
+    return apiFetch("/api/admin/classifications/default", {
+      method: "PUT",
+      body: JSON.stringify({ classificationId }),
+    }, true);
+  },
 };
 
 // ── Auth: effective permissions ───────────────────────────────────────────
@@ -1268,6 +1339,27 @@ export interface CustomRoleEntry {
   roleKey: string;
   label: string;
   level: number;
+}
+
+// ── Classification Builder types ─────────────────────────────────────────
+
+export interface ClassificationEntry {
+  id: string;
+  key: string;
+  label: string;
+  level: number;
+  description: string;
+  isDefault: boolean;
+  fileCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ClassificationAccessDetail {
+  classificationId: string;
+  classificationKey: string;
+  readPermissions: Permission[];
+  writePermissions: Permission[];
 }
 
 export interface UserStorageRow {

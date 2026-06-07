@@ -50,6 +50,15 @@ pub struct UpdateUserRequest {
 
 // â”€â”€ POST /api/admin/login â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+// ── GET /api/admin/validate ──────────────────────────────────────────────────
+/// Lightweight token validation endpoint. Returns 200 if the AdminUser extractor
+/// successfully authenticated the request (token is valid and not expired).
+/// Used by the admin frontend to validate session without running 8 aggregate
+/// dashboard queries.
+pub async fn validate_token(_admin: AdminUser) -> Result<HttpResponse, AppError> {
+    Ok(HttpResponse::Ok().json(serde_json::json!({ "status": "ok" })))
+}
+
 pub async fn admin_login(
     config: web::Data<AppConfig>,
     redis_client: web::Data<RedisClient>,
@@ -829,6 +838,15 @@ pub async fn force_delete_file(
         return Err(AppError::NotFound);
     }
 
+    // Remove the physical file from disk FIRST — if this fails, the DB row
+    // is preserved so the admin can retry rather than orphaning bytes on disk.
+    let filepath = std::path::Path::new(&config.storage_path).join(file_id.to_string());
+    if filepath.exists() {
+        tokio::fs::remove_file(&filepath)
+            .await
+            .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to remove file from disk: {}", e)))?;
+    }
+
     let deleted = sqlx::query("DELETE FROM files WHERE id = $1")
         .bind(file_id)
         .execute(pool.get_ref())
@@ -836,12 +854,6 @@ pub async fn force_delete_file(
         .map_err(AppError::Database)?;
     if deleted.rows_affected() == 0 {
         return Err(AppError::NotFound);
-    }
-
-    // Remove the physical file from disk
-    let filepath = std::path::Path::new(&config.storage_path).join(file_id.to_string());
-    if filepath.exists() {
-        let _ = tokio::fs::remove_file(&filepath).await;
     }
 
     tracing::warn!(admin = "admin", file_id = %file_id, "Admin force-deleted file");
@@ -883,7 +895,7 @@ pub async fn update_config(
     admin: AdminUser,
     body: web::Json<UpdateConfigRequest>,
 ) -> Result<HttpResponse, AppError> {
-    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "users:manage")
+    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "config:write")
         .await?;
     sqlx::query(
         "INSERT INTO system_config (key, value, updated_at) VALUES ($1, $2, NOW()) ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW()",
@@ -1068,13 +1080,16 @@ pub async fn force_approve(
         None => return Err(AppError::NotFound),
     }
 
-    // Mark as approved by the given reviewer
+    // Start a transaction so the status update and side effects are atomic
+    let mut tx = pool.begin().await.map_err(AppError::Database)?;
+
+    // Mark as approved by the given reviewer (inside transaction with TOCTOU guard)
     let updated = sqlx::query(
         "UPDATE governance_requests SET status = 'APPROVED', reviewed_by = $1, updated_at = NOW() WHERE id = $2 AND status = 'PENDING'",
     )
     .bind(body.reviewer_id)
         .bind(request_id)
-        .execute(pool.get_ref())
+        .execute(&mut *tx)
         .await
         .map_err(AppError::Database)?;
 
@@ -1085,7 +1100,7 @@ pub async fn force_approve(
         ));
     }
 
-    // Execute the associated action (simplified: same logic as approve_request)
+    // Execute the associated action inside the same transaction
     let req_type: Option<String> =
         sqlx::query_scalar("SELECT type FROM governance_requests WHERE id = $1")
             .bind(request_id)
@@ -1123,7 +1138,7 @@ pub async fn force_approve(
                 .bind(request_id)
                     .bind(title.as_deref())
                     .bind(fid)
-                    .execute(pool.get_ref())
+                    .execute(&mut *tx)
                     .await
                     .map_err(AppError::Database)?;
             }
@@ -1132,7 +1147,7 @@ pub async fn force_approve(
                     "UPDATE files SET locked_by = NULL, locked_at = NULL, lock_reason = NULL WHERE id = $1",
                 )
                 .bind(fid)
-                    .execute(pool.get_ref())
+                    .execute(&mut *tx)
                     .await
                     .map_err(AppError::Database)?;
             }
@@ -1141,12 +1156,12 @@ pub async fn force_approve(
                 if let Some(meta) = meta {
                     if let Some(new_class) = meta.get("newClassification").and_then(|v| v.as_str())
                     {
-                        if crate::models::file::VALID_CLASSIFICATIONS.contains(&new_class) {
+                        if crate::models::classification::is_valid_classification(pool.get_ref(), new_class).await {
                             let _ =
                                 sqlx::query("UPDATE files SET classification = $1 WHERE id = $2")
                                     .bind(new_class)
                                     .bind(fid)
-                                    .execute(pool.get_ref())
+                                    .execute(&mut *tx)
                                     .await;
                         }
                     }
@@ -1161,7 +1176,7 @@ pub async fn force_approve(
                             let _ = sqlx::query("UPDATE files SET parent_id = $1 WHERE id = $2")
                                 .bind(folder_uuid)
                                 .bind(fid)
-                                .execute(pool.get_ref())
+                                .execute(&mut *tx)
                                 .await;
                         }
                     }
@@ -1170,14 +1185,17 @@ pub async fn force_approve(
             "FILE_DELETE" => {
                 let _ = sqlx::query("UPDATE files SET deleted_at = NOW() WHERE id = $1")
                     .bind(fid)
-                    .execute(pool.get_ref())
+                    .execute(&mut *tx)
                     .await;
             }
             _ => {}
         }
     }
 
-    // ── Audit log ──────────────────────────────────────────────────────────────
+    // Commit the status update and all side effects atomically
+    tx.commit().await.map_err(AppError::Database)?;
+
+    // ── Audit log (after commit) ───────────────────────────────────────────────
     let ip = req.peer_addr().map(|a| a.to_string()).unwrap_or_default();
     let _ = crate::handlers::files::write_audit_log_internal(
         pool.get_ref(),

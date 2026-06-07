@@ -269,6 +269,7 @@ async fn main() -> std::io::Result<()> {
             .service(
                 web::scope("/api/admin")
                     .route("/login", web::post().to(handlers::admin::admin_login))
+                    .route("/validate", web::get().to(handlers::admin::validate_token))
                     .route("/dashboard", web::get().to(handlers::admin::dashboard))
                     .route("/config", web::get().to(handlers::admin::get_config))
                     .route("/config", web::put().to(handlers::admin::update_config))
@@ -428,6 +429,41 @@ async fn main() -> std::io::Result<()> {
                     .route(
                         "/users/{id}/groups",
                         web::get().to(handlers::role_group::list_user_groups),
+                    )
+                    // Classifications Builder
+                    // NOTE: /default routes MUST be registered before /{id} routes
+                    // so that "default" is not captured as a UUID parameter.
+                    .route(
+                        "/classifications",
+                        web::get().to(handlers::classifications::list_classifications),
+                    )
+                    .route(
+                        "/classifications",
+                        web::post().to(handlers::classifications::create_classification),
+                    )
+                    .route(
+                        "/classifications/default",
+                        web::get().to(handlers::classifications::get_default_classification),
+                    )
+                    .route(
+                        "/classifications/default",
+                        web::put().to(handlers::classifications::set_default_classification),
+                    )
+                    .route(
+                        "/classifications/{id}",
+                        web::put().to(handlers::classifications::update_classification),
+                    )
+                    .route(
+                        "/classifications/{id}",
+                        web::delete().to(handlers::classifications::delete_classification),
+                    )
+                    .route(
+                        "/classifications/{id}/permissions",
+                        web::get().to(handlers::classifications::get_classification_permissions),
+                    )
+                    .route(
+                        "/classifications/{id}/permissions",
+                        web::put().to(handlers::classifications::set_classification_permissions),
                     ),
             )
             // /api/auth

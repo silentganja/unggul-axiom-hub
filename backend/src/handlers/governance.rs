@@ -416,6 +416,12 @@ pub async fn approve_request(
     // If the process crashes between them no partial state can occur.
     let mut tx = pool.begin().await.map_err(AppError::Database)?;
 
+    // Deferred notification state — emitted AFTER commit to avoid false positives
+    let mut pending_notification: Option<&str> = None;
+    let mut lock_file_name: Option<String> = None;
+    let mut lock_locked_by: Option<String> = None;
+    let mut unlock_file_name: Option<String> = None;
+
     // Execute the action on the target file
     if let Some(file_id) = target_file_id {
         match req_type.as_str() {
@@ -429,28 +435,26 @@ pub async fn approve_request(
                     .execute(&mut *tx)
                     .await
                     .map_err(AppError::Database)?;
-                // Emit FileLocked notification (after commit; harmless if it fires early)
-                let file_name: String = sqlx::query_scalar("SELECT name FROM files WHERE id = $1")
-                    .bind(file_id)
+                // Collect file_name for deferred notification after commit
+                lock_file_name = Some(
+                    sqlx::query_scalar("SELECT name FROM files WHERE id = $1")
+                        .bind(file_id)
+                        .fetch_optional(pool.get_ref())
+                        .await
+                        .map_err(AppError::Database)?
+                        .unwrap_or_default(),
+                );
+                lock_locked_by = Some(
+                    sqlx::query_scalar(
+                        "SELECT requested_by::text FROM governance_requests WHERE id = $1",
+                    )
+                    .bind(request_id)
                     .fetch_optional(pool.get_ref())
                     .await
                     .map_err(AppError::Database)?
-                    .unwrap_or_default();
-                let locked_by_id: String = sqlx::query_scalar(
-                    "SELECT requested_by::text FROM governance_requests WHERE id = $1",
-                )
-                .bind(request_id)
-                .fetch_optional(pool.get_ref())
-                .await
-                .map_err(AppError::Database)?
-                .unwrap_or_default();
-                crate::handlers::notifications::emit_notification(
-                    crate::models::notification::NotificationEvent::FileLocked {
-                        file_id: file_id.to_string(),
-                        file_name,
-                        locked_by: locked_by_id,
-                    },
+                    .unwrap_or_default(),
                 );
+                pending_notification = Some("FILE_LOCK");
             }
             "FILE_UNLOCK" => {
                 sqlx::query(
@@ -460,25 +464,21 @@ pub async fn approve_request(
                     .execute(&mut *tx)
                     .await
                     .map_err(AppError::Database)?;
-                // Emit FileUnlocked notification
-                let file_name: String = sqlx::query_scalar("SELECT name FROM files WHERE id = $1")
-                    .bind(file_id)
-                    .fetch_optional(pool.get_ref())
-                    .await
-                    .map_err(AppError::Database)?
-                    .unwrap_or_default();
-                crate::handlers::notifications::emit_notification(
-                    crate::models::notification::NotificationEvent::FileUnlocked {
-                        file_id: file_id.to_string(),
-                        file_name,
-                    },
+                unlock_file_name = Some(
+                    sqlx::query_scalar("SELECT name FROM files WHERE id = $1")
+                        .bind(file_id)
+                        .fetch_optional(pool.get_ref())
+                        .await
+                        .map_err(AppError::Database)?
+                        .unwrap_or_default(),
                 );
+                pending_notification = Some("FILE_UNLOCK");
             }
             "CLASSIFICATION_UPGRADE" | "CLASSIFICATION_DOWNGRADE" => {
                 if let Some(ref meta) = metadata {
                     if let Some(new_class) = meta.get("newClassification").and_then(|v| v.as_str())
                     {
-                        if !crate::models::file::VALID_CLASSIFICATIONS.contains(&new_class) {
+                        if !crate::models::classification::is_valid_classification(pool.get_ref(), new_class).await {
                             return Err(AppError::BadRequest("Invalid classification".into()));
                         }
 
@@ -492,21 +492,17 @@ pub async fn approve_request(
                                 .flatten();
 
                         if let Some(ref cur) = current_class {
-                            let cur_idx = crate::models::file::VALID_CLASSIFICATIONS
-                                .iter()
-                                .position(|&c| c == cur.as_str());
-                            let new_idx = crate::models::file::VALID_CLASSIFICATIONS
-                                .iter()
-                                .position(|&c| c == new_class);
-                            if let (Some(ci), Some(ni)) = (cur_idx, new_idx) {
+                            let cur_level = crate::models::classification::classification_level(pool.get_ref(), cur.as_str()).await;
+                            let new_level = crate::models::classification::classification_level(pool.get_ref(), new_class).await;
+                            if let (Some(cl), Some(nl)) = (cur_level, new_level) {
                                 let is_upgrade = req_type.as_str() == "CLASSIFICATION_UPGRADE";
-                                if is_upgrade && ci <= ni {
+                                if is_upgrade && cl >= nl {
                                     return Err(AppError::BadRequest(format!(
-                                        "Cannot upgrade: {} is not higher than {}",
-                                        new_class, cur
+                                        "Cannot upgrade: {} (level {}) is not higher than {} (level {})",
+                                        new_class, nl, cur, cl
                                     )));
                                 }
-                                if !is_upgrade && ci >= ni {
+                                if !is_upgrade && cl <= nl {
                                     return Err(AppError::BadRequest(format!(
                                         "Cannot downgrade: {} is not lower than {}",
                                         new_class, cur
@@ -615,6 +611,34 @@ pub async fn approve_request(
 
     // Commit everything atomically
     tx.commit().await.map_err(AppError::Database)?;
+
+    // ── Emit deferred FILE_LOCK / FILE_UNLOCK notifications (after commit) ──
+    match pending_notification {
+        Some("FILE_LOCK") => {
+            if let (Some(ref file_name), Some(ref locked_by)) =
+                (&lock_file_name, &lock_locked_by)
+            {
+                crate::handlers::notifications::emit_notification(
+                    crate::models::notification::NotificationEvent::FileLocked {
+                        file_id: target_file_id.map_or(String::new(), |id| id.to_string()),
+                        file_name: file_name.clone(),
+                        locked_by: locked_by.clone(),
+                    },
+                );
+            }
+        }
+        Some("FILE_UNLOCK") => {
+            if let Some(ref file_name) = unlock_file_name {
+                crate::handlers::notifications::emit_notification(
+                    crate::models::notification::NotificationEvent::FileUnlocked {
+                        file_id: target_file_id.map_or(String::new(), |id| id.to_string()),
+                        file_name: file_name.clone(),
+                    },
+                );
+            }
+        }
+        _ => {}
+    }
 
     // ── Emit notification to the original requester (after commit) ─────────────
     crate::handlers::notifications::emit_notification_to(
@@ -887,7 +911,7 @@ pub async fn batch_approve(
                             .get("newClassification")
                             .and_then(|v| v.as_str())
                         {
-                            if !crate::models::file::VALID_CLASSIFICATIONS.contains(&new_class) {
+                            if !crate::models::classification::is_valid_classification(pool.get_ref(), new_class).await {
                                 errors.push(format!("{}: invalid classification", request_id));
                                 failed += 1;
                                 continue;
@@ -961,7 +985,7 @@ pub async fn batch_approve(
 
         // Mark as approved
         if let Err(e) = sqlx::query(
-            "UPDATE governance_requests SET status = 'APPROVED', reviewed_by = $1, review_note = $2, updated_at = NOW() WHERE id = $3",
+            "UPDATE governance_requests SET status = 'APPROVED', reviewed_by = $1, review_note = $2, updated_at = NOW() WHERE id = $3 AND status = 'PENDING'",
         )
         .bind(user.id)
         .bind(&body.reason)
@@ -1247,7 +1271,11 @@ pub async fn undo_request(
                 existing.metadata.clone()
             };
 
-            // Create a new inverse request and auto-approve it
+            // Wrap the inverse creation and side effects in a transaction so
+            // the reverse request, file updates, and original-request annotation
+            // are atomic — no partial undo state can survive a crash.
+            let mut tx = pool.begin().await.map_err(AppError::Database)?;
+
             let new_request_id = Uuid::new_v4();
 
             sqlx::query(
@@ -1265,7 +1293,7 @@ pub async fn undo_request(
                 "Auto-reversed: original request {} reversed by {}",
                 request_id, user.id
             ))
-            .execute(pool.get_ref())
+            .execute(&mut *tx)
             .await
             .map_err(AppError::Database)?;
 
@@ -1279,7 +1307,7 @@ pub async fn undo_request(
                         .bind(new_request_id)
                         .bind(&existing.title)
                         .bind(file_id)
-                        .execute(pool.get_ref())
+                        .execute(&mut *tx)
                         .await
                         .map_err(AppError::Database)?;
                     }
@@ -1288,7 +1316,7 @@ pub async fn undo_request(
                             "UPDATE files SET locked_by = NULL, locked_at = NULL, lock_reason = NULL WHERE id = $1",
                         )
                         .bind(file_id)
-                        .execute(pool.get_ref())
+                        .execute(&mut *tx)
                         .await
                         .map_err(AppError::Database)?;
                     }
@@ -1297,13 +1325,13 @@ pub async fn undo_request(
                             if let Some(new_class) =
                                 meta.get("newClassification").and_then(|v| v.as_str())
                             {
-                                if crate::models::file::VALID_CLASSIFICATIONS.contains(&new_class) {
+                                if crate::models::classification::is_valid_classification(pool.get_ref(), new_class).await {
                                     sqlx::query(
                                         "UPDATE files SET classification = $1 WHERE id = $2",
                                     )
                                     .bind(new_class)
                                     .bind(file_id)
-                                    .execute(pool.get_ref())
+                                    .execute(&mut *tx)
                                     .await
                                     .map_err(AppError::Database)?;
                                 }
@@ -1313,7 +1341,7 @@ pub async fn undo_request(
                     "FILE_DELETE" => {
                         sqlx::query("UPDATE files SET deleted_at = NULL WHERE id = $1")
                             .bind(file_id)
-                            .execute(pool.get_ref())
+                            .execute(&mut *tx)
                             .await
                             .map_err(AppError::Database)?;
                     }
@@ -1327,7 +1355,7 @@ pub async fn undo_request(
                                     sqlx::query("UPDATE files SET parent_id = $1 WHERE id = $2")
                                         .bind(orig_pid)
                                         .bind(file_id)
-                                        .execute(pool.get_ref())
+                                        .execute(&mut *tx)
                                         .await
                                         .map_err(AppError::Database)?;
                                 }
@@ -1344,8 +1372,11 @@ pub async fn undo_request(
             )
             .bind(user.id.to_string())
             .bind(request_id)
-            .execute(pool.get_ref())
+            .execute(&mut *tx)
             .await
+            .map_err(AppError::Database)?;
+
+            tx.commit().await.map_err(AppError::Database)?;
             .map_err(AppError::Database)?;
 
             // Audit log

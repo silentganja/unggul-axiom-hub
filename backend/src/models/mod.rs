@@ -1,4 +1,5 @@
 ﻿// models/mod.rs - re-export all models
+pub mod classification;
 pub mod favorite;
 pub mod file;
 pub mod file_version;

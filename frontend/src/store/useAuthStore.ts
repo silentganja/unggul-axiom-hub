@@ -99,7 +99,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         ? localStorage.getItem("auth-refresh-token")
         : null;
 
-    // Try to load cached user profile first (instant UI)
+    // Try to load cached user profile first for instant display (does NOT set isAuthenticated)
     let hasCache = false;
     const cached =
       typeof window !== "undefined"
@@ -108,7 +108,9 @@ export const useAuthStore = create<AuthState>((set) => ({
     if (cached) {
       try {
         const user = JSON.parse(cached) as UserProfile;
-        set({ token, user, refreshToken, isAuthenticated: true });
+        // Load user + token into state for display while validating, but do NOT
+        // set isAuthenticated until the backend confirms the token is still valid.
+        set({ token, user, refreshToken });
         hasCache = true;
       } catch { /* ignore corrupt cache */ }
     }
@@ -121,8 +123,9 @@ export const useAuthStore = create<AuthState>((set) => ({
       set({ token, user, refreshToken, isAuthenticated: true, isLoading: false });
     } catch {
       if (hasCache) {
-        // Token might be expired - keep cached session, auto-refresh will handle it
-        set({ isLoading: false });
+        // Token might be expired - keep cached data for display but mark unauthenticated.
+        // The first API call that gets a 401 will trigger a redirect to login.
+        set({ isLoading: false, isAuthenticated: false });
       } else {
         // No cache - must log out
         clearToken();

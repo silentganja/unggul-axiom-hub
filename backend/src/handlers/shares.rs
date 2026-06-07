@@ -15,6 +15,8 @@ use uuid::Uuid;
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// List files that have been shared WITH the authenticated user.
+/// Files whose classification the user lacks read-access for are excluded
+/// from the result to prevent metadata leakage (BUG-18).
 pub async fn list_shared_files(
     pool: web::Data<PgPool>,
     user: AuthUser,
@@ -47,9 +49,26 @@ pub async fn list_shared_files(
     .await
     .map_err(AppError::Database)?;
 
-    let shared: Vec<SharedFileNode> = rows.into_iter().map(|r| r.into()).collect();
+    // Filter out files whose classification the user cannot read.
+    // Chief/director/officer pass immediately; staff are checked against
+    // the classification_permissions table.
+    let mut visible: Vec<SharedFileNode> = Vec::with_capacity(rows.len());
+    for row in rows {
+        let can_read = crate::models::classification::user_can_read_classification(
+            pool.get_ref(),
+            user.id,
+            &user.role,
+            &row.classification,
+        )
+        .await
+        .unwrap_or(false); // On DB error, exclude the file (safe: won't leak, user can retry)
 
-    Ok(HttpResponse::Ok().json(shared))
+        if can_read {
+            visible.push(row.into());
+        }
+    }
+
+    Ok(HttpResponse::Ok().json(visible))
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -89,9 +108,16 @@ pub async fn share_file(
 
     let (owner_id, file_classification) = file_row.ok_or(AppError::NotFound)?;
 
-    // ── Classification check: restricted files can only be shared with
-    //     users who have files:classify permission or director+ base role ─
-    if file_classification != "TERBUKA" {
+    // ── Classification check: files above the lowest classification level
+    //     can only be shared with users who have files:classify permission
+    //     or director+ base role ─
+    let class_level = crate::models::classification::classification_level(
+        pool.get_ref(),
+        &file_classification,
+    )
+    .await
+    .unwrap_or(0);
+    if class_level > 0 {
         let recipient: Option<(Uuid, String)> =
             sqlx::query_as("SELECT id, role FROM users WHERE email = $1")
                 .bind(&recipient_email)

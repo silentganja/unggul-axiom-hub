@@ -99,11 +99,11 @@ export const useAdminStore = create<AdminAuthState>((set) => ({
 
     // Validate the token against the backend. This is the authoritative check:
     // even if the local timestamp says the token is fresh, the backend may have
-    // invalidated it (e.g. secret rotation). getDashboard() requires a valid
-    // AdminUser extractor so a 401 response means the session is dead.
+    // invalidated it (e.g. secret rotation). Uses a lightweight endpoint that
+    // only checks the AdminUser extractor — no aggregate queries.
     set({ isLoading: true });
     try {
-      await adminApi.getDashboard();
+      await adminApi.validateToken();
       set({ token, username, isAuthenticated: true, isLoading: false });
     } catch {
       // Backend rejected the token (expired, invalid, revoked).

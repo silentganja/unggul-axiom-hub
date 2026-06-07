@@ -41,7 +41,6 @@ const THEME_PRESETS: ThemePreset[] = [
 ];
 
 export default function UIUXAdminPage() {
-  const [, setConfigMap] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -59,7 +58,6 @@ export default function UIUXAdminPage() {
     adminApi
       .getConfig()
       .then((config) => {
-        setConfigMap(config);
         setSelectedTheme(config["ui_theme"] || "midnight");
         setGlassBlur(config["ui_glass_blur"] || "20");
         setGlowIntensity(config["ui_glow_intensity"] || "0.15");

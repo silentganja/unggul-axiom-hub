@@ -79,19 +79,16 @@ pub struct RenameFileReq {
 pub const VALID_CLASSIFICATIONS: &[&str] = &["RAHSIA", "SULIT", "TERHAD", "TERBUKA"];
 
 impl CreateFolderReq {
-    /// Validates name is non-empty and classification is a recognised tier.
-    pub fn validate(&self) -> Result<&str, &'static str> {
+    /// Validates name is non-empty. Classification is validated separately
+    /// via the async DB-backed helper so custom tiers are supported.
+    pub fn validate_and_default_classification(&self) -> Result<&str, &'static str> {
         if self.name.trim().is_empty() {
             return Err("name must not be empty");
         }
         if self.name.trim().len() > 255 {
             return Err("name must be 255 characters or less");
         }
-        let classification = self.classification.as_deref().unwrap_or("TERBUKA");
-        if !VALID_CLASSIFICATIONS.contains(&classification) {
-            return Err("classification must be one of: RAHSIA, SULIT, TERHAD, TERBUKA");
-        }
-        Ok(classification)
+        Ok(self.classification.as_deref().unwrap_or("TERBUKA"))
     }
 }
 
@@ -123,7 +120,7 @@ mod tests {
                 parent_id: None,
                 classification: None,
             };
-            let cls = req.validate().expect("should be valid");
+            let cls = req.validate_and_default_classification().expect("should be valid");
             assert_eq!(cls, "TERBUKA", "default classification is TERBUKA");
         }
 
@@ -135,7 +132,11 @@ mod tests {
                     parent_id: None,
                     classification: Some(cls.into()),
                 };
-                assert!(req.validate().is_ok(), "{} should be valid", cls);
+                assert!(
+                    req.validate_and_default_classification().is_ok(),
+                    "{} should be valid",
+                    cls
+                );
             }
         }
 
@@ -147,22 +148,24 @@ mod tests {
                 classification: None,
             };
             assert!(
-                req.validate().is_err(),
+                req.validate_and_default_classification().is_err(),
                 "whitespace-only name must be rejected"
             );
         }
 
         #[test]
-        fn invalid_classification_rejected() {
+        fn custom_classification_passed_through() {
+            // Classification validation now happens in the handler via DB lookup.
+            // The model only validates the name — any classification string passes through.
             let req = CreateFolderReq {
                 name: "Valid Name".into(),
                 parent_id: None,
-                classification: Some("TOP_SECRET".into()),
+                classification: Some("CUSTOM_TIER".into()),
             };
-            assert!(
-                req.validate().is_err(),
-                "unknown classification must be rejected"
-            );
+            let cls = req
+                .validate_and_default_classification()
+                .expect("model should not reject unknown classifications");
+            assert_eq!(cls, "CUSTOM_TIER", "custom classification should pass through");
         }
 
         #[test]
@@ -173,7 +176,7 @@ mod tests {
                 classification: None,
             };
             assert!(
-                req.validate().is_ok(),
+                req.validate_and_default_classification().is_ok(),
                 "trimmed name should still be non-empty"
             );
         }

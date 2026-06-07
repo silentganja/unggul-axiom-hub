@@ -324,7 +324,8 @@ pub async fn run_migrations(pool: &PgPool) {
                     ('shares:manage',      'Manage file shares'),
                     ('audit:read',         'View audit logs'),
                     ('storage:manage',     'Manage storage quotas'),
-                    ('config:read',        'Read system configuration')
+                    ('config:read',        'Read system configuration'),
+                    ('config:write',       'Write system configuration')
                  ON CONFLICT (key) DO NOTHING",
             ],
         ),
@@ -435,6 +436,91 @@ pub async fn run_migrations(pool: &PgPool) {
                     ('ui_logo_url', '', NOW()),
                     ('ui_greeting_header', 'Strategic Portal', NOW())
                  ON CONFLICT (key) DO NOTHING",
+            ],
+        ),
+        // 9026 - Backfill config:write permission for existing deployments
+        (
+            "9026",
+            "Auto: Seed config:write permission",
+            vec![
+                "INSERT INTO permissions (key, description) VALUES
+                    ('config:write', 'Write system configuration')
+                 ON CONFLICT (key) DO NOTHING",
+                "INSERT INTO role_implicit_permissions (role_key, permission_id)
+                 SELECT 'chief', id FROM permissions WHERE key = 'config:write'
+                 ON CONFLICT DO NOTHING",
+                "INSERT INTO role_implicit_permissions (role_key, permission_id)
+                 SELECT 'director', id FROM permissions WHERE key = 'config:write'
+                 ON CONFLICT DO NOTHING",
+            ],
+        ),
+        // 9027 - Classifications system
+        (
+            "9027",
+            "Auto: Classifications table, permissions, and default data",
+            vec![
+                // Core table
+                "CREATE TABLE IF NOT EXISTS classifications (
+                    id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                    key         VARCHAR(32) NOT NULL UNIQUE,
+                    label       VARCHAR(64) NOT NULL,
+                    level       SMALLINT NOT NULL DEFAULT 0,
+                    description TEXT NOT NULL DEFAULT '',
+                    is_default  BOOLEAN NOT NULL DEFAULT FALSE,
+                    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                )",
+                // Junction: permission × classification × access_type
+                "CREATE TABLE IF NOT EXISTS classification_permissions (
+                    classification_id UUID NOT NULL REFERENCES classifications(id) ON DELETE CASCADE,
+                    permission_id     UUID NOT NULL REFERENCES permissions(id) ON DELETE CASCADE,
+                    access_type       VARCHAR(8) NOT NULL CHECK (access_type IN ('read', 'write')),
+                    PRIMARY KEY (classification_id, permission_id, access_type)
+                )",
+                // Seed new permissions
+                "INSERT INTO permissions (key, description) VALUES
+                    ('classifications:read',  'View classification definitions'),
+                    ('classifications:manage','Create and edit classifications')
+                 ON CONFLICT (key) DO NOTHING",
+                // Grant new permissions to chief/director implicitly
+                "INSERT INTO role_implicit_permissions (role_key, permission_id)
+                 SELECT 'chief', id FROM permissions WHERE key IN ('classifications:read','classifications:manage')
+                 ON CONFLICT DO NOTHING",
+                "INSERT INTO role_implicit_permissions (role_key, permission_id)
+                 SELECT 'director', id FROM permissions WHERE key IN ('classifications:read','classifications:manage')
+                 ON CONFLICT DO NOTHING",
+                // Seed 4 default classifications
+                "INSERT INTO classifications (key, label, level, description, is_default) VALUES
+                    ('TERBUKA', 'Terbuka (Open)',         0, 'Unclassified / public information', TRUE),
+                    ('TERHAD',  'Terhad (Restricted)',     1, 'Limited distribution within organization', FALSE),
+                    ('SULIT',   'Sulit (Confidential)',    2, 'Sensitive — need-to-know basis', FALSE),
+                    ('RAHSIA',  'Rahsia (Secret)',         3, 'Highest security tier', FALSE)
+                 ON CONFLICT (key) DO NOTHING",
+                // Seed default classification permissions:
+                // files:read can read all classifications; files:write can write all
+                "INSERT INTO classification_permissions (classification_id, permission_id, access_type)
+                 SELECT c.id, p.id, 'read'
+                 FROM classifications c, permissions p
+                 WHERE p.key = 'files:read'
+                 ON CONFLICT DO NOTHING",
+                "INSERT INTO classification_permissions (classification_id, permission_id, access_type)
+                 SELECT c.id, p.id, 'write'
+                 FROM classifications c, permissions p
+                 WHERE p.key = 'files:write'
+                 ON CONFLICT DO NOTHING",
+                // files:classify can assign all classifications
+                "INSERT INTO classification_permissions (classification_id, permission_id, access_type)
+                 SELECT c.id, p.id, 'write'
+                 FROM classifications c, permissions p
+                 WHERE p.key = 'files:classify'
+                 ON CONFLICT DO NOTHING",
+                // ── Performance indexes ───────────────────────────────────────
+                // BUG-14: Index for classification-based file queries
+                "CREATE INDEX IF NOT EXISTS idx_files_classification ON files (classification) WHERE deleted_at IS NULL",
+                // BUG-15: Compound index for governance list filtering
+                "CREATE INDEX IF NOT EXISTS idx_gov_requests_status_type ON governance_requests (status, type)",
+                // BUG-16: Compound index for file share lookups
+                "CREATE INDEX IF NOT EXISTS idx_file_shares_file_user ON file_shares (file_id, user_id)",
             ],
         ),
     ];

@@ -60,7 +60,7 @@ pub async fn get_file(
             .map_err(AppError::Database)?;
 
             if is_shared {
-                sqlx::query_as::<_, FileNode>(
+                let shared_file = sqlx::query_as::<_, FileNode>(
                     "SELECT id, parent_id, owner_id, name, is_folder,
                             size_bytes, mime_type, classification, created_at, updated_at, locked_by, locked_at, lock_reason
                      FROM files
@@ -70,7 +70,30 @@ pub async fn get_file(
                 .fetch_optional(pool.get_ref())
                 .await
                 .map_err(AppError::Database)?
-                .ok_or(AppError::NotFound)?
+                .ok_or(AppError::NotFound)?;
+
+                // Classification-based access control for non-owner access
+                if shared_file.owner_id != user.id
+                    && !crate::models::classification::user_can_read_classification(
+                        pool.get_ref(),
+                        user.id,
+                        &user.role,
+                        &shared_file.classification,
+                    )
+                    .await
+                    .map_err(|e| {
+                        tracing::error!(error = %e, user_id = %user.id, file_id = %file_id,
+                            "Classification read-access DB check failed in get_file");
+                        AppError::Internal(anyhow::anyhow!("Access check failed"))
+                    })?
+                {
+                    return Err(AppError::Forbidden(
+                        "You do not have permission to access files of this classification"
+                            .into(),
+                    ));
+                }
+
+                shared_file
             } else {
                 return Err(AppError::NotFound);
             }
@@ -299,8 +322,16 @@ pub async fn create_folder(
 ) -> Result<HttpResponse, AppError> {
     // ── Validate payload ──────────────────────────────────────────────────────
     let classification = body
-        .validate()
+        .validate_and_default_classification()
         .map_err(|e| AppError::BadRequest(e.to_string()))?;
+
+    // Validate classification against the dynamic DB-backed list
+    if !crate::models::classification::is_valid_classification(pool.get_ref(), classification).await {
+        return Err(AppError::BadRequest(format!(
+            "Invalid classification: {}",
+            classification
+        )));
+    }
 
     let name = body.name.trim().to_string();
 
@@ -405,8 +436,31 @@ pub async fn update_classification(
         ));
     }
 
-    if !crate::models::file::VALID_CLASSIFICATIONS.contains(&body.classification.as_str()) {
+    if !crate::models::classification::is_valid_classification(pool.get_ref(), &body.classification).await {
         return Err(AppError::BadRequest("Invalid classification".into()));
+    }
+
+    // Check if user has write access to the target classification
+    if !crate::models::classification::user_can_write_classification(
+        pool.get_ref(),
+        user.id,
+        &user.role,
+        &body.classification,
+    )
+    .await
+    .map_err(|e| {
+        tracing::error!(error = %e, user_id = %user.id, classification = %body.classification,
+            "Classification write-access DB check failed in update_classification");
+        AppError::Internal(anyhow::anyhow!("Access check failed"))
+    })?
+    {
+        return Err(AppError::Forbidden(
+            format!(
+                "You do not have permission to assign classification '{}'",
+                body.classification
+            )
+            .into(),
+        ));
     }
 
     // ── Enforce lock: hierarchical - must be the locker or have >= role level ──
@@ -945,14 +999,18 @@ pub async fn move_files(
         }
     }
 
-    // ── Enforce lock: hierarchical - must be the locker or have >= role level ──
+    // Use a transaction so the lock check and the move are atomic.
+    // SELECT ... FOR UPDATE prevents concurrent lock changes on the files.
+    let mut tx = pool.begin().await.map_err(AppError::Database)?;
+
+    // ── Enforce lock: hierarchical (inside transaction) ────────────────────────
     for file_id in &body.file_ids {
         let lock_info: Option<(Option<Uuid>, Option<String>)> = sqlx::query_as(
-            "SELECT f.locked_by, u.role FROM files f LEFT JOIN users u ON u.id = f.locked_by WHERE f.id = $1 AND f.owner_id = $2",
+            "SELECT f.locked_by, u.role FROM files f LEFT JOIN users u ON u.id = f.locked_by WHERE f.id = $1 AND f.owner_id = $2 FOR UPDATE OF f",
         )
         .bind(file_id)
         .bind(user.id)
-        .fetch_optional(pool.get_ref())
+        .fetch_optional(&mut *tx)
         .await
         .map_err(AppError::Database)?;
 
@@ -988,16 +1046,14 @@ pub async fn move_files(
                         "UPDATE files SET locked_by = NULL, locked_at = NULL, lock_reason = NULL WHERE id = $1",
                     )
                     .bind(file_id)
-                    .execute(pool.get_ref())
+                    .execute(&mut *tx)
                     .await;
                 }
             }
         }
     }
 
-    // Use a transaction to move all files atomically
-    let mut tx = pool.begin().await.map_err(AppError::Database)?;
-
+    // Move all files inside the same transaction
     for file_id in &body.file_ids {
         let result = sqlx::query(
             "UPDATE files SET parent_id = $1 WHERE id = $2 AND owner_id = $3 AND deleted_at IS NULL",
@@ -1106,6 +1162,26 @@ pub async fn download_file(
 
     let file = file.ok_or(AppError::NotFound)?;
 
+    // Classification-based access control for non-owner access
+    if file.owner_id != user.id
+        && !crate::models::classification::user_can_read_classification(
+            pool.get_ref(),
+            user.id,
+            &user.role,
+            &file.classification,
+        )
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, user_id = %user.id, file_id = %file_id,
+                "Classification read-access DB check failed");
+            AppError::Internal(anyhow::anyhow!("Access check failed"))
+        })?
+    {
+        return Err(AppError::Forbidden(
+            "You do not have permission to access files of this classification".into(),
+        ));
+    }
+
     let filepath = std::path::Path::new(&config.storage_path).join(file_id.to_string());
 
     if !filepath.exists() {
@@ -1180,6 +1256,26 @@ pub async fn get_file_content(
     .map_err(AppError::Database)?;
 
     let file = file.ok_or(AppError::NotFound)?;
+
+    // Classification-based access control for non-owner access
+    if file.owner_id != user.id
+        && !crate::models::classification::user_can_read_classification(
+            pool.get_ref(),
+            user.id,
+            &user.role,
+            &file.classification,
+        )
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, user_id = %user.id, file_id = %file_id,
+                "Classification read-access DB check failed");
+            AppError::Internal(anyhow::anyhow!("Access check failed"))
+        })?
+    {
+        return Err(AppError::Forbidden(
+            "You do not have permission to access files of this classification".into(),
+        ));
+    }
 
     let filepath = std::path::Path::new(&config.storage_path).join(file_id.to_string());
 
@@ -1276,8 +1372,17 @@ pub async fn upload_file(
     req: HttpRequest,
     mut payload: Multipart,
 ) -> Result<HttpResponse, AppError> {
+    // Fetch dynamic default classification from DB (falls back to TERBUKA)
+    let default_classification: Option<String> = sqlx::query_scalar(
+        "SELECT key FROM classifications WHERE is_default = TRUE LIMIT 1",
+    )
+    .fetch_optional(pool.get_ref())
+    .await
+    .ok()
+    .flatten();
+
     let mut parent_id: Option<Uuid> = None;
-    let mut classification = "TERBUKA".to_string();
+    let mut classification = default_classification.unwrap_or_else(|| "TERBUKA".to_string());
     let mut filename = String::new();
     let mut mime_type: Option<String> = None;
     let mut size_bytes = 0i64;
@@ -1340,7 +1445,7 @@ pub async fn upload_file(
                         .map_err(|e| AppError::BadRequest(e.to_string()))?;
                     let val_str = val_str.trim().to_uppercase();
                     if !val_str.is_empty() {
-                        if !crate::models::file::VALID_CLASSIFICATIONS.contains(&val_str.as_str()) {
+                        if !crate::models::classification::is_valid_classification(pool.get_ref(), &val_str).await {
                             return Err(AppError::BadRequest(
                                 "Invalid classification tier".to_string(),
                             ));

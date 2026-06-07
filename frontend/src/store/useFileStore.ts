@@ -229,6 +229,10 @@ interface FileState {
   removeCollaborator: (fileId: string, collaboratorId: string) => void;
   lockFile: (id: string, user: string, reason: string) => void;
   unlockFile: (id: string) => void;
+
+  // ── Classification default ─────────────────────────────────────────────────
+  defaultClassification: string;
+  setDefaultClassification: (key: string) => void;
 }
 
 // ── Store ────────────────────────────────────────────────────────────────────
@@ -263,6 +267,7 @@ export const useFileStore = create<FileState>((set, get) => ({
   quotaTotal: 5368709120, // 5 GB default
   quotaFileCount: 0,
   quotaFolderCount: 0,
+  defaultClassification: "TERBUKA", // Fallback; set by dashboard on mount
 
   // ── Pagination / sorting setters ──────────────────────────────────────────
 
@@ -481,13 +486,13 @@ export const useFileStore = create<FileState>((set, get) => ({
   // ── CRUD operations ───────────────────────────────────────────────────────
 
   createFolder: async (name, classification) => {
-    const { currentFolderId, fetchFiles } = get();
+    const { currentFolderId, fetchFiles, defaultClassification: defaultClass } = get();
     set({ error: null });
     try {
       await filesApi.createFolder({
         name: name.trim(),
         parentId: currentFolderId,
-        classification: classification || "TERBUKA",
+        classification: classification || defaultClass,
       });
       await fetchFiles();
     } catch (err) {
@@ -496,12 +501,12 @@ export const useFileStore = create<FileState>((set, get) => ({
   },
 
   uploadFileReal: async (file, classification) => {
-    const { currentFolderId, fetchFiles } = get();
+    const { currentFolderId, fetchFiles, defaultClassification: defaultClass } = get();
     const formData = new FormData();
     if (currentFolderId) {
       formData.append("parentId", currentFolderId);
     }
-    formData.append("classification", classification || "TERBUKA");
+    formData.append("classification", classification || defaultClass);
     formData.append("file", file);
 
     set({ uploadProgress: 0, uploadFileName: file.name, error: null });
@@ -627,19 +632,37 @@ export const useFileStore = create<FileState>((set, get) => ({
   },
 
   renameFile: async (id, newName) => {
+    const state = get();
+    const oldFile = state.files.find((f) => f.id === id);
+    const oldName = oldFile?.name;
+    const trimmed = newName.trim();
+
+    // Optimistic update
+    set((s) => ({
+      files: s.files.map((f) =>
+        f.id === id ? { ...f, name: trimmed } : f
+      ),
+      activeFile:
+        s.activeFile?.id === id
+          ? { ...s.activeFile, name: trimmed }
+          : s.activeFile,
+    }));
+
     try {
-      await filesApi.rename(id, { newName: newName.trim() });
-      // Optimistic update
-      set((state) => ({
-        files: state.files.map((f) =>
-          f.id === id ? { ...f, name: newName.trim() } : f
-        ),
-        activeFile:
-          state.activeFile?.id === id
-            ? { ...state.activeFile, name: newName.trim() }
-            : state.activeFile,
-      }));
+      await filesApi.rename(id, { newName: trimmed });
     } catch (err) {
+      // Rollback optimistic update on failure
+      if (oldName) {
+        set((s) => ({
+          files: s.files.map((f) =>
+            f.id === id ? { ...f, name: oldName } : f
+          ),
+          activeFile:
+            s.activeFile?.id === id
+              ? { ...s.activeFile, name: oldName }
+              : s.activeFile,
+        }));
+      }
       set({ error: err instanceof Error ? err.message : "Failed to rename" });
     }
   },
@@ -662,10 +685,27 @@ export const useFileStore = create<FileState>((set, get) => ({
   },
 
   deleteSelected: async () => {
-    const { selectedIds, deleteFile } = get();
+    const { selectedIds } = get();
+    const failed: string[] = [];
     // Delete sequentially to respect backend rate limits
     for (const id of selectedIds) {
-      await deleteFile(id);
+      try {
+        await filesApi.delete(id);
+        set((state) => ({
+          files: state.files.filter((f) => f.id !== id),
+          selectedIds: state.selectedIds.filter((sid) => sid !== id),
+          activeFile: state.activeFile?.id === id ? null : state.activeFile,
+          isAccessSheetOpen: state.activeFile?.id === id ? false : state.isAccessSheetOpen,
+          previewFileId: state.previewFileId === id ? null : state.previewFileId,
+        }));
+      } catch (err) {
+        failed.push(id);
+      }
+    }
+    if (failed.length > 0) {
+      set({
+        error: `Failed to delete ${failed.length} of ${selectedIds.length} item(s). Check file locks or permissions.`,
+      });
     }
   },
 
@@ -817,31 +857,27 @@ export const useFileStore = create<FileState>((set, get) => ({
           : state.activeFile,
     })),
 
-  /** UI-only lock - does NOT persist to backend. Use governance API for real locking. */
-  lockFile: (id, user, reason) => {
-    console.warn("lockFile is UI-only - use governanceApi.create for real locking");
-    set((state) => ({
-      files: state.files.map((f) =>
-        f.id === id ? { ...f, lockedBy: user, lockReason: reason } : f
-      ),
-      activeFile:
-        state.activeFile?.id === id
-          ? { ...state.activeFile, lockedBy: user, lockReason: reason }
-          : state.activeFile,
-    }));
+  /** File locking requires a governance request. This stub guides users to the
+   *  correct workflow rather than silently setting UI-only state. */
+  lockFile: (_id, _user, _reason) => {
+    if (typeof window !== "undefined") {
+      const { useToastStore } = require("@/components/ui/Toast");
+      useToastStore.getState().error(
+        "File locking requires a Governance request. Submit a FILE_LOCK request via the Governance panel."
+      );
+    }
   },
 
-  /** UI-only unlock - does NOT persist to backend. Use governance API for real unlocking. */
-  unlockFile: (id) => {
-    console.warn("unlockFile is UI-only - use governanceApi.create for real unlocking");
-    set((state) => ({
-      files: state.files.map((f) =>
-        f.id === id ? { ...f, lockedBy: null, lockReason: null } : f
-      ),
-      activeFile:
-        state.activeFile?.id === id
-          ? { ...state.activeFile, lockedBy: null, lockReason: null }
-          : state.activeFile,
-    }));
+  setDefaultClassification: (key) => set({ defaultClassification: key }),
+
+  /** File unlocking requires a governance request. This stub guides users to the
+   *  correct workflow rather than silently setting UI-only state. */
+  unlockFile: (_id) => {
+    if (typeof window !== "undefined") {
+      const { useToastStore } = require("@/components/ui/Toast");
+      useToastStore.getState().error(
+        "File unlocking requires a Governance request. Submit a FILE_UNLOCK request via the Governance panel."
+      );
+    }
   },
 }));
