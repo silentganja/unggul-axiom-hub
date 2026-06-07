@@ -386,6 +386,10 @@ async fn main() -> std::io::Result<()> {
                         web::delete().to(handlers::role_group::delete_custom_role),
                     )
                     .route(
+                        "/roles/{role_key}",
+                        web::put().to(handlers::role_group::update_custom_role),
+                    )
+                    .route(
                         "/roles/{role_key}/permissions",
                         web::get().to(handlers::role_group::get_role_implicit_permissions),
                     )
@@ -560,6 +564,11 @@ async fn main() -> std::io::Result<()> {
                         web::post().to(handlers::auth_extras::webauthn_login_complete),
                     ),
             )
+            // /api/role-labels — public, any authenticated user
+            .service(web::scope("/api/role-labels").route(
+                "",
+                web::get().to(handlers::role_group::list_role_labels_public),
+            ))
             // /api/classifications — public, any authenticated user
             .service(web::scope("/api/classifications").route(
                 "",

@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback } from "react";
 import {
   Loader2, AlertCircle, Plus, Trash2, Shield, Users, Key,
-  Save, X, Check, Search, Zap, Copy,
+  Save, X, Check, Search, Zap, Copy, Edit2,
 } from "lucide-react";
 import { useToastStore } from "@/components/ui/Toast";
 import {
@@ -14,6 +14,7 @@ import {
   UserGroupEntry,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { useRoleLabels, roleLabel, invalidateRoleLabelsCache } from "@/hooks/useRoleLabels";
 
 // ── Permission categories ──────────────────────────────────────────────────
 
@@ -65,6 +66,7 @@ function buildPermMap(permissions: Permission[]): Map<string, string> {
 }
 
 export default function RoleBuilderTab() {
+  const { labels: roleLabels } = useRoleLabels();
   // ── List state ────────────────────────────────────────────────────────────
   const [groups, setGroups] = useState<RoleGroupSummary[]>([]);
   const [permissions, setPermissions] = useState<Permission[]>([]);
@@ -121,6 +123,9 @@ export default function RoleBuilderTab() {
   const [roleCreateLoading, setRoleCreateLoading] = useState(false);
   const [editingRoleKey, setEditingRoleKey] = useState<string | null>(null);
   const [editingRolePermIds, setEditingRolePermIds] = useState<Set<string>>(new Set());
+  const [editingLabelKey, setEditingLabelKey] = useState<string | null>(null);
+  const [editingLabelValue, setEditingLabelValue] = useState("");
+  const [editingLabelLoading, setEditingLabelLoading] = useState(false);
 
   // ── Audit & Overrides state ───────────────────────────────────────────────
   const [auditSelectedUserId, setAuditSelectedUserId] = useState<string | null>(null);
@@ -448,6 +453,31 @@ export default function RoleBuilderTab() {
     } catch (e) {
       useToastStore.getState().error(e instanceof Error ? e.message : "Failed to create role");
     } finally { setRoleCreateLoading(false); }
+  };
+
+  const handleStartEditLabel = (roleKey: string, currentLabel: string) => {
+    setEditingLabelKey(roleKey);
+    setEditingLabelValue(currentLabel);
+  };
+
+  const handleCancelEditLabel = () => {
+    setEditingLabelKey(null);
+    setEditingLabelValue("");
+  };
+
+  const handleSaveLabel = async (roleKey: string) => {
+    if (!editingLabelValue.trim()) return;
+    setEditingLabelLoading(true);
+    try {
+      const updated = await adminApi.updateCustomRole(roleKey, { label: editingLabelValue.trim() });
+      useToastStore.getState().success(`Role label updated to "${updated.label}"`);
+      setEditingLabelKey(null);
+      setEditingLabelValue("");
+      invalidateRoleLabelsCache();
+      await fetchCustomRoles();
+    } catch (e) {
+      useToastStore.getState().error(e instanceof Error ? e.message : "Failed to update role label");
+    } finally { setEditingLabelLoading(false); }
   };
 
   const handleDeleteRole = async (roleKey: string) => {
@@ -895,7 +925,7 @@ export default function RoleBuilderTab() {
                                     : "bg-info/10 text-info border-info/20"
                               )}
                             >
-                              {user.role}
+                              {roleLabel(roleLabels, user.role)}
                             </span>
                           </button>
                         );
@@ -1042,7 +1072,44 @@ export default function RoleBuilderTab() {
                   <div className="px-6 py-4 flex items-center justify-between hover:bg-background-subtle/10 transition-colors">
                     <div className="flex items-center gap-2.5">
                       <span className="text-xs font-mono font-semibold text-foreground">{r.roleKey}</span>
-                      <span className="text-xs font-sans text-foreground-subtle">{r.label}</span>
+                      {editingLabelKey === r.roleKey ? (
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="text"
+                            value={editingLabelValue}
+                            onChange={e => setEditingLabelValue(e.target.value)}
+                            onKeyDown={e => { if (e.key === "Enter") handleSaveLabel(r.roleKey); else if (e.key === "Escape") handleCancelEditLabel(); }}
+                            className="h-7 w-32 px-2 rounded-sm border border-accent/50 bg-background text-xs font-sans text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+                            autoFocus
+                          />
+                          <button
+                            onClick={() => handleSaveLabel(r.roleKey)}
+                            disabled={editingLabelLoading}
+                            className="h-7 w-7 rounded-sm flex items-center justify-center bg-accent/15 text-accent hover:bg-accent/25 transition-colors cursor-pointer disabled:opacity-50"
+                            title="Save"
+                          >
+                            {editingLabelLoading ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+                          </button>
+                          <button
+                            onClick={handleCancelEditLabel}
+                            className="h-7 w-7 rounded-sm flex items-center justify-center bg-background-muted/30 text-foreground-subtle hover:text-foreground transition-colors cursor-pointer"
+                            title="Cancel"
+                          >
+                            <X size={12} />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1 group">
+                          <span className="text-xs font-sans text-foreground-subtle">{r.label}</span>
+                          <button
+                            onClick={() => handleStartEditLabel(r.roleKey, r.label)}
+                            className="h-5 w-5 rounded-sm flex items-center justify-center opacity-0 group-hover:opacity-100 text-foreground-subtle/40 hover:text-foreground hover:bg-background-muted/30 transition-all cursor-pointer"
+                            title="Edit label"
+                          >
+                            <Edit2 size={10} />
+                          </button>
+                        </div>
+                      )}
                       <span className="text-[10px] font-sans text-accent bg-accent/10 border border-accent/20 px-2 py-0.5 rounded-md">Lv.{r.level}</span>
                     </div>
                     <div className="flex items-center gap-2">
@@ -1185,7 +1252,7 @@ export default function RoleBuilderTab() {
                             ? "bg-accent/10 text-accent border-accent/20"
                             : "bg-info/10 text-info border-info/20"
                       )}>
-                        {u.role}
+                        {roleLabel(roleLabels, u.role)}
                       </span>
                     </div>
                     <div className="text-xs font-mono text-foreground-subtle mt-1 truncate">
@@ -1223,7 +1290,7 @@ export default function RoleBuilderTab() {
                         Audit: {auditedUser.fullName}
                       </span>
                       <span className="text-xs text-foreground-subtle font-sans truncate block">
-                        Base Role: <span className="font-bold uppercase font-mono text-accent/80 text-[11px]">{auditedUser.role}</span> (Lv.{
+                        Base Role: <span className="font-bold uppercase font-mono text-accent/80 text-[11px]">{roleLabel(roleLabels, auditedUser.role)}</span> (Lv.{
                           auditedUser.role === "chief" ? 4 :
                           auditedUser.role === "director" ? 3 :
                           auditedUser.role === "officer" ? 2 : 1

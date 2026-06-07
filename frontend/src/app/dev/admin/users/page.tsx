@@ -278,15 +278,15 @@ export default function UsersAdminPage() {
           <div className="text-xl font-bold font-mono text-foreground mt-0.5">{total}</div>
         </div>
         <div className="border border-border/30 rounded-sm bg-background-panel/35 backdrop-blur-sm p-3">
-          <span className="font-mono text-[8px] font-bold uppercase tracking-widest text-accent">Chief</span>
+          <span className="font-mono text-[8px] font-bold uppercase tracking-widest text-accent">{availableRoles.find(r => r.roleKey === "chief")?.label || "Chief"}</span>
           <div className="text-xl font-bold font-mono text-accent mt-0.5">{users.filter(u => u.role === "chief").length}</div>
         </div>
         <div className="border border-border/30 rounded-sm bg-background-panel/35 backdrop-blur-sm p-3">
-          <span className="font-mono text-[8px] font-bold uppercase tracking-widest text-accent/80">Directors</span>
+          <span className="font-mono text-[8px] font-bold uppercase tracking-widest text-accent/80">{availableRoles.find(r => r.roleKey === "director")?.label || "Director"}s</span>
           <div className="text-xl font-bold font-mono text-accent/80 mt-0.5">{users.filter(u => u.role === "director").length}</div>
         </div>
         <div className="border border-border/30 rounded-sm bg-background-panel/35 backdrop-blur-sm p-3">
-          <span className="font-mono text-[8px] font-bold uppercase tracking-widest text-info">Officers</span>
+          <span className="font-mono text-[8px] font-bold uppercase tracking-widest text-info">{availableRoles.find(r => r.roleKey === "officer")?.label || "Officer"}s</span>
           <div className="text-xl font-bold font-mono text-info mt-0.5">{users.filter(u => u.role === "officer").length}</div>
         </div>
       </div>
@@ -362,7 +362,7 @@ export default function UsersAdminPage() {
                     <td className="px-4 py-2 text-center">
                       <span className={cn("inline-block px-1.5 py-0.5 rounded-sm text-[8px] font-bold tracking-wider uppercase border",
                         user.role === "chief" ? "bg-accent/15 text-accent border-accent/30" : user.role === "director" ? "bg-accent/10 text-accent border-accent/20" : user.role === "officer" ? "bg-info/10 text-info border-info/20" : "bg-background-muted/40 text-foreground-subtle border-border/40"
-                      )}>{user.role}</span>
+                      )}>{availableRoles.find(r => r.roleKey === user.role)?.label || user.role}</span>
                     </td>
                     <td className="px-4 py-2 text-foreground-muted">{formatTimestamp(user.createdAt)}</td>
                     <td className="px-4 py-2 text-center">

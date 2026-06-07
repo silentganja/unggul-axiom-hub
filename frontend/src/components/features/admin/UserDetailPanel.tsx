@@ -10,6 +10,7 @@ import {
   adminApi, UserDetail, formatFileSize, formatTimestamp, UserGroupEntry, Permission,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { useRoleLabels, roleLabel } from "@/hooks/useRoleLabels";
 
 interface Props {
   userId: string;
@@ -18,6 +19,7 @@ interface Props {
 }
 
 export default function UserDetailPanel({ userId, onBack, onRefresh }: Props) {
+  const { labels: roleLabels } = useRoleLabels();
   const [detail, setDetail] = useState<UserDetail | null>(null);
   const [groups, setGroups] = useState<UserGroupEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -111,7 +113,7 @@ export default function UserDetailPanel({ userId, onBack, onRefresh }: Props) {
               detail.role === "director" ? "bg-accent/10 text-accent border-accent/20" :
               detail.role === "officer" ? "bg-info/10 text-info border-info/20" :
               "bg-background-muted/40 text-foreground-subtle border-border/40"
-            )}>{detail.role}</span>
+            )}>{roleLabel(roleLabels, detail.role)}</span>
             {detail.active === false && (
               <span className="px-2 py-1 rounded-md text-[10px] font-bold uppercase border bg-destructive/10 text-destructive border-destructive/20">Inactive</span>
             )}

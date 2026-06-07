@@ -1220,6 +1220,13 @@ export const adminApi = {
     }, true);
   },
 
+  updateCustomRole(roleKey: string, payload: { label: string }): Promise<CustomRoleEntry> {
+    return apiFetch(`/api/admin/roles/${roleKey}`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }, true);
+  },
+
   deleteCustomRole(roleKey: string): Promise<void> {
     return apiFetch(`/api/admin/roles/${roleKey}`, { method: "DELETE" }, true);
   },
@@ -1327,6 +1334,12 @@ export const adminApi = {
     }, true);
   },
 };
+
+/** Fetch role key → label mapping from the public role-labels endpoint. Usable by any authenticated user. */
+export async function fetchRoleLabels(): Promise<Record<string, string>> {
+  const map: Record<string, string> = await apiFetch("/api/role-labels", {}, false);
+  return map || {};
+}
 
 // ── Public API (authenticated, not admin-gated) ─────────────────────────────
 

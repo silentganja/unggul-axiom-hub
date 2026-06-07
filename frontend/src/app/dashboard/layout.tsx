@@ -28,6 +28,7 @@ import { useFileStore } from "@/store/useFileStore";
 import { useAuthStore } from "@/store/useAuthStore";
 import { cn } from "@/lib/utils";
 import { getAvatarUrl } from "@/lib/api";
+import { useRoleLabels, roleLabel } from "@/hooks/useRoleLabels";
 
 interface SidebarLinkProps {
   label: string;
@@ -66,6 +67,7 @@ export default function DashboardLayout({
 
   // ── Auth guard ────────────────────────────────────────────────────────────
   const { isAuthenticated, isLoading: authLoading, user, hydrate, logout } = useAuthStore();
+  const { labels: roleLabels } = useRoleLabels();
   const fetchQuota = useFileStore((state) => state.fetchQuota);
 
   useEffect(() => {
@@ -243,7 +245,7 @@ export default function DashboardLayout({
                 </p>
                 <div className="flex items-center mt-0.5">
                   <span className="font-mono text-[8px] font-bold uppercase tracking-wider text-accent bg-accent/10 px-1 py-0.5 rounded leading-none">
-                    {user?.role || "STAFF"}
+                    {roleLabel(roleLabels, user?.role || "staff").toUpperCase()}
                   </span>
                 </div>
               </div>

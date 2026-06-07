@@ -2,6 +2,7 @@
 import { Loader2 } from "lucide-react";
 import { adminApi, AdminUserEntry } from "@/lib/api";
 import { useToastStore } from "@/components/ui/Toast";
+import { useRoleLabels, roleLabel } from "@/hooks/useRoleLabels";
 
 interface Props {
   users: AdminUserEntry[];
@@ -14,6 +15,7 @@ interface Props {
 }
 
 export default function BulkOperations({ users, fetchUsers, bulkCsvText, setBulkCsvText, bulkResult, setBulkResult, bulkLoading, setBulkLoading, bulkRoleUserIds, setBulkRoleUserIds, bulkRoleTarget, setBulkRoleTarget }: Props) {
+  const { labels: roleLabels } = useRoleLabels();
   const handleBulkImport = async () => {
     const lines = bulkCsvText.trim().split("\n").filter(Boolean);
     const errors: string[] = [];
@@ -78,7 +80,7 @@ export default function BulkOperations({ users, fetchUsers, bulkCsvText, setBulk
         <div className="flex items-center gap-2">
           <select value={bulkRoleTarget} onChange={e => setBulkRoleTarget(e.target.value)}
             className="h-7 px-2 rounded-sm border border-border bg-background text-[10px] text-foreground focus:outline-none focus:ring-1 focus:ring-accent">
-            <option value="staff">Staff</option><option value="officer">Officer</option><option value="director">Director</option><option value="chief">Chief</option>
+            <option value="staff">{roleLabel(roleLabels, "staff")}</option><option value="officer">{roleLabel(roleLabels, "officer")}</option><option value="director">{roleLabel(roleLabels, "director")}</option><option value="chief">{roleLabel(roleLabels, "chief")}</option>
           </select>
           <button onClick={handleBulkRole} disabled={bulkRoleUserIds.length === 0 || bulkLoading}
             className="btn-shimmer h-7 px-3 rounded-sm text-[9px] font-bold tracking-wider uppercase font-mono disabled:opacity-50">Apply</button>
@@ -88,7 +90,7 @@ export default function BulkOperations({ users, fetchUsers, bulkCsvText, setBulk
             <label key={u.id} className="flex items-center gap-2 px-2 py-1 text-[10px] font-mono hover:bg-background-subtle/30 cursor-pointer">
               <input type="checkbox" checked={bulkRoleUserIds.includes(u.id)} onChange={() => toggleUser(u.id)} className="w-3 h-3" />
               <span className="text-foreground">{u.fullName}</span>
-              <span className="text-foreground-subtle ml-auto">{u.role}</span>
+              <span className="text-foreground-subtle ml-auto">{roleLabel(roleLabels, u.role)}</span>
             </label>
           ))}
         </div>

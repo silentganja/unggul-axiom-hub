@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { useAuthStore } from "@/store/useAuthStore";
 import { authApi, UpdateProfilePayload, webauthnApi, SessionInfo, ColleagueEntry, getAvatarUrl } from "@/lib/api";
+import { useRoleLabels, roleLabel } from "@/hooks/useRoleLabels";
 import { cn } from "@/lib/utils";
 
 type SettingsTab = "profile" | "security" | "notifications" | "sessions";
@@ -70,6 +71,7 @@ function SupervisorSelect({ user }: { user: { id?: string; supervisorId?: string
 export default function ProfileSettingsPage() {
   const router = useRouter();
   const { user, isAuthenticated, isLoading: authLoading } = useAuthStore();
+  const { labels: roleLabels } = useRoleLabels();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fullNameId = useId();
@@ -536,7 +538,7 @@ export default function ProfileSettingsPage() {
                             (user.role === "chief" || user.role === "director") ? "text-accent" : user.role === "officer" ? "text-info" : "text-foreground-subtle"
                           )}
                         />
-                        {user.role}
+                        {roleLabel(roleLabels, user.role)}
                       </div>
                     </div>
 

@@ -10,6 +10,7 @@ import {
   governanceApi, formatTimestamp,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { useRoleLabels, roleLabel } from "@/hooks/useRoleLabels";
 
 interface Props {
   govRequests: GovernanceRequest[];
@@ -47,6 +48,7 @@ function filterRequests(requests: GovernanceRequest[], status: string, type: str
 }
 
 export default function GovernanceTab({ govRequests, setGovRequests, govLoading, setGovLoading }: Props) {
+  const { labels: roleLabels } = useRoleLabels();
   const [users, setUsers] = useState<AdminUserEntry[]>([]);
   const [selectedReviewer, setSelectedReviewer] = useState<string>("");
   const [statusFilter, setStatusFilter] = useState("ALL");
@@ -181,7 +183,7 @@ export default function GovernanceTab({ govRequests, setGovRequests, govLoading,
             className="h-7 px-2 rounded-sm border border-border bg-background text-[10px] text-foreground focus:outline-none focus:ring-1 focus:ring-accent">
             <option value="">Select...</option>
             {users.filter(u => u.role === "chief" || u.role === "director").map(u => (
-              <option key={u.id} value={u.id}>{u.fullName} ({u.role})</option>
+              <option key={u.id} value={u.id}>{u.fullName} ({roleLabel(roleLabels, u.role)})</option>
             ))}
           </select>
         </div>

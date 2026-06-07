@@ -1009,6 +1009,23 @@ pub async fn list_custom_roles(
     Ok(HttpResponse::Ok().json(roles))
 }
 
+/// Public endpoint — no auth required. Returns a simple { roleKey: label } map.
+/// Role labels are not sensitive; they only map internal keys to human-readable names.
+pub async fn list_role_labels_public(
+    pool: web::Data<PgPool>,
+) -> Result<HttpResponse, AppError> {
+    let roles: Vec<CustomRoleEntry> =
+        sqlx::query_as("SELECT role_key, label, level FROM custom_roles ORDER BY level DESC")
+            .fetch_all(pool.get_ref())
+            .await
+            .map_err(AppError::Database)?;
+    let map: std::collections::HashMap<String, String> = roles
+        .into_iter()
+        .map(|r| (r.role_key, r.label))
+        .collect();
+    Ok(HttpResponse::Ok().json(map))
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateCustomRoleRequest {
@@ -1079,6 +1096,60 @@ pub async fn create_custom_role(
     .await;
 
     Ok(HttpResponse::Created().json(role))
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateCustomRoleRequest {
+    pub label: String,
+}
+
+pub async fn update_custom_role(
+    pool: web::Data<PgPool>,
+    admin: AdminUser,
+    req: HttpRequest,
+    path: web::Path<String>,
+    body: web::Json<UpdateCustomRoleRequest>,
+) -> Result<HttpResponse, AppError> {
+    crate::app_middleware::admin::require_permission_or(
+        &admin,
+        pool.get_ref(),
+        "role_groups:manage",
+        "users:manage",
+    )
+    .await?;
+
+    let role_key = path.into_inner();
+    let label = body.label.trim().to_string();
+
+    if label.is_empty() {
+        return Err(AppError::BadRequest("label is required".into()));
+    }
+
+    let role: CustomRoleEntry = sqlx::query_as(
+        "UPDATE custom_roles SET label = $1 WHERE role_key = $2
+         RETURNING role_key, label, level",
+    )
+    .bind(&label)
+    .bind(&role_key)
+    .fetch_one(pool.get_ref())
+    .await
+    .map_err(|e| match e {
+        sqlx::Error::RowNotFound => AppError::NotFound,
+        other => AppError::Database(other),
+    })?;
+
+    let ip = req.peer_addr().map(|a| a.to_string()).unwrap_or_default();
+    let _ = crate::handlers::files::write_audit_log_internal(
+        pool.get_ref(),
+        uuid::Uuid::nil(),
+        "CUSTOM_ROLE_UPDATE",
+        &role_key,
+        &ip,
+    )
+    .await;
+
+    Ok(HttpResponse::Ok().json(role))
 }
 
 pub async fn delete_custom_role(
