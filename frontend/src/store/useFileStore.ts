@@ -12,6 +12,7 @@ import {
   getToken,
   attemptTokenRefresh,
 } from "@/lib/api";
+import { useToastStore } from "@/components/ui/Toast";
 
 // ── Frontend FileNode (UI-facing shape) ──────────────────────────────────────
 
@@ -227,8 +228,8 @@ interface FileState {
     role: "owner" | "editor" | "viewer"
   ) => void;
   removeCollaborator: (fileId: string, collaboratorId: string) => void;
-  lockFile: (id: string, user: string, reason: string) => void;
-  unlockFile: (id: string) => void;
+  lockFile: () => void;
+  unlockFile: () => void;
 
   // ── Classification default ─────────────────────────────────────────────────
   defaultClassification: string;
@@ -698,7 +699,7 @@ export const useFileStore = create<FileState>((set, get) => ({
           isAccessSheetOpen: state.activeFile?.id === id ? false : state.isAccessSheetOpen,
           previewFileId: state.previewFileId === id ? null : state.previewFileId,
         }));
-      } catch (err) {
+      } catch {
         failed.push(id);
       }
     }
@@ -859,25 +860,19 @@ export const useFileStore = create<FileState>((set, get) => ({
 
   /** File locking requires a governance request. This stub guides users to the
    *  correct workflow rather than silently setting UI-only state. */
-  lockFile: (_id, _user, _reason) => {
-    if (typeof window !== "undefined") {
-      const { useToastStore } = require("@/components/ui/Toast");
-      useToastStore.getState().error(
-        "File locking requires a Governance request. Submit a FILE_LOCK request via the Governance panel."
-      );
-    }
+  lockFile: () => {
+    useToastStore.getState().error(
+      "File locking requires a Governance request. Submit a FILE_LOCK request via the Governance panel."
+    );
   },
 
   setDefaultClassification: (key) => set({ defaultClassification: key }),
 
   /** File unlocking requires a governance request. This stub guides users to the
    *  correct workflow rather than silently setting UI-only state. */
-  unlockFile: (_id) => {
-    if (typeof window !== "undefined") {
-      const { useToastStore } = require("@/components/ui/Toast");
-      useToastStore.getState().error(
-        "File unlocking requires a Governance request. Submit a FILE_UNLOCK request via the Governance panel."
-      );
-    }
+  unlockFile: () => {
+    useToastStore.getState().error(
+      "File unlocking requires a Governance request. Submit a FILE_UNLOCK request via the Governance panel."
+    );
   },
 }));

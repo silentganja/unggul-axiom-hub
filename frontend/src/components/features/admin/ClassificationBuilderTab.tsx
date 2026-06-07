@@ -2,14 +2,13 @@
 import { useEffect, useState, useCallback } from "react";
 import {
   Loader2, AlertCircle, Plus, Trash2, Shield, Save,
-  X, Check, Star, Eye, Pencil,
+  Star, Eye, Pencil,
 } from "lucide-react";
 import { useToastStore } from "@/components/ui/Toast";
 import {
   adminApi,
   Permission,
   ClassificationEntry,
-  ClassificationAccessDetail,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -26,7 +25,6 @@ export default function ClassificationBuilderTab() {
   // ── Selection state ────────────────────────────────────────────────────────
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedAccessId, setSelectedAccessId] = useState<string | null>(null);
-  const [accessDetail, setAccessDetail] = useState<ClassificationAccessDetail | null>(null);
   const [accessLoading, setAccessLoading] = useState(false);
 
   // ── Edit state ─────────────────────────────────────────────────────────────
@@ -108,11 +106,9 @@ export default function ClassificationBuilderTab() {
     setAccessIsDirty(false);
     try {
       const detail = await adminApi.getClassificationPermissions(c.id);
-      setAccessDetail(detail);
       setSelectedReadIds(new Set(detail.readPermissions.map((p) => p.id)));
       setSelectedWriteIds(new Set(detail.writePermissions.map((p) => p.id)));
     } catch {
-      setAccessDetail(null);
       useToastStore.getState().error("Failed to load access rules");
     } finally {
       setAccessLoading(false);
@@ -123,7 +119,11 @@ export default function ClassificationBuilderTab() {
   const toggleRead = (permId: string) => {
     setSelectedReadIds((prev) => {
       const next = new Set(prev);
-      next.has(permId) ? next.delete(permId) : next.add(permId);
+      if (next.has(permId)) {
+        next.delete(permId);
+      } else {
+        next.add(permId);
+      }
       return next;
     });
     setAccessIsDirty(true);
@@ -132,7 +132,11 @@ export default function ClassificationBuilderTab() {
   const toggleWrite = (permId: string) => {
     setSelectedWriteIds((prev) => {
       const next = new Set(prev);
-      next.has(permId) ? next.delete(permId) : next.add(permId);
+      if (next.has(permId)) {
+        next.delete(permId);
+      } else {
+        next.add(permId);
+      }
       return next;
     });
     setAccessIsDirty(true);
@@ -226,7 +230,6 @@ export default function ClassificationBuilderTab() {
       }
       if (selectedAccessId === deleteTarget.id) {
         setSelectedAccessId(null);
-        setAccessDetail(null);
       }
       setDeleteTarget(null);
       await fetchData();
@@ -269,17 +272,6 @@ export default function ClassificationBuilderTab() {
 
   const selected = classifications.find((c) => c.id === selectedId);
   const selectedAccess = classifications.find((c) => c.id === selectedAccessId);
-
-  // Group permissions by category for the access control UI (matches RoleBuilderTab PERM_CATEGORIES)
-  const permCategories = [
-    { label: "Files", keys: ["files:read", "files:write", "files:delete", "files:classify"] },
-    { label: "Users", keys: ["users:read", "users:manage", "users:delete"] },
-    { label: "Governance", keys: ["governance:approve", "governance:reject"] },
-    { label: "Admin", keys: ["admin:access", "shares:manage", "audit:read"] },
-    { label: "System", keys: ["storage:manage", "config:read", "config:write", "classifications:read", "classifications:manage"] },
-  ];
-
-  const permKeyToId = new Map(permissions.map((p) => [p.key, p.id]));
 
   return (
     <div className="space-y-6">

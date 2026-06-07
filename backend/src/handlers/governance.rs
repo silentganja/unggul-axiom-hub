@@ -1377,7 +1377,6 @@ pub async fn undo_request(
             .map_err(AppError::Database)?;
 
             tx.commit().await.map_err(AppError::Database)?;
-            .map_err(AppError::Database)?;
 
             // Audit log
             let ip = req.peer_addr().map(|a| a.to_string()).unwrap_or_default();
