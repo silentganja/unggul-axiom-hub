@@ -277,7 +277,10 @@ async fn main() -> std::io::Result<()> {
                     .route("/dashboard", web::get().to(handlers::admin::dashboard))
                     .route("/config", web::get().to(handlers::admin::get_config))
                     .route("/config", web::put().to(handlers::admin::update_config))
-                    .route("/config/{key}", web::delete().to(handlers::admin::delete_config))
+                    .route(
+                        "/config/{key}",
+                        web::delete().to(handlers::admin::delete_config),
+                    )
                     .route(
                         "/governance",
                         web::get().to(handlers::admin::admin_governance_list),

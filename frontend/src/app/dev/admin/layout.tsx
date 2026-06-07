@@ -220,7 +220,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { key: "config", label: "config", href: "/dev/admin/config" },
     { key: "roles", label: "Roles", href: "/dev/admin/roles" },
     { key: "classifications", label: "Classifications", href: "/dev/admin/classifications" },
-    { key: "uiux", label: "UI/UX Templates", href: "/dev/admin/uiux" },
     { key: "system", label: "System", href: "/dev/admin/system" },
     { key: "doc", label: "Documentation", href: "/dev/admin/doc" },
   ];

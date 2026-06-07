@@ -1,6 +1,6 @@
 "use client";
-import { useEffect, useState } from "react";
-import { Loader2, Edit2, Check, Plus, Trash2, X, HelpCircle, AlertTriangle } from "lucide-react";
+import { useState } from "react";
+import { Edit2, Check, Plus, Trash2, X, HelpCircle, AlertTriangle } from "lucide-react";
 import { adminApi } from "@/lib/api";
 import { useToastStore } from "@/components/ui/Toast";
 
@@ -152,7 +152,6 @@ const CONFIG_META: Record<string, ConfigMeta> = {
 const CATEGORY_ORDER = ["UI/UX", "System", "Limits & Security"] as const;
 
 export default function ConfigTab({ configMap, setConfigMap, configEditKey, setConfigEditKey, configEditVal, setConfigEditVal }: Props) {
-  const [isLoading, setIsLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [newKey, setNewKey] = useState("");
   const [newValue, setNewValue] = useState("");
@@ -160,16 +159,13 @@ export default function ConfigTab({ configMap, setConfigMap, configEditKey, setC
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [tooltipKey, setTooltipKey] = useState<string | null>(null);
 
-  useEffect(() => {
-    setIsLoading(true);
-    adminApi.getConfig().then(setConfigMap).catch(() => {}).finally(() => setIsLoading(false));
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
   const handleSave = async (key: string) => {
     try {
       await adminApi.updateConfig(key, configEditVal);
       setConfigMap({ ...configMap, [key]: configEditVal });
       setConfigEditKey(null);
+      // Dispatch event so parent layouts re-read config and apply UI changes in real-time
+      window.dispatchEvent(new Event("ui-config-update"));
       useToastStore.getState().success(`"${key}" updated`);
     } catch {
       useToastStore.getState().error("Failed to save configuration");
@@ -194,6 +190,7 @@ export default function ConfigTab({ configMap, setConfigMap, configEditKey, setC
       setNewKey("");
       setNewValue("");
       setShowCreate(false);
+      window.dispatchEvent(new Event("ui-config-update"));
       useToastStore.getState().success(`"${key}" created`);
     } catch {
       useToastStore.getState().error("Failed to create configuration");
@@ -208,6 +205,7 @@ export default function ConfigTab({ configMap, setConfigMap, configEditKey, setC
       setConfigMap(next);
       setDeleteConfirm(null);
       if (configEditKey === key) setConfigEditKey(null);
+      window.dispatchEvent(new Event("ui-config-update"));
       useToastStore.getState().success(`"${key}" deleted`);
     } catch {
       useToastStore.getState().error("Failed to delete configuration");
@@ -276,18 +274,6 @@ export default function ConfigTab({ configMap, setConfigMap, configEditKey, setC
 
   const grouped = categorize();
   const usedKeys = Object.keys(configMap);
-
-  if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <div>
-          <h2 className="text-base font-bold text-foreground font-serif">System Configuration</h2>
-          <p className="text-xs text-foreground-subtle mt-1">Runtime configuration values stored in the database.</p>
-        </div>
-        <div className="p-12 text-center"><Loader2 size={20} className="animate-spin mx-auto text-accent" /></div>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">
