@@ -17,7 +17,7 @@ import {
 import { useFileStore, FileNode, Collaborator } from "@/store/useFileStore";
 import { useOperationsStore } from "@/store/useOperationsStore";
 import { useToastStore } from "@/components/ui/Toast";
-import { filesApi, formatTimestamp } from "@/lib/api";
+import { formatTimestamp } from "@/lib/api";
 
 export default function FileAccessSheet() {
   const addPersonEmailId = useId();
@@ -29,7 +29,6 @@ export default function FileAccessSheet() {
   const setOpen = useFileStore((state) => state.setAccessSheetOpen);
   const setActiveFile = useFileStore((state) => state.setActiveFile);
   const fileShares = useFileStore((state) => state.fileShares);
-  const updateFileInStore = useFileStore((state) => state.updateFileClassification);
 
   const shareFile = useFileStore((state) => state.shareFile);
   const removeShare = useFileStore((state) => state.removeShare);

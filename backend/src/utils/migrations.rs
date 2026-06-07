@@ -479,15 +479,14 @@ pub async fn run_migrations(pool: &PgPool) {
                 )",
                 // Seed new permissions
                 "INSERT INTO permissions (key, description) VALUES
-                    ('classifications:read',  'View classification definitions'),
                     ('classifications:manage','Create and edit classifications')
                  ON CONFLICT (key) DO NOTHING",
-                // Grant new permissions to chief/director implicitly
+                // Grant classification management to chief/director implicitly
                 "INSERT INTO role_implicit_permissions (role_key, permission_id)
-                 SELECT 'chief', id FROM permissions WHERE key IN ('classifications:read','classifications:manage')
+                 SELECT 'chief', id FROM permissions WHERE key = 'classifications:manage'
                  ON CONFLICT DO NOTHING",
                 "INSERT INTO role_implicit_permissions (role_key, permission_id)
-                 SELECT 'director', id FROM permissions WHERE key IN ('classifications:read','classifications:manage')
+                 SELECT 'director', id FROM permissions WHERE key = 'classifications:manage'
                  ON CONFLICT DO NOTHING",
                 // Seed 4 default classifications
                 "INSERT INTO classifications (key, label, level, description, is_default) VALUES

@@ -205,12 +205,16 @@ pub async fn update_classification(
         .unwrap_or(existing.description.clone());
     let new_is_default = body.is_default.unwrap_or(existing.is_default);
 
+    // Run key-change, default-clearing, and the classification UPDATE inside a
+    // single transaction so that a constraint violation on the new key does not
+    // leave files reclassified to a non-existent tier.
+    let mut tx = pool.begin().await.map_err(AppError::Database)?;
+
     // If setting this as default, clear previous default
     if new_is_default && !existing.is_default {
-        let _ =
-            sqlx::query("UPDATE classifications SET is_default = FALSE WHERE is_default = TRUE")
-                .execute(pool.get_ref())
-                .await;
+        let _ = sqlx::query("UPDATE classifications SET is_default = FALSE WHERE is_default = TRUE")
+            .execute(&mut *tx)
+            .await;
     }
 
     // If key changed, update file references
@@ -218,7 +222,7 @@ pub async fn update_classification(
         let _ = sqlx::query("UPDATE files SET classification = $1 WHERE classification = $2")
             .bind(&new_key)
             .bind(&existing.key)
-            .execute(pool.get_ref())
+            .execute(&mut *tx)
             .await;
     }
 
@@ -234,7 +238,7 @@ pub async fn update_classification(
     .bind(&new_description)
     .bind(new_is_default)
     .bind(id)
-    .fetch_one(pool.get_ref())
+    .fetch_one(&mut *tx)
     .await
     .map_err(|e| {
         if let sqlx::Error::Database(ref db_err) = e {
@@ -244,6 +248,8 @@ pub async fn update_classification(
         }
         AppError::Database(e)
     })?;
+
+    tx.commit().await.map_err(AppError::Database)?;
 
     tracing::info!(
         admin = %admin.username,

@@ -236,7 +236,11 @@ pub async fn update_role_group(
     let existing = fetch_group(pool.get_ref(), group_id).await?;
 
     if let Some(ref name) = body.name {
-        if name.trim().len() > 128 {
+        let trimmed = name.trim();
+        if trimmed.is_empty() {
+            return Err(AppError::BadRequest("Group name is required".into()));
+        }
+        if trimmed.len() > 128 {
             return Err(AppError::BadRequest(
                 "Group name must be 128 characters or less".into(),
             ));
@@ -902,6 +906,11 @@ pub async fn create_custom_role(
     if role_key.is_empty() || label.is_empty() {
         return Err(AppError::BadRequest(
             "roleKey and label are required".into(),
+        ));
+    }
+    if !(1..=10).contains(&body.level) {
+        return Err(AppError::BadRequest(
+            "Role level must be between 1 and 10".into(),
         ));
     }
 

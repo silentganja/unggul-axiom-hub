@@ -27,7 +27,7 @@ const PERM_CATEGORIES: PermCategory[] = [
   { label: "Users", keys: ["users:read", "users:manage", "users:delete"] },
   { label: "Governance", keys: ["governance:approve", "governance:reject"] },
   { label: "Admin", keys: ["admin:access", "shares:manage", "audit:read"] },
-  { label: "System", keys: ["storage:manage", "config:read", "config:write", "classifications:read", "classifications:manage"] },
+  { label: "System", keys: ["storage:manage", "config:read", "config:write", "classifications:manage"] },
 ];
 
 interface Preset {
@@ -38,7 +38,7 @@ interface Preset {
 const PRESETS: Preset[] = [
   {
     label: "Read-Only Auditor",
-    keys: ["files:read", "users:read", "audit:read", "config:read", "classifications:read"],
+    keys: ["files:read", "users:read", "audit:read", "config:read"],
   },
   {
     label: "Content Manager",
@@ -50,7 +50,7 @@ const PRESETS: Preset[] = [
   },
   {
     label: "Governance Officer",
-    keys: ["governance:approve", "governance:reject", "files:read", "users:read", "audit:read", "classifications:read"],
+    keys: ["governance:approve", "governance:reject", "files:read", "users:read", "audit:read"],
   },
   {
     label: "Full Access",

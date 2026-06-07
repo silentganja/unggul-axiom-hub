@@ -185,8 +185,9 @@ async fn get_effective_permission_keys(
 
 /// Check whether a user can read files of a given classification, based on
 /// their effective permissions (base role + direct grants + group membership).
-/// Chief/Director/Officer always pass via fast path. Staff are checked against
-/// the `classification_permissions` table.
+/// Chief/Director always pass via fast path. All other roles (including
+/// officer) are checked against the `classification_permissions` table so
+/// that the admin-configured access rules are always respected.
 pub async fn user_can_read_classification(
     pool: &PgPool,
     user_id: uuid::Uuid,
@@ -197,20 +198,23 @@ pub async fn user_can_read_classification(
     if matches!(base_role, "admin_panel" | "chief" | "director") {
         return Ok(true);
     }
-    // Officer fast path: officers have files:read implicitly, which is seeded
-    // with read access to all classifications by default (BUG-20)
-    if base_role == "officer" {
-        return Ok(true);
-    }
 
-    // BUG-21: If no classification_permissions rules exist at all, fall back
-    // to allowing access (backward compatible with pre-builder behaviour).
-    let any_rules: bool =
-        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM classification_permissions LIMIT 1)")
-            .fetch_one(pool)
-            .await
-            .unwrap_or(false);
-    if !any_rules {
+    // If no classification_permissions rules exist *for this classification*,
+    // fall back to allowing access (backward compatible with pre-builder behaviour).
+    let has_rules_for_this_tier: bool = sqlx::query_scalar(
+        "SELECT EXISTS(
+            SELECT 1 FROM classification_permissions cp
+            JOIN classifications c ON c.id = cp.classification_id
+            WHERE c.key = $1 AND cp.access_type = $2
+        )",
+    )
+    .bind(classification_key)
+    .bind("read")
+    .fetch_one(pool)
+    .await
+    .unwrap_or(false);
+
+    if !has_rules_for_this_tier {
         return Ok(true);
     }
 
@@ -252,6 +256,8 @@ pub async fn user_can_read_classification(
 }
 
 /// Check whether a user can assign/write files of a given classification.
+/// Chief/Director always pass via fast path. All other roles (including
+/// officer) are checked against the `classification_permissions` table.
 pub async fn user_can_write_classification(
     pool: &PgPool,
     user_id: uuid::Uuid,
@@ -262,19 +268,23 @@ pub async fn user_can_write_classification(
     if matches!(base_role, "admin_panel" | "chief" | "director") {
         return Ok(true);
     }
-    // Officer fast path: officers have files:write implicitly, which is seeded
-    // with write access to all classifications by default (BUG-20)
-    if base_role == "officer" {
-        return Ok(true);
-    }
 
-    // BUG-21: If no classification_permissions rules exist, fall back to allow.
-    let any_rules: bool =
-        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM classification_permissions LIMIT 1)")
-            .fetch_one(pool)
-            .await
-            .unwrap_or(false);
-    if !any_rules {
+    // If no classification_permissions rules exist *for this classification*,
+    // fall back to allowing access (backward compatible with pre-builder behaviour).
+    let has_rules_for_this_tier: bool = sqlx::query_scalar(
+        "SELECT EXISTS(
+            SELECT 1 FROM classification_permissions cp
+            JOIN classifications c ON c.id = cp.classification_id
+            WHERE c.key = $1 AND cp.access_type = $2
+        )",
+    )
+    .bind(classification_key)
+    .bind("write")
+    .fetch_one(pool)
+    .await
+    .unwrap_or(false);
+
+    if !has_rules_for_this_tier {
         return Ok(true);
     }
 
