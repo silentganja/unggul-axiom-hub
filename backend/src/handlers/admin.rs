@@ -908,6 +908,26 @@ pub async fn update_config(
     Ok(HttpResponse::Ok().json(serde_json::json!({ "status": "ok" })))
 }
 
+pub async fn delete_config(
+    pool: web::Data<PgPool>,
+    admin: AdminUser,
+    path: web::Path<String>,
+) -> Result<HttpResponse, AppError> {
+    crate::app_middleware::admin::require_permission(&admin, pool.get_ref(), "config:write")
+        .await?;
+    let key = path.into_inner();
+    let deleted = sqlx::query("DELETE FROM system_config WHERE key = $1")
+        .bind(&key)
+        .execute(pool.get_ref())
+        .await
+        .map_err(AppError::Database)?;
+    if deleted.rows_affected() == 0 {
+        return Err(AppError::NotFound);
+    }
+    tracing::warn!(admin = "admin", key = %key, "Admin deleted config entry");
+    Ok(HttpResponse::NoContent().finish())
+}
+
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // Tier 2: Governance Admin
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•

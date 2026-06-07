@@ -1049,6 +1049,10 @@ export const adminApi = {
     return apiFetch("/api/admin/config", { method: "PUT", body: JSON.stringify({ key, value }) }, true);
   },
 
+  deleteConfig(key: string): Promise<void> {
+    return apiFetch(`/api/admin/config/${encodeURIComponent(key)}`, { method: "DELETE" }, true);
+  },
+
   getAdminGovernance(): Promise<GovernanceListResponse> {
     return apiFetch("/api/admin/governance", {}, true);
   },

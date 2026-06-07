@@ -132,7 +132,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     void hydrate();
   }, [hydrate]);
 
-  // 15-Minute Idle Timeout Check
+  // Idle Timeout Check — duration comes from DB config (default 15 minutes)
+  const sessionTimeoutMs =
+    (parseInt(configMap["session_timeout_minutes"] || "15", 10) || 15) * 60 * 1000;
+
   useEffect(() => {
     if (!isAuthenticated) return;
 
@@ -143,7 +146,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       timeoutId = setTimeout(() => {
         useToastStore.getState().error("Admin session expired due to inactivity");
         logout();
-      }, 15 * 60 * 1000); // 15 minutes
+      }, sessionTimeoutMs);
     };
 
     // Listen to user interactions
@@ -163,7 +166,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         window.removeEventListener(event, handleEvent);
       });
     };
-  }, [isAuthenticated, logout]);
+  }, [isAuthenticated, logout, sessionTimeoutMs]);
 
   const requestStepUp = (onSuccess: () => void) => {
     setStepUpCallback(() => onSuccess);
