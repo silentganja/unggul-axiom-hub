@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Edit2, Check, Plus, Trash2, X, HelpCircle, AlertTriangle } from "lucide-react";
+import { Loader2, Edit2, Check, Plus, Trash2, X, HelpCircle, AlertTriangle } from "lucide-react";
 import { adminApi } from "@/lib/api";
 import { useToastStore } from "@/components/ui/Toast";
 
@@ -9,6 +9,7 @@ interface Props {
   setConfigMap: (m: Record<string, string>) => void;
   configEditKey: string | null; setConfigEditKey: (k: string | null) => void;
   configEditVal: string; setConfigEditVal: (v: string) => void;
+  isLoading?: boolean;
 }
 
 // ── Config key metadata: category, label, description, input type ─────────────
@@ -151,7 +152,7 @@ const CONFIG_META: Record<string, ConfigMeta> = {
 
 const CATEGORY_ORDER = ["UI/UX", "System", "Limits & Security"] as const;
 
-export default function ConfigTab({ configMap, setConfigMap, configEditKey, setConfigEditKey, configEditVal, setConfigEditVal }: Props) {
+export default function ConfigTab({ configMap, setConfigMap, configEditKey, setConfigEditKey, configEditVal, setConfigEditVal, isLoading }: Props) {
   const [showCreate, setShowCreate] = useState(false);
   const [newKey, setNewKey] = useState("");
   const [newValue, setNewValue] = useState("");
@@ -284,14 +285,20 @@ export default function ConfigTab({ configMap, setConfigMap, configEditKey, setC
             Runtime configuration values stored in the database. Changes take effect immediately.
           </p>
         </div>
-        <button
-          onClick={() => { setShowCreate(true); setCreateError(null); setNewKey(""); setNewValue(""); }}
-          className="flex items-center gap-1.5 h-8 px-3 rounded-md border border-accent/25 text-accent bg-accent/5 hover:bg-accent/15 transition-colors text-[10px] font-bold tracking-wider uppercase font-mono cursor-pointer"
-        >
-          <Plus size={13} /> Add Config
-        </button>
+        {!isLoading && (
+          <button
+            onClick={() => { setShowCreate(true); setCreateError(null); setNewKey(""); setNewValue(""); }}
+            className="flex items-center gap-1.5 h-8 px-3 rounded-md border border-accent/25 text-accent bg-accent/5 hover:bg-accent/15 transition-colors text-[10px] font-bold tracking-wider uppercase font-mono cursor-pointer"
+          >
+            <Plus size={13} /> Add Config
+          </button>
+        )}
       </div>
 
+      {isLoading ? (
+        <div className="p-12 text-center"><Loader2 size={20} className="animate-spin mx-auto text-accent" /></div>
+      ) : (
+      <>
       {/* ── Create New Config Panel ── */}
       {showCreate && (
         <div className="border border-accent/30 rounded-lg bg-accent/5 p-4 space-y-3 animate-in fade-in duration-200">
@@ -461,6 +468,8 @@ export default function ConfigTab({ configMap, setConfigMap, configEditKey, setC
           </div>
         )}
       </div>
+      </>
+      )}
     </div>
   );
 }
