@@ -233,23 +233,6 @@ export default function ExecutiveOverview() {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
-      {/* ── Session Status Bar ── */}
-      <div className="w-full bg-background-panel/40 border border-border/30 px-6 py-3 rounded-sm flex flex-col md:flex-row md:items-center justify-between gap-3 font-mono text-xs uppercase tracking-wider text-foreground-subtle select-none">
-        <div className="flex items-center gap-2">
-          <span className="h-2 w-2 rounded-full bg-success animate-pulse" />
-          <span>SESSION ACTIVE</span>
-        </div>
-        <div className="flex flex-wrap items-center gap-4">
-          <span>{user?.fullName || user?.email || "-"}</span>
-          <span className="text-foreground-subtle/30 hidden md:inline">|</span>
-          <span>ROLE: {user?.role || "-"}</span>
-          <span className="text-foreground-subtle/30 hidden md:inline">|</span>
-          <span className="flex items-center gap-1.5">
-            <Lock size={12} className="text-accent" /> SECURE
-          </span>
-        </div>
-      </div>
-
       {/* ── Metrics Grid ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Total Files */}

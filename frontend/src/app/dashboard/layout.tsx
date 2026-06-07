@@ -27,6 +27,7 @@ import NotificationBell from "@/components/features/NotificationBell";
 import { useFileStore } from "@/store/useFileStore";
 import { useAuthStore } from "@/store/useAuthStore";
 import { cn } from "@/lib/utils";
+import { getAvatarUrl } from "@/lib/api";
 
 interface SidebarLinkProps {
   label: string;
@@ -210,15 +211,61 @@ export default function DashboardLayout({
             </div>
           </div>
 
-          {/* Secure Status Badge */}
-          <div className="p-3 rounded border border-border/30 bg-background/40 space-y-1.5">
-            <div className="flex items-center justify-between">
-              <span className="font-mono text-[8px] uppercase tracking-wider text-foreground-subtle">Session Status</span>
-              <span className="h-1.5 w-1.5 rounded-full bg-success" />
+          {/* Mini Profile Card */}
+          <div className="p-3.5 rounded border border-border/30 bg-background-panel/60 space-y-3 relative overflow-hidden group">
+            {/* Ambient indicator glow */}
+            <div className="absolute top-0 right-0 w-12 h-12 bg-success/5 rounded-full blur-xl pointer-events-none" />
+
+            {/* Profile Detail Row */}
+            <div className="flex items-center gap-2.5">
+              {user?.avatarData ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={getAvatarUrl(user.avatarData) || undefined}
+                  alt={user.fullName || "User Avatar"}
+                  className="h-9 w-9 rounded-full border border-accent/20 object-cover shrink-0"
+                />
+              ) : (
+                <div className="h-9 w-9 rounded-full bg-accent/10 border border-accent/25 text-accent font-bold font-mono text-xs flex items-center justify-center shrink-0 select-none">
+                  {user?.fullName
+                    ? user.fullName
+                        .split(" ")
+                        .map((n) => n[0])
+                        .slice(0, 2)
+                        .join("")
+                        .toUpperCase()
+                    : "U"}
+                </div>
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-semibold text-foreground truncate leading-tight">
+                  {user?.fullName || "Administrator"}
+                </p>
+                <div className="flex items-center mt-0.5">
+                  <span className="font-mono text-[8px] font-bold uppercase tracking-wider text-accent bg-accent/10 px-1 py-0.5 rounded leading-none">
+                    {user?.role || "STAFF"}
+                  </span>
+                </div>
+              </div>
             </div>
-            <p className="font-mono text-[9px] font-bold truncate text-foreground-muted">{userEmail}</p>
-            <div className="flex items-center gap-1.5 text-[8px] text-foreground-subtle font-mono uppercase tracking-wider pt-1.5 border-t border-border/20">
-              <Lock size={9} className="text-accent" /> Restricted Sandbox
+
+            {/* Session Status & Meta details */}
+            <div className="space-y-1.5 pt-2.5 border-t border-border/20">
+              <div className="flex items-center justify-between font-mono text-[8px] uppercase tracking-wider text-foreground-subtle">
+                <span className="flex items-center gap-1.5">
+                  <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse shrink-0" />
+                  Session Active
+                </span>
+                <span className="font-semibold text-foreground-muted">{user?.department || "HQ"}</span>
+              </div>
+              
+              <p className="font-mono text-[9px] font-bold truncate text-foreground-muted select-all">
+                {userEmail}
+              </p>
+
+              <div className="flex items-center gap-1.5 text-[8px] text-foreground-subtle font-mono uppercase tracking-wider pt-1.5 border-t border-border/20">
+                <Lock size={9} className="text-accent" /> Restricted Sandbox
+              </div>
             </div>
           </div>
 
