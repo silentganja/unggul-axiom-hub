@@ -1011,18 +1011,14 @@ pub async fn list_custom_roles(
 
 /// Public endpoint — no auth required. Returns a simple { roleKey: label } map.
 /// Role labels are not sensitive; they only map internal keys to human-readable names.
-pub async fn list_role_labels_public(
-    pool: web::Data<PgPool>,
-) -> Result<HttpResponse, AppError> {
+pub async fn list_role_labels_public(pool: web::Data<PgPool>) -> Result<HttpResponse, AppError> {
     let roles: Vec<CustomRoleEntry> =
         sqlx::query_as("SELECT role_key, label, level FROM custom_roles ORDER BY level DESC")
             .fetch_all(pool.get_ref())
             .await
             .map_err(AppError::Database)?;
-    let map: std::collections::HashMap<String, String> = roles
-        .into_iter()
-        .map(|r| (r.role_key, r.label))
-        .collect();
+    let map: std::collections::HashMap<String, String> =
+        roles.into_iter().map(|r| (r.role_key, r.label)).collect();
     Ok(HttpResponse::Ok().json(map))
 }
 
