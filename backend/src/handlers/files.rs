@@ -455,8 +455,7 @@ pub async fn update_classification(
             format!(
                 "You do not have permission to assign classification '{}'",
                 body.classification
-            )
-            .into(),
+            ),
         ));
     }
 
