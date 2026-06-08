@@ -104,14 +104,6 @@ const CONFIG_META: Record<string, ConfigMeta> = {
     inputType: "number",
     placeholder: "72",
   },
-  allowed_classifications: {
-    label: "Allowed Classifications",
-    description: "Comma-separated list of security classification tiers available for file labelling. Used to populate classification dropdowns and enforce governance workflows.",
-    category: "System",
-    inputType: "text",
-    placeholder: "UNCLASSIFIED, RESTRICTED, CONFIDENTIAL, SECRET, TOP SECRET",
-  },
-
   // ── Limits & Security ──────────────────────────────────────────────────────
   session_timeout_minutes: {
     label: "Session Timeout (minutes)",

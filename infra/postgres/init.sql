@@ -165,8 +165,7 @@ CREATE TABLE IF NOT EXISTS system_config (
 
 INSERT INTO system_config (key, value) VALUES
     ('default_storage_quota_bytes', '107374182400'),
-    ('jwt_expiry_hours', '8'),
-    ('allowed_classifications', 'RAHSIA,SULIT,TERHAD,TERBUKA')
+    ('jwt_expiry_hours', '8')
 ON CONFLICT (key) DO NOTHING;
 
 -- ── Favorites ─────────────────────────────────────────────────

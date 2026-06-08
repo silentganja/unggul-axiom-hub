@@ -133,8 +133,7 @@ pub async fn run_migrations(pool: &PgPool) {
                 )",
                 "INSERT INTO system_config (key, value) VALUES
                     ('default_storage_quota_bytes', '5368709120'),
-                    ('jwt_expiry_hours', '8'),
-                    ('allowed_classifications', 'RAHSIA,SULIT,TERHAD,TERBUKA')
+                    ('jwt_expiry_hours', '8')
                 ON CONFLICT (key) DO NOTHING",
             ],
         ),
